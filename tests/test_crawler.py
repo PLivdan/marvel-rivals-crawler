@@ -158,3 +158,14 @@ def test_reseed_queues_players_from_global_and_hero_leaderboards():
     assert total_players > 0
     last_seeded = conn.execute("SELECT last_seeded_at FROM heroes WHERE hero_id=1047").fetchone()[0]
     assert last_seeded is not None
+
+    # uid 1772998912 ("MAINTANKSLOP") appears on BOTH the hero-1047
+    # leaderboard and the general top-500 leaderboard in these fixtures.
+    # Because hero leaderboards are processed first, this player must end
+    # up tagged with the hero-specific discovery_hero_id=1047 rather than
+    # the untagged (None) tag the general leaderboard would otherwise give
+    # them.
+    row = conn.execute(
+        "SELECT discovery_hero_id FROM players WHERE uid=1772998912"
+    ).fetchone()
+    assert row[0] == 1047
