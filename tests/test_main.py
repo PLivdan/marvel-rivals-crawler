@@ -1,6 +1,12 @@
+import threading
+import time
+
+import pytest
+
 import db
 import fetcher
 import main
+import rivalsmeta
 
 
 def make_conn():
@@ -142,15 +148,21 @@ def test_run_pauses_on_circuit_open_error_then_retries():
         sleep_fn=sleeps.append,
     )
 
+    # The same player being claimed a SECOND time is itself the proof that the
+    # first attempt released its claim back to 'pending' — a still-claimed row
+    # is invisible to claim_next_player, so calls could only ever be [1].
     assert calls == [1, 1]
     assert sleeps == [0]
     # The fake crawl_player_fn never writes to the DB itself (that's real
     # crawler.crawl_player's job, covered by Task 6's tests) — this asserts
     # the narrower thing this test actually owns: run() must NOT mark a
     # player "error" after a CircuitOpenError the way it does for a
-    # FetchError, since a tripped circuit isn't this player's fault.
+    # FetchError, since a tripped circuit isn't this player's fault. (The row
+    # is left 'claimed' here only because the fake never reaches a terminal
+    # status; test_run_releases_the_claim_when_the_circuit_opens pins the
+    # release down directly.)
     status = conn.execute("SELECT crawl_status FROM players WHERE uid=1").fetchone()[0]
-    assert status == "pending"
+    assert status != "error"
 
 
 def test_run_backs_off_on_rate_limited_error_and_leaves_player_pending():
@@ -182,10 +194,44 @@ def test_run_backs_off_on_rate_limited_error_and_leaves_player_pending():
         sleep_fn=sleeps.append,
     )
 
+    # Being claimed a second time proves the back-off released the claim: a row
+    # still marked 'claimed' can never be handed out again.
     assert calls == [1, 1]  # retried the same player after backing off
     assert sleeps == [0]
     status = conn.execute("SELECT crawl_status FROM players WHERE uid=1").fetchone()[0]
+    assert status != "error"
+
+
+def test_run_releases_the_claim_when_the_circuit_opens():
+    # The direct form of the assertion the two tests above make indirectly:
+    # once a player is claimed, a tripped circuit must hand them straight back
+    # to the frontier. Leaving them 'claimed' would take them out of the queue
+    # until the orphaned-claim sweep noticed, ten minutes later.
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
+    flag = main.ShutdownFlag()
+
+    def circuit_open_then_shut_down(conn_, client_, uid, season):
+        flag.requested = True  # so the loop exits right after the release
+        raise fetcher.CircuitOpenError("open")
+
+    main.run(
+        conn,
+        object(),
+        season=19,
+        shutdown_flag=flag,
+        reseed_interval_seconds=10**9,
+        crawl_player_fn=circuit_open_then_shut_down,
+        reseed_fn=lambda conn_, client_: 0,
+        circuit_cooldown_seconds=0,
+        sleep_fn=lambda s: None,
+    )
+
+    status, claimed_at = conn.execute(
+        "SELECT crawl_status, claimed_at FROM players WHERE uid=1"
+    ).fetchone()
     assert status == "pending"
+    assert claimed_at is None
 
 
 def test_run_requeues_stale_players_at_startup_and_on_the_periodic_interval():
@@ -334,3 +380,490 @@ def test_status_flag_prints_progress_and_exits_without_crawling(monkeypatch, cap
 
     captured = capsys.readouterr()
     assert "done=1" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# --workers 1 backward compatibility
+# ---------------------------------------------------------------------------
+
+
+def _record_run_calls(conn, flag, n_players, **run_kwargs):
+    """Drive run() over `n_players` pending players with fully instrumented
+    fakes, and return the ordered log of everything it did. Used to compare the
+    default (workers unset) path against an explicit --workers 1."""
+    for uid in range(1, n_players + 1):
+        db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "pending"})
+    conn.commit()
+
+    events = []
+
+    def fake_crawl_player(conn_, client_, uid, season):
+        events.append(("crawl", uid, season))
+        db.upsert(
+            conn_,
+            "players",
+            ["uid"],
+            {"uid": uid, "crawl_status": "done", "last_crawled_at": db.now(), "claimed_at": None},
+        )
+        conn_.commit()
+        return "done"
+
+    def fake_reseed(conn_, client_):
+        events.append(("reseed",))
+        return 0
+
+    def fake_requeue(conn_):
+        events.append(("requeue",))
+        return 0
+
+    main.run(
+        conn,
+        object(),
+        season=19,
+        shutdown_flag=flag,
+        crawl_player_fn=fake_crawl_player,
+        reseed_fn=fake_reseed,
+        requeue_fn=fake_requeue,
+        sleep_fn=lambda s: events.append(("sleep", s)),
+        **run_kwargs,
+    )
+    return events
+
+
+def test_workers_one_makes_exactly_the_same_call_sequence_as_the_unset_default():
+    # The strict backward-compatibility requirement: opting out of concurrency
+    # (or simply not opting in) must reproduce the pre-concurrency loop exactly
+    # — same startup reseed+requeue, same one-player-at-a-time claim/crawl in
+    # frontier-priority order, same exit the moment the queue drains.
+    default_conn = make_conn()
+    default_events = _record_run_calls(
+        default_conn, main.ShutdownFlag(), 5, reseed_interval_seconds=10**9
+    )
+
+    explicit_conn = make_conn()
+    explicit_events = _record_run_calls(
+        explicit_conn, main.ShutdownFlag(), 5, reseed_interval_seconds=10**9, workers=1
+    )
+
+    assert default_events == explicit_events
+    assert default_events == [
+        ("reseed",),
+        ("requeue",),
+        ("crawl", 1, 19),
+        ("crawl", 2, 19),
+        ("crawl", 3, 19),
+        ("crawl", 4, 19),
+        ("crawl", 5, 19),
+    ]
+    # Every player finished, nothing was left claimed, and the run exited on
+    # its own when the frontier emptied rather than idling.
+    statuses = dict(default_conn.execute("SELECT uid, crawl_status FROM players").fetchall())
+    assert statuses == {uid: "done" for uid in range(1, 6)}
+
+
+def test_workers_one_runs_on_the_calling_thread_with_no_pool_and_no_extra_connection():
+    # "Identical behaviour" includes not quietly becoming concurrent: a single
+    # worker must not spawn a pool, and must not need (or open) a second
+    # connection to the database.
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
+    flag = main.ShutdownFlag()
+    threads = []
+    conns_used = []
+
+    def fake_crawl_player(conn_, client_, uid, season):
+        threads.append(threading.current_thread())
+        conns_used.append(conn_)
+        db.upsert(conn_, "players", ["uid"], {"uid": uid, "crawl_status": "done"})
+        conn_.commit()
+        return "done"
+
+    def exploding_worker_conn():
+        raise AssertionError("a single worker must reuse the caller's connection")
+
+    main.run(
+        conn,
+        object(),
+        season=19,
+        shutdown_flag=flag,
+        reseed_interval_seconds=10**9,
+        crawl_player_fn=fake_crawl_player,
+        reseed_fn=lambda conn_, client_: 0,
+        worker_conn_fn=exploding_worker_conn,
+    )
+
+    assert threads == [threading.main_thread()]
+    assert conns_used == [conn]
+
+
+def test_main_defaults_to_a_single_worker_so_concurrency_stays_opt_in(monkeypatch, tmp_path):
+    # Not passing --workers must leave the crawler exactly as conservative as
+    # it has always been. (If the intended shipping default is instead 3, this
+    # is the one line to change in main.main.)
+    db_path = str(tmp_path / "w.db")
+    captured = {}
+
+    monkeypatch.setattr(fetcher, "RivalsMetaClient", lambda: object())
+    monkeypatch.setattr(rivalsmeta, "resolve_current_season", lambda client: 19)
+    monkeypatch.setattr(main, "run", lambda *a, **k: captured.update(k))
+
+    main.main(["--db-path", db_path])
+
+    assert captured["workers"] == 1
+
+
+def test_main_passes_the_requested_worker_count_and_a_per_worker_connection_factory(
+    monkeypatch, tmp_path
+):
+    db_path = str(tmp_path / "w.db")
+    captured = {}
+
+    monkeypatch.setattr(fetcher, "RivalsMetaClient", lambda: object())
+    monkeypatch.setattr(rivalsmeta, "resolve_current_season", lambda client: 19)
+    monkeypatch.setattr(main, "run", lambda *a, **k: captured.update(k))
+
+    main.main(["--db-path", db_path, "--workers", "3"])
+
+    assert captured["workers"] == 3
+    # Each worker opens its own connection to the same file, because sqlite3
+    # connections cannot be shared across threads.
+    worker_conn = captured["worker_conn_fn"]()
+    assert worker_conn.execute("SELECT COUNT(*) FROM players").fetchone()[0] == 0
+    worker_conn.close()
+
+
+def test_main_rejects_a_worker_count_below_one(tmp_path):
+    with pytest.raises(SystemExit):
+        main.main(["--db-path", str(tmp_path / "w.db"), "--workers", "0"])
+
+
+def test_main_rejects_multiple_workers_against_an_in_memory_database():
+    # ":memory:" gives every connection its OWN empty database, so the workers
+    # would silently crawl into nothing.
+    with pytest.raises(SystemExit):
+        main.main(["--db-path", ":memory:", "--workers", "3"])
+
+
+def test_run_refuses_multiple_workers_without_a_connection_factory():
+    conn = make_conn()
+    with pytest.raises(ValueError, match="worker_conn_fn"):
+        main.run(
+            conn,
+            object(),
+            season=19,
+            shutdown_flag=main.ShutdownFlag(),
+            reseed_interval_seconds=10**9,
+            crawl_player_fn=lambda *a: "done",
+            reseed_fn=lambda conn_, client_: 0,
+            workers=3,
+        )
+
+
+# ---------------------------------------------------------------------------
+# the worker pool
+# ---------------------------------------------------------------------------
+
+
+def _pool_db(tmp_path, n_players):
+    path = str(tmp_path / "pool.db")
+    setup = db.connect(path)
+    db.init_schema(setup)
+    for uid in range(1, n_players + 1):
+        db.upsert(setup, "players", ["uid"], {"uid": uid, "crawl_status": "pending"})
+    setup.commit()
+    return path, setup
+
+
+def test_worker_pool_crawls_every_player_exactly_once_and_drains_the_queue(tmp_path):
+    # The end-to-end claim: three real threads against one real on-disk DB, and
+    # afterwards every player is done, none was handed out twice, and none was
+    # left stranded in 'pending' or 'claimed'.
+    path, coordinator_conn = _pool_db(tmp_path, 20)
+    crawled = []
+    lock = threading.Lock()
+
+    def fake_crawl_player(conn_, client_, uid, season):
+        time.sleep(0.002)  # a little real work, so the threads genuinely overlap
+        with lock:
+            crawled.append(uid)
+        db.upsert(
+            conn_,
+            "players",
+            ["uid"],
+            {"uid": uid, "crawl_status": "done", "last_crawled_at": db.now(), "claimed_at": None},
+        )
+        conn_.commit()
+        return "done"
+
+    main.run(
+        coordinator_conn,
+        object(),
+        season=19,
+        shutdown_flag=main.ShutdownFlag(),
+        reseed_interval_seconds=10**9,
+        crawl_player_fn=fake_crawl_player,
+        reseed_fn=lambda conn_, client_: 0,
+        requeue_fn=lambda conn_: 0,
+        workers=3,
+        worker_conn_fn=lambda: db.connect(path),
+        worker_idle_sleep_seconds=0.01,
+        coordinator_poll_seconds=0.01,
+    )
+
+    assert sorted(crawled) == list(range(1, 21))  # all 20
+    assert len(crawled) == len(set(crawled))  # none twice
+    statuses = dict(coordinator_conn.execute("SELECT uid, crawl_status FROM players").fetchall())
+    assert statuses == {uid: "done" for uid in range(1, 21)}
+    assert coordinator_conn.execute(
+        "SELECT COUNT(*) FROM players WHERE claimed_at IS NOT NULL"
+    ).fetchone()[0] == 0
+    coordinator_conn.close()
+
+
+def test_worker_pool_actually_overlaps_its_workers(tmp_path):
+    # Guards against the pool degenerating into a sequential crawl (e.g. if the
+    # shared limiter's lock were ever held across the request): assert more
+    # than one worker is inside crawl_player at the same moment.
+    path, coordinator_conn = _pool_db(tmp_path, 12)
+    lock = threading.Lock()
+    in_flight = 0
+    peak = 0
+
+    def fake_crawl_player(conn_, client_, uid, season):
+        nonlocal in_flight, peak
+        with lock:
+            in_flight += 1
+            peak = max(peak, in_flight)
+        time.sleep(0.05)
+        with lock:
+            in_flight -= 1
+        db.upsert(conn_, "players", ["uid"], {"uid": uid, "crawl_status": "done"})
+        conn_.commit()
+        return "done"
+
+    main.run(
+        coordinator_conn,
+        object(),
+        season=19,
+        shutdown_flag=main.ShutdownFlag(),
+        reseed_interval_seconds=10**9,
+        crawl_player_fn=fake_crawl_player,
+        reseed_fn=lambda conn_, client_: 0,
+        requeue_fn=lambda conn_: 0,
+        workers=3,
+        worker_conn_fn=lambda: db.connect(path),
+        worker_idle_sleep_seconds=0.01,
+        coordinator_poll_seconds=0.01,
+    )
+
+    assert peak > 1, "workers never overlapped; the pool is effectively sequential"
+    coordinator_conn.close()
+
+
+def test_worker_pool_reseeds_and_requeues_from_one_place_only(tmp_path):
+    # A reseed is ~40+ leaderboard requests per hero-refresh cycle. Running it
+    # per worker would multiply that by the worker count for no benefit, so it
+    # must stay on the coordinator no matter how wide the pool is.
+    path, coordinator_conn = _pool_db(tmp_path, 9)
+    reseed_conns = []
+    requeue_conns = []
+    lock = threading.Lock()
+
+    def fake_reseed(conn_, client_):
+        with lock:
+            reseed_conns.append(conn_)
+        return 0
+
+    def fake_requeue(conn_):
+        with lock:
+            requeue_conns.append(conn_)
+        return 0
+
+    def fake_crawl_player(conn_, client_, uid, season):
+        db.upsert(conn_, "players", ["uid"], {"uid": uid, "crawl_status": "done"})
+        conn_.commit()
+        return "done"
+
+    main.run(
+        coordinator_conn,
+        object(),
+        season=19,
+        shutdown_flag=main.ShutdownFlag(),
+        reseed_interval_seconds=10**9,  # startup only; no periodic tick
+        crawl_player_fn=fake_crawl_player,
+        reseed_fn=fake_reseed,
+        requeue_fn=fake_requeue,
+        workers=3,
+        worker_conn_fn=lambda: db.connect(path),
+        worker_idle_sleep_seconds=0.01,
+        coordinator_poll_seconds=0.01,
+    )
+
+    assert len(reseed_conns) == 1  # once, not once per worker
+    assert len(requeue_conns) == 1
+    # And on the coordinator's own connection, never a worker's.
+    assert reseed_conns == [coordinator_conn]
+    assert requeue_conns == [coordinator_conn]
+    coordinator_conn.close()
+
+
+def test_worker_pool_lets_every_in_flight_player_finish_on_shutdown(tmp_path):
+    # Graceful shutdown has always meant "finish the player you are on". With a
+    # pool that must hold for all of them: no player may be abandoned mid-crawl
+    # and left stuck in 'claimed'.
+    path, coordinator_conn = _pool_db(tmp_path, 30)
+    flag = main.ShutdownFlag()
+    lock = threading.Lock()
+    started = []
+    finished = []
+
+    def fake_crawl_player(conn_, client_, uid, season):
+        with lock:
+            started.append(uid)
+            trip = len(started) == 6
+        if trip:
+            flag.requested = True  # a signal arrives mid-run
+        time.sleep(0.02)  # ... while several workers are mid-player
+        db.upsert(
+            conn_,
+            "players",
+            ["uid"],
+            {"uid": uid, "crawl_status": "done", "last_crawled_at": db.now(), "claimed_at": None},
+        )
+        conn_.commit()
+        with lock:
+            finished.append(uid)
+        return "done"
+
+    main.run(
+        coordinator_conn,
+        object(),
+        season=19,
+        shutdown_flag=flag,
+        reseed_interval_seconds=10**9,
+        crawl_player_fn=fake_crawl_player,
+        reseed_fn=lambda conn_, client_: 0,
+        requeue_fn=lambda conn_: 0,
+        workers=3,
+        worker_conn_fn=lambda: db.connect(path),
+        worker_idle_sleep_seconds=0.01,
+        coordinator_poll_seconds=0.01,
+    )
+
+    # run() returned only after joining the pool: everything started finished.
+    assert sorted(started) == sorted(finished)
+    assert len(started) < 30  # it really did stop early rather than draining
+    left_claimed = coordinator_conn.execute(
+        "SELECT COUNT(*) FROM players WHERE crawl_status='claimed'"
+    ).fetchone()[0]
+    assert left_claimed == 0
+    coordinator_conn.close()
+
+
+def test_worker_pool_surfaces_a_worker_crash_instead_of_swallowing_it(tmp_path):
+    # An unexpected exception used to kill the process outright. Buried in a
+    # future it would instead leave the crawl silently running short-handed —
+    # or hang the coordinator waiting on a drain the dead worker's claim can
+    # never deliver.
+    path, coordinator_conn = _pool_db(tmp_path, 5)
+
+    def exploding_crawl_player(conn_, client_, uid, season):
+        raise RuntimeError("worker bug")
+
+    with pytest.raises(RuntimeError, match="worker bug"):
+        main.run(
+            coordinator_conn,
+            object(),
+            season=19,
+            shutdown_flag=main.ShutdownFlag(),
+            reseed_interval_seconds=10**9,
+            crawl_player_fn=exploding_crawl_player,
+            reseed_fn=lambda conn_, client_: 0,
+            requeue_fn=lambda conn_: 0,
+            workers=2,
+            worker_conn_fn=lambda: db.connect(path),
+            worker_idle_sleep_seconds=0.01,
+            coordinator_poll_seconds=0.01,
+        )
+    coordinator_conn.close()
+
+
+def test_worker_pool_shares_one_client_across_every_worker(tmp_path):
+    # The design's core claim: N workers, ONE rate limiter and circuit breaker,
+    # so the site sees a single adaptively-paced traffic pattern rather than N
+    # uncoordinated crawlers.
+    path, coordinator_conn = _pool_db(tmp_path, 12)
+    client = object()
+    lock = threading.Lock()
+    clients_seen = []
+    threads_seen = set()
+
+    def fake_crawl_player(conn_, client_, uid, season):
+        with lock:
+            clients_seen.append(client_)
+            threads_seen.add(threading.current_thread().name)
+        # Slow enough that the queue cannot be drained by whichever worker
+        # happens to start first, so all three really do take part.
+        time.sleep(0.02)
+        db.upsert(conn_, "players", ["uid"], {"uid": uid, "crawl_status": "done"})
+        conn_.commit()
+        return "done"
+
+    main.run(
+        coordinator_conn,
+        client,
+        season=19,
+        shutdown_flag=main.ShutdownFlag(),
+        reseed_interval_seconds=10**9,
+        crawl_player_fn=fake_crawl_player,
+        reseed_fn=lambda conn_, client_: 0,
+        requeue_fn=lambda conn_: 0,
+        workers=3,
+        worker_conn_fn=lambda: db.connect(path),
+        worker_idle_sleep_seconds=0.01,
+        coordinator_poll_seconds=0.01,
+    )
+
+    assert len(threads_seen) > 1  # genuinely several workers
+    assert all(c is client for c in clients_seen)  # all on the one client
+    coordinator_conn.close()
+
+
+def test_worker_pool_gives_each_worker_its_own_connection(tmp_path):
+    # sqlite3 connections are bound to their creating thread, so sharing one
+    # would raise "SQLite objects created in a thread can only be used in that
+    # same thread" the moment a second worker touched it.
+    path, coordinator_conn = _pool_db(tmp_path, 12)
+    lock = threading.Lock()
+    conn_by_thread = {}
+
+    def fake_crawl_player(conn_, client_, uid, season):
+        with lock:
+            conn_by_thread.setdefault(threading.current_thread().name, set()).add(id(conn_))
+        time.sleep(0.02)  # so all three workers really get some of the queue
+        db.upsert(conn_, "players", ["uid"], {"uid": uid, "crawl_status": "done"})
+        conn_.commit()
+        return "done"
+
+    main.run(
+        coordinator_conn,
+        object(),
+        season=19,
+        shutdown_flag=main.ShutdownFlag(),
+        reseed_interval_seconds=10**9,
+        crawl_player_fn=fake_crawl_player,
+        reseed_fn=lambda conn_, client_: 0,
+        requeue_fn=lambda conn_: 0,
+        workers=3,
+        worker_conn_fn=lambda: db.connect(path),
+        worker_idle_sleep_seconds=0.01,
+        coordinator_poll_seconds=0.01,
+    )
+
+    # One connection per worker thread, and never the coordinator's.
+    assert len(conn_by_thread) > 1  # several workers really took part
+    assert all(len(ids) == 1 for ids in conn_by_thread.values())
+    all_ids = {next(iter(ids)) for ids in conn_by_thread.values()}
+    assert len(all_ids) == len(conn_by_thread)
+    assert id(coordinator_conn) not in all_ids
+    coordinator_conn.close()
