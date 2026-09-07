@@ -85,6 +85,20 @@ def test_circuit_opens_after_repeated_failures_and_blocks_further_calls():
         client.get_json("/api/player/1")
 
 
+def test_default_session_carries_the_declared_user_agent():
+    client = RivalsMetaClient(limiter=NoSleepLimiter())
+    assert client.session.headers["User-Agent"] == RivalsMetaClient.USER_AGENT
+
+
+def test_injected_session_is_not_mutated_and_needs_no_headers_attribute():
+    # Test fakes are plain objects with only .get(); constructing a client
+    # around one must not touch (or require) a .headers mapping.
+    session = FakeSession([FakeResponse(200, payload={"ok": True})])
+    client = RivalsMetaClient(session=session, limiter=NoSleepLimiter())
+    assert client.session is session
+    assert not hasattr(session, "headers")
+
+
 def test_rate_limiter_speeds_up_on_success_and_slows_down_on_failure():
     limiter = AdaptiveRateLimiter(initial_delay=1.0, min_delay=0.2, max_delay=8.0)
     limiter.record_success(latency=0.1)

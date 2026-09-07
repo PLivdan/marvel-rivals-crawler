@@ -42,7 +42,13 @@ class RivalsMetaClient:
     CIRCUIT_COOLDOWN_SECONDS = 300
 
     def __init__(self, session=None, limiter=None):
-        self.session = session or requests.Session()
+        if session is None:
+            # Only stamp the User-Agent on a session we own. An injected
+            # session belongs to the caller (tests pass plain fakes with no
+            # .headers at all), so it is never mutated here.
+            session = requests.Session()
+            session.headers["User-Agent"] = self.USER_AGENT
+        self.session = session
         self.limiter = limiter or AdaptiveRateLimiter()
         self._consecutive_failures = 0
         self._circuit_open_until = 0.0
