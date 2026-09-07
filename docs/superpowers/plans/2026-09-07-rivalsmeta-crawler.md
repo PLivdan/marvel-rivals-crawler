@@ -565,7 +565,6 @@ class RivalsMetaClient:
             except requests.RequestException as exc:
                 last_exc = exc
                 self.limiter.record_failure()
-                self._register_failure()
                 continue
 
             latency = time.time() - start
@@ -577,7 +576,6 @@ class RivalsMetaClient:
 
             if resp.status_code in (429, 403) or resp.status_code >= 500:
                 self.limiter.record_failure()
-                self._register_failure()
                 last_exc = FetchError(f"status {resp.status_code} for {path}")
                 continue
 
@@ -585,6 +583,10 @@ class RivalsMetaClient:
             self._consecutive_failures = 0
             return resp
 
+        # Registered once per exhausted-retries call, not once per raw
+        # attempt — the circuit threshold counts distinct failed fetches,
+        # not individual retry attempts within one fetch.
+        self._register_failure()
         raise last_exc or FetchError(f"failed after {self.MAX_RETRIES} attempts: {path}")
 
     def _register_failure(self):
