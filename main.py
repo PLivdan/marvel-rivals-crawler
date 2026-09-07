@@ -69,6 +69,22 @@ def _format_eta(pending, rate_per_min):
     return f"~{hours / 24:.1f}d"
 
 
+def _reseed_guarded(reseed_fn, conn, client, circuit_cooldown_seconds, sleep_fn):
+    """Run a reseed, absorbing fetch failures instead of killing the process.
+
+    A reseed makes ~40+ requests (one per hero leaderboard plus the global
+    board), so it is the single most likely place to meet a transient
+    failure. Unlike a player crawl there is no per-player status to mark on
+    failure — a reseed is simply retried on the next cycle."""
+    try:
+        reseed_fn(conn, client)
+    except fetcher.CircuitOpenError:
+        print(f"circuit open during reseed; pausing {circuit_cooldown_seconds}s", file=sys.stderr)
+        sleep_fn(circuit_cooldown_seconds)
+    except fetcher.FetchError as exc:
+        print(f"reseed failed (retrying next cycle): {exc}", file=sys.stderr)
+
+
 def run(
     conn,
     client,
@@ -83,13 +99,13 @@ def run(
     crawl_player_fn = crawl_player_fn or crawler.crawl_player
     reseed_fn = reseed_fn or crawler.reseed
 
-    reseed_fn(conn, client)
+    _reseed_guarded(reseed_fn, conn, client, circuit_cooldown_seconds, sleep_fn)
     last_reseed = time.time()
     last_progress_log = time.time()
 
     while not shutdown_flag.requested:
         if time.time() - last_reseed > reseed_interval_seconds:
-            reseed_fn(conn, client)
+            _reseed_guarded(reseed_fn, conn, client, circuit_cooldown_seconds, sleep_fn)
             last_reseed = time.time()
 
         uid = crawler.select_next_player(conn)

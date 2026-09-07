@@ -153,6 +153,70 @@ def test_run_pauses_on_circuit_open_error_then_retries():
     assert status == "pending"
 
 
+def test_run_survives_circuit_open_error_from_the_startup_reseed():
+    # A reseed makes ~40+ requests; a failure there must not kill the process.
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
+    flag = main.ShutdownFlag()
+    calls = []
+    sleeps = []
+
+    def exploding_reseed(conn_, client_):
+        raise fetcher.CircuitOpenError("open")
+
+    def fake_crawl_player(conn_, client_, uid, season):
+        calls.append(uid)
+        flag.requested = True
+        return "done"
+
+    main.run(
+        conn,
+        object(),
+        season=19,
+        shutdown_flag=flag,
+        reseed_interval_seconds=10**9,
+        crawl_player_fn=fake_crawl_player,
+        reseed_fn=exploding_reseed,
+        circuit_cooldown_seconds=0,
+        sleep_fn=sleeps.append,
+    )
+
+    assert sleeps == [0]  # cooled down instead of crashing
+    assert calls == [1]  # and carried on crawling
+
+
+def test_run_survives_fetch_error_from_the_periodic_reseed():
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
+    flag = main.ShutdownFlag()
+    calls = []
+    reseeds = []
+
+    def flaky_reseed(conn_, client_):
+        reseeds.append(1)
+        if len(reseeds) > 1:  # the periodic (not startup) reseed
+            raise fetcher.FetchError("boom")
+        return 0
+
+    def fake_crawl_player(conn_, client_, uid, season):
+        calls.append(uid)
+        flag.requested = True
+        return "done"
+
+    main.run(
+        conn,
+        object(),
+        season=19,
+        shutdown_flag=flag,
+        reseed_interval_seconds=-1,  # force the periodic reseed immediately
+        crawl_player_fn=fake_crawl_player,
+        reseed_fn=flaky_reseed,
+    )
+
+    assert len(reseeds) == 2  # startup + periodic
+    assert calls == [1]  # the loop continued past the failed reseed
+
+
 def test_status_flag_prints_progress_and_exits_without_crawling(monkeypatch, capsys, tmp_path):
     db_path = str(tmp_path / "test.db")
     conn = db.connect(db_path)

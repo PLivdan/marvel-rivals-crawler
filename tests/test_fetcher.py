@@ -1,4 +1,5 @@
 import pytest
+import requests
 
 from fetcher import AdaptiveRateLimiter, RivalsMetaClient, PlayerNotFoundError, CircuitOpenError, FetchError
 
@@ -59,6 +60,18 @@ def test_get_json_exhausts_retries_and_raises_fetch_error():
     with pytest.raises(FetchError):
         client.get_json("/api/player/1")
     assert session.calls == 3
+
+
+def test_connection_errors_exhaust_retries_as_fetch_error_not_raw_requests_error():
+    # A raw requests.RequestException escaping _request would sail straight
+    # past main.py's `except fetcher.FetchError` and kill the whole run.
+    session = FakeSession([requests.ConnectionError("no route to host")] * 3)
+    client = RivalsMetaClient(session=session, limiter=NoSleepLimiter())
+    with pytest.raises(FetchError) as excinfo:
+        client.get_json("/api/player/1")
+    assert not isinstance(excinfo.value, requests.RequestException)
+    assert isinstance(excinfo.value.__cause__, requests.ConnectionError)
+    assert session.calls == RivalsMetaClient.MAX_RETRIES
 
 
 def test_circuit_opens_after_repeated_failures_and_blocks_further_calls():

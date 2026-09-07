@@ -86,6 +86,12 @@ class RivalsMetaClient:
             return resp
 
         self._register_failure()
+        # Every exhausted-retry path must surface as a FetchError. When all
+        # attempts died on requests.RequestException, last_exc is that raw
+        # exception, which main.py's `except fetcher.FetchError` would not
+        # catch — crashing the whole run on a transient connection blip.
+        if last_exc is not None and not isinstance(last_exc, FetchError):
+            raise FetchError(f"failed after {self.MAX_RETRIES} attempts: {path}") from last_exc
         raise last_exc or FetchError(f"failed after {self.MAX_RETRIES} attempts: {path}")
 
     def _register_failure(self):
