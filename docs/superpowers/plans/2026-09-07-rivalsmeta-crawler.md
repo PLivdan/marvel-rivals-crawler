@@ -27,7 +27,7 @@ The spec (§10) flagged three items as "resolve during implementation." All thre
 2. **Hero roster for seeding**: rather than a static hardcoded list of ~40 hero ids (which would go stale — the site was mid-launch of a new hero, "The Hood," at investigation time), heroes are discovered dynamically into a `heroes` table from every ingested match's ban list and hero-swap segments, and `reseed()` calls `/api/hero-leaderboard/{hero_id}` for any hero not seeded in the last 24 hours. This self-bootstraps within the first few matches crawled and requires no manual roster maintenance as new heroes launch.
 3. **Competitive mode id**: confirmed as `game_mode_id=2` directly from the site's own mode-filter `<select>` (`{"All Modes":0,"Quick Play":1,"Competitive":2,"Custom":3,"Arcade":4,"Tournament":9}`), not inferred from a single sample.
 
-Season-number mapping needed no formula at all: the season `<select>` on the site enumerates every season 1:1 in order (Season 0→`1`, Season 1→`2`, Season 1.5→`3`, ... Season 9.5→`19`), and the crawler never needs to compute this itself — `rivalsmeta.resolve_current_season()` always reads the live value from the leaderboard payload, and a player's own per-season rank blob is addressed directly as `rank_game_{1000000 + season}`.
+Season-number mapping needed no formula at all: the season `<select>` on the site enumerates every season 1:1 in order (Season 0→`1`, Season 1→`2`, Season 1.5→`3`, ... Season 9.5→`19`), and the crawler never needs to compute this itself — `rivalsmeta.resolve_current_season()` always reads the live value from the leaderboard payload, and a player's own per-season rank blob is addressed directly as `rank_game_{1001000 + season}`.
 
 ---
 
@@ -770,10 +770,10 @@ def resolve_current_season(client):
 
 def current_season_rank(profile, season):
     """Extract the {level, rank_score, ...} blob for the given season from
-    a player profile's info.rank_game_<1000000+season> field, which is a
+    a player profile's info.rank_game_<1001000+season> field, which is a
     JSON-encoded string, not a nested object."""
     info = profile.get("player", {}).get("info", {})
-    raw = info.get(f"rank_game_{1000000 + season}")
+    raw = info.get(f"rank_game_{1001000 + season}")
     if raw is None:
         return None
     try:
