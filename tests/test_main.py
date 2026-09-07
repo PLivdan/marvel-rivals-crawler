@@ -188,6 +188,67 @@ def test_run_backs_off_on_rate_limited_error_and_leaves_player_pending():
     assert status == "pending"
 
 
+def test_run_requeues_stale_players_at_startup_and_on_the_periodic_interval():
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
+    flag = main.ShutdownFlag()
+    requeues = []
+    calls = []
+
+    def fake_requeue(conn_):
+        requeues.append(conn_)
+        return 0
+
+    def fake_crawl_player(conn_, client_, uid, season):
+        calls.append(uid)
+        flag.requested = True
+        return "done"
+
+    main.run(
+        conn,
+        object(),
+        season=19,
+        shutdown_flag=flag,
+        reseed_interval_seconds=-1,  # force the periodic branch immediately
+        crawl_player_fn=fake_crawl_player,
+        reseed_fn=lambda conn_, client_: 0,
+        requeue_fn=fake_requeue,
+    )
+
+    assert len(requeues) == 2  # once at startup, once on the periodic tick
+    assert all(c is conn for c in requeues)
+    assert calls == [1]
+
+
+def test_run_requeues_even_when_the_reseed_had_to_back_off():
+    # Requeueing is local DB work with nothing network-shaped to fail, so a
+    # backed-off reseed must not also cost us the frontier refresh.
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
+    flag = main.ShutdownFlag()
+    requeues = []
+
+    def failing_reseed(conn_, client_):
+        raise fetcher.FetchError("boom")
+
+    def fake_crawl_player(conn_, client_, uid, season):
+        flag.requested = True
+        return "done"
+
+    main.run(
+        conn,
+        object(),
+        season=19,
+        shutdown_flag=flag,
+        reseed_interval_seconds=10**9,
+        crawl_player_fn=fake_crawl_player,
+        reseed_fn=failing_reseed,
+        requeue_fn=lambda conn_: requeues.append(conn_),
+    )
+
+    assert len(requeues) == 1
+
+
 def test_run_survives_circuit_open_error_from_the_startup_reseed():
     # A reseed makes ~40+ requests; a failure there must not kill the process.
     conn = make_conn()

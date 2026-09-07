@@ -121,6 +121,46 @@ def crawl_player(conn, client, uid, season):
     return _set_status(conn, uid, "done")
 
 
+def requeue_stale_players(conn, done_revisit_seconds=43200, error_retry_seconds=3600):
+    """Return stale players to the frontier, so the crawl is actually ongoing.
+
+    Without this nothing ever leaves 'done' or 'error', so the incremental
+    re-crawl the design is built around could never happen, and one transient
+    failure abandoned a player permanently.
+
+    The two resets are deliberately NOT symmetric, because crawl_player reads
+    `last_crawled_at IS NULL` to tell a first-ever crawl from a revisit:
+
+    - A 'done' player KEEPS last_crawled_at. They completed a full crawl, so
+      this is a genuine revisit: stopping at the first already-known match is
+      both correct and the cheap way to pull only what's new.
+    - An 'error' player has last_crawled_at CLEARED to NULL. They never
+      completed a first crawl — they may have ingested none, some, or most of
+      their history before failing — so the retry must behave like a fresh
+      first crawl (skip past already-known matches and keep paginating).
+      Leaving the timestamp set would make the retry stop at the first match
+      the failed attempt happened to ingest, silently stranding the rest.
+
+    A NULL last_crawled_at never satisfies `last_crawled_at < cutoff` in SQL,
+    so rows in an unexpected state are left alone rather than requeued.
+    """
+    now = db.now()
+
+    done_reset = conn.execute(
+        "UPDATE players SET crawl_status='pending' "
+        "WHERE crawl_status='done' AND last_crawled_at IS NOT NULL AND last_crawled_at < ?",
+        (now - done_revisit_seconds,),
+    ).rowcount
+    error_reset = conn.execute(
+        "UPDATE players SET crawl_status='pending', last_crawled_at=NULL "
+        "WHERE crawl_status='error' AND last_crawled_at IS NOT NULL AND last_crawled_at < ?",
+        (now - error_retry_seconds,),
+    ).rowcount
+
+    conn.commit()
+    return done_reset + error_reset
+
+
 def reseed(conn, client, hero_refresh_seconds=86400):
     # Hero leaderboards are seeded BEFORE the general leaderboard on purpose:
     # _seed_player only tags a player's discovery_hero_id on first creation,

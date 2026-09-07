@@ -326,6 +326,155 @@ def test_crawl_player_skips_a_malformed_match_and_keeps_going():
     ).fetchone()[0] == 12
 
 
+def test_requeue_stale_players_revisits_done_players_keeping_last_crawled_at():
+    conn = make_conn()
+    now = db.now()
+    db.upsert(
+        conn,
+        "players",
+        ["uid"],
+        {"uid": 1, "crawl_status": "done", "last_crawled_at": now - 50000},
+    )
+
+    n = crawler.requeue_stale_players(conn, done_revisit_seconds=43200)
+
+    assert n == 1
+    status, last = conn.execute(
+        "SELECT crawl_status, last_crawled_at FROM players WHERE uid=1"
+    ).fetchone()
+    assert status == "pending"
+    # A completed crawl is a genuine revisit: keeping the timestamp is what
+    # lets crawl_player stop at the first already-known match and pull only
+    # what's new.
+    assert last == now - 50000
+
+
+def test_requeue_stale_players_retries_error_players_clearing_last_crawled_at():
+    conn = make_conn()
+    now = db.now()
+    db.upsert(
+        conn,
+        "players",
+        ["uid"],
+        {"uid": 1, "crawl_status": "error", "last_crawled_at": now - 7200},
+    )
+
+    n = crawler.requeue_stale_players(conn, error_retry_seconds=3600)
+
+    assert n == 1
+    status, last = conn.execute(
+        "SELECT crawl_status, last_crawled_at FROM players WHERE uid=1"
+    ).fetchone()
+    assert status == "pending"
+    # An errored player never completed a first crawl, so the retry must be
+    # treated as a fresh one — NULL here is what makes crawl_player skip past
+    # partially-ingested matches instead of stopping at the first of them.
+    assert last is None
+
+
+def test_requeue_stale_players_leaves_players_inside_their_windows_alone():
+    conn = make_conn()
+    now = db.now()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "done", "last_crawled_at": now - 100})
+    db.upsert(conn, "players", ["uid"], {"uid": 2, "crawl_status": "error", "last_crawled_at": now - 100})
+
+    n = crawler.requeue_stale_players(conn, done_revisit_seconds=43200, error_retry_seconds=3600)
+
+    assert n == 0
+    rows = dict(conn.execute("SELECT uid, crawl_status FROM players").fetchall())
+    assert rows == {1: "done", 2: "error"}
+
+
+def test_requeue_stale_players_never_touches_other_statuses():
+    # Terminal/never-crawlable states must stay out of the frontier no matter
+    # how old they are: re-crawling them would burn requests to learn nothing.
+    conn = make_conn()
+    ancient = db.now() - 10**7
+    statuses = {
+        1: "pending",
+        2: "skipped_private",
+        3: "skipped_floor",
+        4: "not_indexed",
+    }
+    for uid, status in statuses.items():
+        db.upsert(
+            conn,
+            "players",
+            ["uid"],
+            {"uid": uid, "crawl_status": status, "last_crawled_at": ancient},
+        )
+
+    n = crawler.requeue_stale_players(conn)
+
+    assert n == 0
+    rows = dict(conn.execute("SELECT uid, crawl_status FROM players").fetchall())
+    assert rows == statuses
+    # And the timestamps are untouched too.
+    assert all(
+        row[0] == ancient
+        for row in conn.execute("SELECT last_crawled_at FROM players").fetchall()
+    )
+
+
+def test_requeue_stale_players_counts_both_categories():
+    conn = make_conn()
+    now = db.now()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "done", "last_crawled_at": now - 50000})
+    db.upsert(conn, "players", ["uid"], {"uid": 2, "crawl_status": "done", "last_crawled_at": now - 50000})
+    db.upsert(conn, "players", ["uid"], {"uid": 3, "crawl_status": "error", "last_crawled_at": now - 7200})
+    db.upsert(conn, "players", ["uid"], {"uid": 4, "crawl_status": "done", "last_crawled_at": now})
+
+    assert crawler.requeue_stale_players(conn) == 3
+
+
+def test_requeued_error_player_is_recrawled_as_a_fresh_first_crawl():
+    # The whole point of the last_crawled_at asymmetry, end to end: a player
+    # who errored partway through their first crawl must, on retry, skip past
+    # the matches that attempt did ingest and keep paginating — not stop dead
+    # at the first of them and strand the rest of their history.
+    conn = make_conn()
+    match = load("match_detail.json")
+    partially_ingested_uid = "ingested_before_the_error"
+    unseen_uid = match["match_uid"]
+    uid = 457877313
+    profile = load("player_public.json")
+
+    db.upsert(conn, "matches", ["match_uid"], {"match_uid": partially_ingested_uid})
+    db.upsert(
+        conn,
+        "players",
+        ["uid"],
+        {"uid": uid, "crawl_status": "error", "last_crawled_at": db.now() - 7200},
+    )
+    conn.commit()
+
+    assert crawler.requeue_stale_players(conn) == 1
+    assert crawler.select_next_player(conn) == uid  # back in the frontier
+
+    history_page = [
+        {"match_uid": partially_ingested_uid, "match_map_id": 1200},
+        {"match_uid": unseen_uid, "match_map_id": 1245},
+    ]
+
+    class RetryClient:
+        def __init__(self):
+            self.detail_calls = []
+
+        def get_json(self, path, params=None):
+            if path == f"/api/player/{uid}":
+                return profile
+            if path == f"/api/player-match-history/{uid}":
+                return history_page if params["skip"] == 0 else []
+            if path.startswith("/api/matches/"):
+                self.detail_calls.append(path.rsplit("/", 1)[1])
+                return match
+            raise AssertionError(f"unexpected call: {path} {params}")
+
+    client = RetryClient()
+    assert crawler.crawl_player(conn, client, uid=uid, season=19) == "done"
+    assert client.detail_calls == [unseen_uid]
+
+
 def test_reseed_queues_players_from_global_and_hero_leaderboards():
     conn = make_conn()
     raw_leaderboard_text = (FIXTURES / "leaderboard_payload.json").read_text()

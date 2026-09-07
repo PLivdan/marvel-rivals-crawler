@@ -93,19 +93,28 @@ def run(
     reseed_interval_seconds=86400,
     crawl_player_fn=None,
     reseed_fn=None,
+    requeue_fn=None,
     circuit_cooldown_seconds=60,
     sleep_fn=time.sleep,
 ):
     crawl_player_fn = crawl_player_fn or crawler.crawl_player
     reseed_fn = reseed_fn or crawler.reseed
+    requeue_fn = requeue_fn or crawler.requeue_stale_players
 
+    # Requeueing rides along with the reseed cadence, including the startup
+    # call: a process that has been down for a while should pick up everything
+    # that went stale meanwhile instead of waiting out a full interval. It is
+    # pure local DB work, so it runs even when the reseed above had to back
+    # off — there is nothing network-shaped to fail.
     _reseed_guarded(reseed_fn, conn, client, circuit_cooldown_seconds, sleep_fn)
+    requeue_fn(conn)
     last_reseed = time.time()
     last_progress_log = time.time()
 
     while not shutdown_flag.requested:
         if time.time() - last_reseed > reseed_interval_seconds:
             _reseed_guarded(reseed_fn, conn, client, circuit_cooldown_seconds, sleep_fn)
+            requeue_fn(conn)
             last_reseed = time.time()
 
         uid = crawler.select_next_player(conn)
