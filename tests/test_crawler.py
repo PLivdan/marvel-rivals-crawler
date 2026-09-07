@@ -96,6 +96,222 @@ def test_select_next_player_stays_fast_at_realistic_queue_size():
     assert elapsed < 1.0, f"select_next_player took {elapsed:.2f}s at 2000 pending players"
 
 
+def test_claim_next_player_returns_none_when_queue_empty():
+    conn = make_conn()
+    assert crawler.claim_next_player(conn) is None
+
+
+def test_claim_next_player_marks_the_player_claimed_and_stamps_claimed_at():
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
+
+    before = db.now()
+    assert crawler.claim_next_player(conn) == 1
+
+    status, claimed_at = conn.execute(
+        "SELECT crawl_status, claimed_at FROM players WHERE uid=1"
+    ).fetchone()
+    assert status == "claimed"
+    assert claimed_at is not None and claimed_at >= before
+
+
+def test_claim_next_player_follows_the_same_priority_order_as_select_next_player():
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "discovery_hero_id": None, "crawl_status": "pending"})
+    db.upsert(conn, "players", ["uid"], {"uid": 2, "discovery_hero_id": 1002, "crawl_status": "pending"})
+    # Untagged players sort last, so the hero-tagged one must be claimed first.
+    assert crawler.claim_next_player(conn) == 2
+
+
+def test_two_sequential_claims_hand_out_two_different_players():
+    # The plain sequential case: a claimed player is out of the frontier, so a
+    # second claim cannot possibly return them again.
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
+    db.upsert(conn, "players", ["uid"], {"uid": 2, "crawl_status": "pending"})
+
+    first = crawler.claim_next_player(conn)
+    second = crawler.claim_next_player(conn)
+
+    assert {first, second} == {1, 2}
+    assert crawler.claim_next_player(conn) is None  # nothing pending left
+    statuses = dict(conn.execute("SELECT uid, crawl_status FROM players").fetchall())
+    assert statuses == {1: "claimed", 2: "claimed"}
+
+
+def test_claim_next_player_does_not_stamp_last_crawled_at():
+    # crawl_player reads `last_crawled_at IS NULL` as "has never COMPLETED a
+    # crawl". Writing it at claim time would make every first crawl look like a
+    # revisit, so the crawler would stop at the first already-known match and
+    # permanently strand the rest of that player's history.
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
+
+    assert crawler.claim_next_player(conn) == 1
+
+    assert conn.execute("SELECT last_crawled_at FROM players WHERE uid=1").fetchone()[0] is None
+
+
+def test_claim_next_player_preserves_an_existing_last_crawled_at_for_revisits():
+    conn = make_conn()
+    stamped = db.now() - 50000
+    db.upsert(
+        conn,
+        "players",
+        ["uid"],
+        {"uid": 1, "crawl_status": "pending", "last_crawled_at": stamped},
+    )
+
+    assert crawler.claim_next_player(conn) == 1
+
+    assert conn.execute("SELECT last_crawled_at FROM players WHERE uid=1").fetchone()[0] == stamped
+
+
+def test_a_claimed_first_time_player_is_still_crawled_as_a_fresh_first_crawl():
+    # End-to-end guard for the two tests above: claiming must not disturb the
+    # interrupted-first-crawl resume. The player has one already-ingested match
+    # and one unseen one; a fresh crawl skips past the known one and still
+    # fetches the unseen one, where a revisit would stop dead at the known one.
+    conn = make_conn()
+    match = load("match_detail.json")
+    already_ingested_uid = "ingested_before_the_interruption"
+    unseen_uid = match["match_uid"]
+    uid = 457877313
+    profile = load("player_public.json")
+
+    db.upsert(conn, "matches", ["match_uid"], {"match_uid": already_ingested_uid})
+    db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "pending"})
+    conn.commit()
+
+    assert crawler.claim_next_player(conn) == uid
+
+    history_page = [
+        {"match_uid": already_ingested_uid, "match_map_id": 1200},
+        {"match_uid": unseen_uid, "match_map_id": 1245},
+    ]
+
+    class ResumeClient:
+        def __init__(self):
+            self.detail_calls = []
+
+        def get_json(self, path, params=None):
+            if path == f"/api/player/{uid}":
+                return profile
+            if path == f"/api/player-match-history/{uid}":
+                return history_page if params["skip"] == 0 else []
+            if path.startswith("/api/matches/"):
+                self.detail_calls.append(path.rsplit("/", 1)[1])
+                return match
+            raise AssertionError(f"unexpected call: {path} {params}")
+
+    client = ResumeClient()
+    assert crawler.crawl_player(conn, client, uid=uid, season=19) == "done"
+    assert client.detail_calls == [unseen_uid]
+
+
+def test_crawl_player_clears_claimed_at_when_it_reaches_a_terminal_status():
+    # claimed_at must mean "a worker is holding this player right now" and
+    # nothing else — that is exactly what the orphaned-claim sweep keys on.
+    conn = make_conn()
+    db.upsert(
+        conn,
+        "players",
+        ["uid"],
+        {"uid": 1, "crawl_status": "pending", "latest_known_level": 5},
+    )
+    assert crawler.claim_next_player(conn) == 1
+    assert conn.execute("SELECT claimed_at FROM players WHERE uid=1").fetchone()[0] is not None
+
+    class UnusedClient:
+        def get_json(self, *a, **k):
+            raise AssertionError("below-floor player needs no request")
+
+    assert crawler.crawl_player(conn, UnusedClient(), uid=1, season=19) == "skipped_floor"
+    assert conn.execute("SELECT claimed_at FROM players WHERE uid=1").fetchone()[0] is None
+
+
+def test_two_connections_racing_for_the_same_player_produce_exactly_one_claim(tmp_path, monkeypatch):
+    """The race the claim exists to close, played out by hand.
+
+    Two real connections to the same on-disk WAL database contend for the only
+    pending row. Connection A is frozen between its SELECT (it has picked its
+    candidate) and its UPDATE (it has not yet written the claim) — precisely
+    the window in which the old select-then-crawl pair would have let both
+    workers start crawling the same player. B runs a complete claim and commits
+    inside that window. A then finishes: its `AND crawl_status='pending'` guard
+    matches zero rows, rowcount is 0, and A correctly reports None.
+    """
+    path = str(tmp_path / "race.db")
+    setup = db.connect(path)
+    db.init_schema(setup)
+    db.upsert(setup, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
+    setup.commit()
+    setup.close()
+
+    conn_a = db.connect(path)
+    conn_b = db.connect(path)
+    real_select = crawler.select_next_player
+    b_result = []
+
+    def select_then_let_b_claim(conn):
+        uid = real_select(conn)
+        if conn is conn_a:
+            # A has its candidate but has NOT claimed it yet. Restore the real
+            # select first so B's claim runs normally, then let B claim and
+            # commit inside A's window.
+            monkeypatch.setattr(crawler, "select_next_player", real_select)
+            b_result.append(crawler.claim_next_player(conn_b))
+        return uid
+
+    monkeypatch.setattr(crawler, "select_next_player", select_then_let_b_claim)
+    a_result = crawler.claim_next_player(conn_a)
+
+    assert b_result == [1]  # B, which committed first, won the row
+    assert a_result is None  # A lost, and says so rather than double-claiming
+    # Exactly one claim exists, not two, not zero.
+    assert sorted([a_result] + b_result, key=lambda v: (v is None, v)) == [1, None]
+    status, claimed_at = conn_a.execute(
+        "SELECT crawl_status, claimed_at FROM players WHERE uid=1"
+    ).fetchone()
+    assert status == "claimed"
+    assert claimed_at is not None
+    conn_a.close()
+    conn_b.close()
+
+
+def test_release_player_returns_a_claim_to_the_frontier_untouched():
+    conn = make_conn()
+    stamped = db.now() - 50000
+    db.upsert(
+        conn,
+        "players",
+        ["uid"],
+        {"uid": 1, "crawl_status": "pending", "last_crawled_at": stamped},
+    )
+    assert crawler.claim_next_player(conn) == 1
+
+    crawler.release_player(conn, 1)
+
+    status, last, claimed_at = conn.execute(
+        "SELECT crawl_status, last_crawled_at, claimed_at FROM players WHERE uid=1"
+    ).fetchone()
+    assert status == "pending"
+    assert claimed_at is None
+    # Releasing is a no-op on history: this player's revisit/first-crawl state
+    # must survive a back-off unchanged.
+    assert last == stamped
+    assert crawler.claim_next_player(conn) == 1  # and they are claimable again
+
+
+def test_release_player_leaves_a_player_who_is_not_claimed_alone():
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "done", "last_crawled_at": db.now()})
+
+    crawler.release_player(conn, 1)
+
+    assert conn.execute("SELECT crawl_status FROM players WHERE uid=1").fetchone()[0] == "done"
+
+
 def test_crawl_player_below_floor_precheck_skips_without_profile_fetch():
     conn = make_conn()
     db.upsert(
@@ -466,6 +682,80 @@ def test_requeue_stale_players_counts_both_categories():
     db.upsert(conn, "players", ["uid"], {"uid": 4, "crawl_status": "done", "last_crawled_at": now})
 
     assert crawler.requeue_stale_players(conn) == 3
+
+
+def test_requeue_stale_players_frees_an_orphaned_claim_as_a_fresh_crawl():
+    # A worker that died mid-crawl leaves its player 'claimed' forever. Like an
+    # 'error' player they never completed the crawl they were in the middle of,
+    # so last_crawled_at is cleared and the retry runs with fresh-crawl
+    # semantics rather than stopping at the first match that attempt ingested.
+    conn = make_conn()
+    now = db.now()
+    db.upsert(
+        conn,
+        "players",
+        ["uid"],
+        {
+            "uid": 1,
+            "crawl_status": "claimed",
+            "claimed_at": now - 1200,
+            "last_crawled_at": now - 90000,
+        },
+    )
+
+    n = crawler.requeue_stale_players(conn, claimed_stale_seconds=600)
+
+    assert n == 1
+    status, last, claimed_at = conn.execute(
+        "SELECT crawl_status, last_crawled_at, claimed_at FROM players WHERE uid=1"
+    ).fetchone()
+    assert status == "pending"
+    assert last is None
+    assert claimed_at is None
+
+
+def test_requeue_stale_players_leaves_a_claim_inside_its_window_alone():
+    # The window has to be long enough that a worker legitimately grinding
+    # through a big match history is never robbed of the player it is crawling.
+    conn = make_conn()
+    now = db.now()
+    db.upsert(
+        conn,
+        "players",
+        ["uid"],
+        {"uid": 1, "crawl_status": "claimed", "claimed_at": now - 60},
+    )
+
+    n = crawler.requeue_stale_players(conn, claimed_stale_seconds=600)
+
+    assert n == 0
+    status, claimed_at = conn.execute(
+        "SELECT crawl_status, claimed_at FROM players WHERE uid=1"
+    ).fetchone()
+    assert status == "claimed"
+    assert claimed_at == now - 60
+
+
+def test_requeue_stale_players_counts_orphaned_claims_alongside_the_other_categories():
+    conn = make_conn()
+    now = db.now()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "done", "last_crawled_at": now - 50000})
+    db.upsert(conn, "players", ["uid"], {"uid": 2, "crawl_status": "error", "last_crawled_at": now - 7200})
+    db.upsert(conn, "players", ["uid"], {"uid": 3, "crawl_status": "claimed", "claimed_at": now - 1200})
+    db.upsert(conn, "players", ["uid"], {"uid": 4, "crawl_status": "claimed", "claimed_at": now})
+
+    assert crawler.requeue_stale_players(conn) == 3
+    assert conn.execute("SELECT crawl_status FROM players WHERE uid=4").fetchone()[0] == "claimed"
+
+
+def test_requeue_stale_players_ignores_a_claimed_row_with_no_claim_timestamp():
+    # A NULL timestamp never satisfies `< cutoff`, so a row in an unexpected
+    # state is left alone rather than yanked out from under a live worker.
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "claimed"})
+
+    assert crawler.requeue_stale_players(conn) == 0
+    assert conn.execute("SELECT crawl_status FROM players WHERE uid=1").fetchone()[0] == "claimed"
 
 
 def test_requeued_error_player_is_recrawled_as_a_fresh_first_crawl():

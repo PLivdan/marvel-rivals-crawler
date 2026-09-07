@@ -26,8 +26,58 @@ LIMIT 1
 
 
 def select_next_player(conn):
+    """Read-only peek at the head of the frontier. Safe on its own only when
+    nothing else is crawling; concurrent callers must use claim_next_player,
+    which builds on this."""
     row = conn.execute(PRIORITY_SQL).fetchone()
     return row[0] if row else None
+
+
+def claim_next_player(conn):
+    """Atomically claim one pending player, or return None if the queue is
+    empty right now (which may mean truly empty, or that a concurrent
+    worker won the race for the one candidate row this connection saw --
+    callers should treat both cases the same way: try again shortly).
+
+    The atomicity comes from nothing more exotic than SQLite's ordinary write
+    serialization: one connection's UPDATE commits at a time, and the
+    `AND crawl_status='pending'` guard means a connection that lost the race
+    for this row simply matches zero rows and reports rowcount 0.
+
+    The claim stamps `claimed_at`, NOT `last_crawled_at`. crawl_player reads
+    `last_crawled_at IS NULL` as "this player has never COMPLETED a crawl" and
+    uses it to keep paginating past already-known matches; stamping it here
+    would make every first crawl look like a revisit and silently strand the
+    rest of that player's history (the exact bug the first-crawl resume fix
+    exists to prevent)."""
+    uid = select_next_player(conn)
+    if uid is None:
+        return None
+    cur = conn.execute(
+        "UPDATE players SET crawl_status='claimed', claimed_at=? "
+        "WHERE uid=? AND crawl_status='pending'",
+        (db.now(), uid),
+    )
+    conn.commit()
+    if cur.rowcount == 0:
+        return None
+    return uid
+
+
+def release_player(conn, uid):
+    """Put a claimed player straight back on the frontier, untouched.
+
+    Used when a crawl was abandoned for a reason that is not this player's
+    fault (a tripped circuit, a site-wide 429/403): the pre-concurrency loop
+    simply left them 'pending' to be retried, and this restores exactly that.
+    `last_crawled_at` is deliberately not written — the claim never touched it,
+    so releasing preserves whatever first-crawl/revisit state the row had."""
+    conn.execute(
+        "UPDATE players SET crawl_status='pending', claimed_at=NULL "
+        "WHERE uid=? AND crawl_status='claimed'",
+        (uid,),
+    )
+    conn.commit()
 
 
 def crawl_player(conn, client, uid, season):
@@ -130,14 +180,20 @@ def crawl_player(conn, client, uid, season):
     return _set_status(conn, uid, "done")
 
 
-def requeue_stale_players(conn, done_revisit_seconds=43200, error_retry_seconds=3600):
+def requeue_stale_players(
+    conn,
+    done_revisit_seconds=43200,
+    error_retry_seconds=3600,
+    claimed_stale_seconds=600,
+):
     """Return stale players to the frontier, so the crawl is actually ongoing.
 
     Without this nothing ever leaves 'done' or 'error', so the incremental
-    re-crawl the design is built around could never happen, and one transient
-    failure abandoned a player permanently.
+    re-crawl the design is built around could never happen, one transient
+    failure abandoned a player permanently, and a worker that died holding a
+    claim would strand that player forever.
 
-    The two resets are deliberately NOT symmetric, because crawl_player reads
+    The three resets are deliberately NOT symmetric, because crawl_player reads
     `last_crawled_at IS NULL` to tell a first-ever crawl from a revisit:
 
     - A 'done' player KEEPS last_crawled_at. They completed a full crawl, so
@@ -149,9 +205,17 @@ def requeue_stale_players(conn, done_revisit_seconds=43200, error_retry_seconds=
       first crawl (skip past already-known matches and keep paginating).
       Leaving the timestamp set would make the retry stop at the first match
       the failed attempt happened to ingest, silently stranding the rest.
+    - A 'claimed' player older than `claimed_stale_seconds` is an orphan: the
+      worker that claimed it died (crash, SIGKILL) without ever writing a
+      terminal status. Same reasoning as 'error' — the crawl it was in the
+      middle of never finished, so last_crawled_at is CLEARED to NULL and the
+      retry runs with fresh-crawl semantics. `claimed_at` is cleared too, so
+      the row stops looking claimed. The default window (10 minutes) is
+      generously longer than any single player's crawl should take even with a
+      large match history, so a live worker is never robbed of its player.
 
-    A NULL last_crawled_at never satisfies `last_crawled_at < cutoff` in SQL,
-    so rows in an unexpected state are left alone rather than requeued.
+    A NULL timestamp never satisfies `< cutoff` in SQL, so rows in an
+    unexpected state are left alone rather than requeued.
     """
     now = db.now()
 
@@ -165,9 +229,14 @@ def requeue_stale_players(conn, done_revisit_seconds=43200, error_retry_seconds=
         "WHERE crawl_status='error' AND last_crawled_at IS NOT NULL AND last_crawled_at < ?",
         (now - error_retry_seconds,),
     ).rowcount
+    claimed_reset = conn.execute(
+        "UPDATE players SET crawl_status='pending', last_crawled_at=NULL, claimed_at=NULL "
+        "WHERE crawl_status='claimed' AND claimed_at IS NOT NULL AND claimed_at < ?",
+        (now - claimed_stale_seconds,),
+    ).rowcount
 
     conn.commit()
-    return done_reset + error_reset
+    return done_reset + error_reset + claimed_reset
 
 
 def reseed(conn, client, hero_refresh_seconds=86400):
@@ -220,6 +289,14 @@ def _seed_player(conn, uid, name, discovery_hero_id):
 
 
 def _set_status(conn, uid, status):
-    db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": status, "last_crawled_at": db.now()})
+    # claimed_at is cleared alongside the terminal status so it only ever means
+    # "a worker is holding this player right now", which is what the orphaned-
+    # claim sweep in requeue_stale_players relies on.
+    db.upsert(
+        conn,
+        "players",
+        ["uid"],
+        {"uid": uid, "crawl_status": status, "last_crawled_at": db.now(), "claimed_at": None},
+    )
     conn.commit()
     return status
