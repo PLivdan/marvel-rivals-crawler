@@ -185,6 +185,97 @@ def test_crawl_player_public_diamond_pulls_matches_and_stops_at_known_match():
     assert client.match_detail_calls == 1  # unchanged
 
 
+def test_crawl_player_resumes_interrupted_first_crawl_past_already_known_matches():
+    # Simulates a kill mid-first-crawl: match A was ingested, match B was not,
+    # the player is still 'pending' and last_crawled_at is still NULL. On
+    # resume the crawler must SKIP A and still fetch B, rather than treating A
+    # as "we've caught up" and dropping the rest of the player's history.
+    conn = make_conn()
+    match = load("match_detail.json")
+    already_ingested_uid = "interrupted_match_a"
+    uid = 457877313
+    profile = load("player_public.json")
+
+    db.upsert(conn, "matches", ["match_uid"], {"match_uid": already_ingested_uid})
+    db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "pending"})
+    conn.commit()
+    assert conn.execute("SELECT last_crawled_at FROM players WHERE uid=?", (uid,)).fetchone()[0] is None
+
+    unseen_uid = match["match_uid"]
+    history_page = [
+        {"match_uid": already_ingested_uid, "match_map_id": 1200},
+        {"match_uid": unseen_uid, "match_map_id": 1245},
+    ]
+
+    class ResumeClient:
+        def __init__(self):
+            self.detail_calls = []
+
+        def get_json(self, path, params=None):
+            if path == f"/api/player/{uid}":
+                return profile
+            if path == f"/api/player-match-history/{uid}":
+                return history_page if params["skip"] == 0 else []
+            if path.startswith("/api/matches/"):
+                self.detail_calls.append(path.rsplit("/", 1)[1])
+                return match
+            raise AssertionError(f"unexpected call: {path} {params}")
+
+    client = ResumeClient()
+    status = crawler.crawl_player(conn, client, uid=uid, season=19)
+
+    assert status == "done"
+    assert client.detail_calls == [unseen_uid]
+    assert conn.execute(
+        "SELECT COUNT(*) FROM matches WHERE match_uid=?", (unseen_uid,)
+    ).fetchone()[0] == 1
+
+
+def test_crawl_player_revisit_still_stops_at_first_known_match():
+    # The mirror of the test above: once last_crawled_at is set (a genuine
+    # revisit), the first already-known match_uid means we've caught up, and
+    # pagination must stop there rather than walking the whole history again.
+    conn = make_conn()
+    match = load("match_detail.json")
+    known_uid = "already_have_this_one"
+    uid = 457877313
+    profile = load("player_public.json")
+
+    db.upsert(conn, "matches", ["match_uid"], {"match_uid": known_uid})
+    db.upsert(
+        conn,
+        "players",
+        ["uid"],
+        {"uid": uid, "crawl_status": "pending", "last_crawled_at": db.now()},
+    )
+    conn.commit()
+
+    history_page = [
+        {"match_uid": known_uid, "match_map_id": 1200},
+        {"match_uid": match["match_uid"], "match_map_id": 1245},
+    ]
+
+    class RevisitClient:
+        def __init__(self):
+            self.detail_calls = []
+
+        def get_json(self, path, params=None):
+            if path == f"/api/player/{uid}":
+                return profile
+            if path == f"/api/player-match-history/{uid}":
+                return history_page if params["skip"] == 0 else []
+            if path.startswith("/api/matches/"):
+                self.detail_calls.append(path.rsplit("/", 1)[1])
+                return match
+            raise AssertionError(f"unexpected call: {path} {params}")
+
+    client = RevisitClient()
+    status = crawler.crawl_player(conn, client, uid=uid, season=19)
+
+    assert status == "done"
+    assert client.detail_calls == []
+
+
 def test_reseed_queues_players_from_global_and_hero_leaderboards():
     conn = make_conn()
     raw_leaderboard_text = (FIXTURES / "leaderboard_payload.json").read_text()

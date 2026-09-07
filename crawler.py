@@ -67,6 +67,18 @@ def crawl_player(conn, client, uid, season):
     if level is not None and not rivalsmeta.is_diamond_plus(level):
         return _set_status(conn, uid, "skipped_floor")
 
+    # Stop-at-first-known is only correct for a REVISIT. On a player's
+    # first-ever crawl, an already-known match_uid means a previous attempt
+    # was interrupted (crash/kill/FetchError) partway through their history —
+    # breaking there would mark them 'done' and permanently lose every older
+    # match. A player with last_crawled_at IS NULL has never completed a
+    # crawl, so we skip past known matches (free, no extra request) and keep
+    # paginating to the real end instead.
+    crawled_before_row = conn.execute(
+        "SELECT last_crawled_at FROM players WHERE uid=?", (uid,)
+    ).fetchone()
+    is_revisit = bool(crawled_before_row) and crawled_before_row[0] is not None
+
     skip = 0
     while True:
         page = rivalsmeta.get_player_match_history_page(client, uid, skip, season)
@@ -79,8 +91,10 @@ def crawl_player(conn, client, uid, season):
                 "SELECT 1 FROM matches WHERE match_uid=?", (match_uid,)
             ).fetchone()
             if already_known:
-                hit_known = True
-                break
+                if is_revisit:
+                    hit_known = True
+                    break
+                continue
             detail = rivalsmeta.get_match_detail(client, match_uid)
             # The history entry carries match_map_id, which the match-detail
             # endpoint does not expose at all — pass it through so map_id lands.
