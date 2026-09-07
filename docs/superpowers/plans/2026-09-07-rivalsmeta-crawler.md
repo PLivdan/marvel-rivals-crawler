@@ -302,7 +302,7 @@ FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 def test_resolve_payload_reconstructs_leaderboard():
     raw = (FIXTURES / "leaderboard_payload.json").read_text()
     data = resolve_payload(raw)
-    assert data["device"] == 1
+    assert data["device"] == "1"  # the API returns this as a string, not an int
     assert data["season"] == "last"
     assert len(data["players"]) == 500
     first = data["players"][0]
