@@ -153,6 +153,41 @@ def test_run_pauses_on_circuit_open_error_then_retries():
     assert status == "pending"
 
 
+def test_run_backs_off_on_rate_limited_error_and_leaves_player_pending():
+    # A sustained 429/403 is site-wide throttling, not this player's fault:
+    # run() must back off like a tripped circuit and leave them 'pending',
+    # never mark them 'error' (nothing in this codebase resets 'error').
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
+    flag = main.ShutdownFlag()
+    calls = []
+    sleeps = []
+
+    def rate_limited_then_success(conn_, client_, uid, season):
+        calls.append(uid)
+        if len(calls) == 1:
+            raise fetcher.RateLimitedError("status 429 for /api/player/1")
+        flag.requested = True
+        return "done"
+
+    main.run(
+        conn,
+        object(),
+        season=19,
+        shutdown_flag=flag,
+        reseed_interval_seconds=10**9,
+        crawl_player_fn=rate_limited_then_success,
+        reseed_fn=lambda conn_, client_: 0,
+        circuit_cooldown_seconds=0,
+        sleep_fn=sleeps.append,
+    )
+
+    assert calls == [1, 1]  # retried the same player after backing off
+    assert sleeps == [0]
+    status = conn.execute("SELECT crawl_status FROM players WHERE uid=1").fetchone()[0]
+    assert status == "pending"
+
+
 def test_run_survives_circuit_open_error_from_the_startup_reseed():
     # A reseed makes ~40+ requests; a failure there must not kill the process.
     conn = make_conn()

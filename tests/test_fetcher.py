@@ -1,7 +1,14 @@
 import pytest
 import requests
 
-from fetcher import AdaptiveRateLimiter, RivalsMetaClient, PlayerNotFoundError, CircuitOpenError, FetchError
+from fetcher import (
+    AdaptiveRateLimiter,
+    RivalsMetaClient,
+    PlayerNotFoundError,
+    CircuitOpenError,
+    FetchError,
+    RateLimitedError,
+)
 
 
 class FakeResponse:
@@ -60,6 +67,40 @@ def test_get_json_exhausts_retries_and_raises_fetch_error():
     with pytest.raises(FetchError):
         client.get_json("/api/player/1")
     assert session.calls == 3
+
+
+def test_sustained_429_raises_rate_limited_error_not_fetch_error():
+    # Per the spec, 429/403 is a site-wide throttling signal, not a
+    # per-player failure — so it must NOT reach main.py as a FetchError,
+    # which would permanently mark that player 'error'.
+    session = FakeSession([FakeResponse(429)] * 3)
+    client = RivalsMetaClient(session=session, limiter=NoSleepLimiter())
+    with pytest.raises(RateLimitedError):
+        client.get_json("/api/player/1")
+    assert session.calls == RivalsMetaClient.MAX_RETRIES
+
+
+def test_sustained_403_raises_rate_limited_error():
+    session = FakeSession([FakeResponse(403)] * 3)
+    client = RivalsMetaClient(session=session, limiter=NoSleepLimiter())
+    with pytest.raises(RateLimitedError):
+        client.get_json("/api/player/1")
+
+
+def test_rate_limited_error_is_not_a_fetch_error():
+    session = FakeSession([FakeResponse(429)] * 3)
+    client = RivalsMetaClient(session=session, limiter=NoSleepLimiter())
+    with pytest.raises(RateLimitedError) as excinfo:
+        client.get_json("/api/player/1")
+    assert not isinstance(excinfo.value, FetchError)
+
+
+def test_sustained_5xx_still_raises_fetch_error_not_rate_limited_error():
+    session = FakeSession([FakeResponse(503)] * 3)
+    client = RivalsMetaClient(session=session, limiter=NoSleepLimiter())
+    with pytest.raises(FetchError) as excinfo:
+        client.get_json("/api/player/1")
+    assert not isinstance(excinfo.value, RateLimitedError)
 
 
 def test_connection_errors_exhaust_retries_as_fetch_error_not_raw_requests_error():

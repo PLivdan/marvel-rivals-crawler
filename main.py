@@ -78,8 +78,8 @@ def _reseed_guarded(reseed_fn, conn, client, circuit_cooldown_seconds, sleep_fn)
     failure — a reseed is simply retried on the next cycle."""
     try:
         reseed_fn(conn, client)
-    except fetcher.CircuitOpenError:
-        print(f"circuit open during reseed; pausing {circuit_cooldown_seconds}s", file=sys.stderr)
+    except (fetcher.CircuitOpenError, fetcher.RateLimitedError) as exc:
+        print(f"backing off during reseed ({exc}); pausing {circuit_cooldown_seconds}s", file=sys.stderr)
         sleep_fn(circuit_cooldown_seconds)
     except fetcher.FetchError as exc:
         print(f"reseed failed (retrying next cycle): {exc}", file=sys.stderr)
@@ -116,6 +116,13 @@ def run(
             crawl_player_fn(conn, client, uid, season)
         except fetcher.CircuitOpenError:
             print(f"circuit open; pausing {circuit_cooldown_seconds}s", file=sys.stderr)
+            sleep_fn(circuit_cooldown_seconds)
+            continue
+        except fetcher.RateLimitedError as exc:
+            # A sustained 429/403 is site-wide throttling, not this player's
+            # fault: back off and leave them 'pending' to be retried. Marking
+            # them 'error' would drop them from the frontier forever.
+            print(f"rate limited ({exc}); pausing {circuit_cooldown_seconds}s", file=sys.stderr)
             sleep_fn(circuit_cooldown_seconds)
             continue
         except fetcher.FetchError as exc:

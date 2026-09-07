@@ -15,6 +15,13 @@ class FetchError(Exception):
     pass
 
 
+class RateLimitedError(Exception):
+    """Retries exhausted against a sustained 429/403. Deliberately NOT a
+    FetchError: per the spec, 429/403 is a site-wide throttling signal, not a
+    per-player failure, so the caller must back off and leave the player
+    'pending' rather than marking them 'error' (which nothing ever resets)."""
+
+
 class AdaptiveRateLimiter:
     def __init__(self, initial_delay=1.0, min_delay=0.2, max_delay=8.0):
         self.current_delay = initial_delay
@@ -82,7 +89,12 @@ class RivalsMetaClient:
                 self._consecutive_failures = 0
                 raise PlayerNotFoundError(path)
 
-            if resp.status_code in (429, 403) or resp.status_code >= 500:
+            if resp.status_code in (429, 403):
+                self.limiter.record_failure()
+                last_exc = RateLimitedError(f"status {resp.status_code} for {path}")
+                continue
+
+            if resp.status_code >= 500:
                 self.limiter.record_failure()
                 last_exc = FetchError(f"status {resp.status_code} for {path}")
                 continue
@@ -96,7 +108,7 @@ class RivalsMetaClient:
         # attempts died on requests.RequestException, last_exc is that raw
         # exception, which main.py's `except fetcher.FetchError` would not
         # catch — crashing the whole run on a transient connection blip.
-        if last_exc is not None and not isinstance(last_exc, FetchError):
+        if last_exc is not None and not isinstance(last_exc, (FetchError, RateLimitedError)):
             raise FetchError(f"failed after {self.MAX_RETRIES} attempts: {path}") from last_exc
         raise last_exc or FetchError(f"failed after {self.MAX_RETRIES} attempts: {path}")
 
