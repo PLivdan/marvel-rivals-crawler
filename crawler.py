@@ -1,4 +1,5 @@
 import json
+import sys
 
 import db
 import fetcher
@@ -95,10 +96,24 @@ def crawl_player(conn, client, uid, season):
                     hit_known = True
                     break
                 continue
-            detail = rivalsmeta.get_match_detail(client, match_uid)
-            # The history entry carries match_map_id, which the match-detail
-            # endpoint does not expose at all — pass it through so map_id lands.
-            ingest.ingest_match(conn, detail, season, history_entry=entry)
+            try:
+                detail = rivalsmeta.get_match_detail(client, match_uid)
+                # The history entry carries match_map_id, which the
+                # match-detail endpoint does not expose at all — pass it
+                # through so map_id lands.
+                ingest.ingest_match(conn, detail, season, history_entry=entry)
+            except (KeyError, TypeError, ValueError) as exc:
+                # This is an undocumented third-party API that can change
+                # shape without notice. One malformed match must not take
+                # down the whole run — log it and move on. The rollback drops
+                # whatever partial rows that match wrote before failing, so a
+                # later match's commit can't flush a half-ingested match.
+                conn.rollback()
+                print(
+                    f"skipping malformed match {match_uid}: {type(exc).__name__}: {exc}",
+                    file=sys.stderr,
+                )
+                continue
         if hit_known or len(page) < 20:
             break
         skip += 20

@@ -1,3 +1,4 @@
+import copy
 import json
 import pathlib
 import time
@@ -274,6 +275,55 @@ def test_crawl_player_revisit_still_stops_at_first_known_match():
 
     assert status == "done"
     assert client.detail_calls == []
+
+
+def test_crawl_player_skips_a_malformed_match_and_keeps_going():
+    # The match-detail endpoint is undocumented and can change shape without
+    # notice. One bad payload must not crash crawl_player (and with it the
+    # whole run loop) — it should be logged, skipped, and leave no partial
+    # rows behind, while the sane matches around it still land.
+    conn = make_conn()
+    match = load("match_detail.json")
+    sane_uid = match["match_uid"]
+    malformed_uid = "malformed_match_uid"
+
+    malformed = copy.deepcopy(match)
+    malformed["match_uid"] = malformed_uid
+    del malformed["match_players"][0]["player_uid"]  # shape change mid-ingest
+
+    uid = 457877313
+    db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "pending"})
+    profile = load("player_public.json")
+
+    history_page = [
+        {"match_uid": malformed_uid, "match_map_id": 1200},
+        {"match_uid": sane_uid, "match_map_id": 1245},
+    ]
+
+    class MixedClient:
+        def get_json(self, path, params=None):
+            if path == f"/api/player/{uid}":
+                return profile
+            if path == f"/api/player-match-history/{uid}":
+                return history_page if params["skip"] == 0 else []
+            if path == f"/api/matches/{malformed_uid}":
+                return malformed
+            if path == f"/api/matches/{sane_uid}":
+                return match
+            raise AssertionError(f"unexpected call: {path} {params}")
+
+    status = crawler.crawl_player(conn, MixedClient(), uid=uid, season=19)
+
+    assert status == "done"  # did not raise, completed normally
+    stored = {row[0] for row in conn.execute("SELECT match_uid FROM matches").fetchall()}
+    assert malformed_uid not in stored  # no partial row left behind
+    assert sane_uid in stored  # the good match around it still landed
+    assert conn.execute(
+        "SELECT COUNT(*) FROM match_players WHERE match_uid=?", (malformed_uid,)
+    ).fetchone()[0] == 0
+    assert conn.execute(
+        "SELECT COUNT(*) FROM match_players WHERE match_uid=?", (sane_uid,)
+    ).fetchone()[0] == 12
 
 
 def test_reseed_queues_players_from_global_and_hero_leaderboards():
