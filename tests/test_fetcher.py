@@ -141,9 +141,72 @@ def test_injected_session_is_not_mutated_and_needs_no_headers_attribute():
 
 
 def test_rate_limiter_speeds_up_on_success_and_slows_down_on_failure():
+    # UPDATED for the cooldown semantics: a single fast success no longer eases
+    # the delay down — it takes `cooldown_successes` consecutive fast responses
+    # to earn that, so the site must prove it's comfortable before we speed up.
+    # Hence the loop where this test previously made one record_success call.
     limiter = AdaptiveRateLimiter(initial_delay=1.0, min_delay=0.2, max_delay=8.0)
-    limiter.record_success(latency=0.1)
+    for _ in range(limiter.cooldown_successes):
+        limiter.record_success(latency=0.1)
     assert limiter.current_delay < 1.0
     before = limiter.current_delay
     limiter.record_failure()
     assert limiter.current_delay > before
+
+
+def test_rate_limiter_does_not_speed_up_before_the_cooldown_is_earned():
+    limiter = AdaptiveRateLimiter(initial_delay=1.0, cooldown_successes=3)
+    limiter.record_success(latency=0.1)
+    assert limiter.current_delay == 1.0  # one fast response is not enough
+    limiter.record_success(latency=0.1)
+    assert limiter.current_delay == 1.0  # nor two
+    limiter.record_success(latency=0.1)
+    assert limiter.current_delay < 1.0  # the third earns it
+
+
+def test_rate_limiter_keeps_easing_down_on_a_clean_run_once_past_the_cooldown():
+    limiter = AdaptiveRateLimiter(initial_delay=1.0, cooldown_successes=3)
+    for _ in range(3):
+        limiter.record_success(latency=0.1)
+    after_first_ease = limiter.current_delay
+    limiter.record_success(latency=0.1)
+    assert limiter.current_delay < after_first_ease
+
+
+def test_rate_limiter_backs_off_on_a_slow_success_instead_of_easing_down():
+    # A 200 that took ages still means the origin is straining — speeding up
+    # into it would be exactly the wrong move.
+    limiter = AdaptiveRateLimiter(initial_delay=1.0, latency_threshold=2.0, cooldown_successes=3)
+    for _ in range(3):
+        limiter.record_success(latency=0.1)
+    eased = limiter.current_delay
+    assert eased < 1.0
+
+    limiter.record_success(latency=5.0)
+    assert limiter.current_delay > eased
+    assert limiter.consecutive_fast_successes == 0  # cooldown clock restarted
+
+    # And the restarted cooldown really is enforced: one fast response after a
+    # slow one must not immediately resume easing.
+    after_slow = limiter.current_delay
+    limiter.record_success(latency=0.1)
+    assert limiter.current_delay == after_slow
+
+
+def test_rate_limiter_never_exceeds_max_delay_when_backing_off_on_slow_successes():
+    limiter = AdaptiveRateLimiter(initial_delay=1.0, max_delay=2.0, latency_threshold=2.0)
+    for _ in range(10):
+        limiter.record_success(latency=9.0)
+    assert limiter.current_delay == 2.0
+
+
+def test_rate_limiter_failure_resets_the_cooldown_clock():
+    limiter = AdaptiveRateLimiter(initial_delay=1.0, cooldown_successes=3)
+    limiter.record_success(latency=0.1)
+    limiter.record_success(latency=0.1)
+    limiter.record_failure()
+    assert limiter.consecutive_fast_successes == 0
+
+    after_failure = limiter.current_delay
+    limiter.record_success(latency=0.1)
+    assert limiter.current_delay == after_failure  # must re-earn the cooldown
