@@ -245,3 +245,172 @@ The obvious black-box test for the circuit breaker lock — N threads incrementi
 - Reseed remains single-threaded and sequential, on the coordinator only (`test_worker_pool_reseeds_and_requeues_from_one_place_only`).
 - `format_progress_line`, `ShutdownFlag`, `_format_eta`, `_reseed_guarded` unchanged.
 - The `-m live` suite was not run.
+
+---
+---
+
+# Addendum: review-round fixes
+
+Commit: `ce5a71e`
+Tests: **125 passed, 3 deselected** (was 117); 8 consecutive clean full-suite runs.
+
+Every fix below was reproduced empirically before being written, and the two
+most important ones were then verified by mutation (break the fix, watch the
+test fail; restore it, watch it pass).
+
+## A. CRITICAL — the reseed held the write lock across ~40 network calls
+
+**Reproduced first.** A probe drives the real `crawler.reseed` with a client
+that, from a *second* connection, tries to write at the exact moment reseed is
+inside a network call. Against the old trailing-commit-only code:
+
+```
+assert ['writable', 'LOCKED', 'LOCKED', 'LOCKED'] == ['writable'] * 4
+```
+
+Probe 1 is writable because no write has been issued yet; from the first
+`_seed_player` onward the coordinator holds SQLite's single write lock for the
+rest of the reseed. After the fix all four probes report `writable`.
+
+**Fixed:**
+- `crawler.reseed` commits after each hero, so no network call is ever made
+  while this connection holds the write lock. The global-leaderboard fetch now
+  also happens with no transaction open, and its seeding loop (which makes no
+  network calls) commits once after it.
+- `_reseed_guarded` commits at the top of both `except` blocks, so an
+  interrupted reseed cannot hold the lock across the back-off sleep.
+- Workers catch `sqlite3.OperationalError` and treat it as a back-off signal
+  instead of letting it kill the process.
+
+**Tests:** `test_reseed_never_holds_the_write_lock_across_a_network_call`
+(root cause, in `tests/test_crawler.py`) and
+`test_worker_pool_survives_a_periodic_reseed_that_writes_before_it_fetches`
+(defense in depth, a real periodic tick against 3 real workers). Both verified
+load-bearing by mutation.
+
+## A2. Two further bugs found while verifying the above
+
+Neither was in the review. Both were found by instrumenting a real pool rather
+than by reading the code, and both would have shipped.
+
+**A2.1 — the `OperationalError` guard livelocked the pool permanently.**
+Catching the error without rolling back is worse than not catching it. A failed
+`UPDATE` leaves pysqlite's implicit `BEGIN` open; the next attempt's `SELECT`
+then pins a read snapshot *inside* that stale transaction, and the following
+read→write upgrade fails with `SQLITE_BUSY_SNAPSHOT` — which `busy_timeout`
+does **not** wait out, because only a rollback can resolve it. Every retry then
+fails identically, forever.
+
+Measured, with the lock released after 0.94s:
+
+```
+!!! WATCHDOG at 25.0s: crawled=0/40 reseeds=1899
+```
+
+Zero progress in 24 seconds on a database nothing was contending for. With
+`_rollback_quietly` in the handler: `40/40 crawled, run() returned at 1.03s`.
+
+This is precisely the hazard §5.9 of the original report called impossible —
+correctly, at the time: it only became reachable because my own new handler
+introduced the "transaction left open" precondition that §5.9 depended on not
+existing.
+
+**A2.2 — the coordinator waited for a drain nothing alive could deliver.**
+A release that lost its own race with the busy database left one player
+`claimed` forever; the drain check counted `claimed` rows, so the pool spun
+until killed:
+
+```
+!!! HUNG at 20s: crawled=39/40
+!!! last 8 polls (in_transaction, coordinator_sees, fresh_conn_sees, drained):
+    (False, 1, 1, False)   x8
+```
+
+The fresh-connection column proves this was a genuinely stuck row, not a stale
+snapshot. Fixed by separating the two questions:
+- `_queue_is_drained` now means "the frontier is empty" (`pending` only).
+- Whether work is in flight is tracked by an in-flight counter over *this
+  process's* threads — the only thing that actually knows, and unlike a
+  `claimed` row it cannot be a leftover from a killed process.
+- `_release_quietly` also retries now, so stuck claims are far rarer.
+
+**Test:** `test_worker_pool_stops_even_when_a_claim_cannot_be_released`.
+
+## B. IMPORTANT — an unexpected exception stranded a claimed player
+
+`except BaseException: release; raise` added around the crawl. The review's two
+concrete paths both check out: `crawl_player` wraps only the *match-detail*
+fetch in `except PlayerNotFoundError`, so a 404 from
+`get_player_match_history_page` escapes unwrapped; and a `JSONDecodeError` is a
+`RequestException`, not a `FetchError`.
+**Test:** `test_run_releases_the_claim_when_the_crawl_raises_something_unexpected`.
+
+## C. IMPORTANT — orphan window raised to 1 hour
+
+`claimed_stale_seconds` 600 → 3600, docstring rewritten to cite the real
+numbers (~112 matches, `max_delay=8s`, so ~15 minutes for one legitimate
+crawl) rather than the old "generously longer" claim, which was false.
+**Tests:** `test_requeue_stale_players_default_orphan_window_outlasts_a_real_crawl`;
+an existing count test was updated, since a 20-minute-old claim is now
+correctly *not* reaped.
+
+## D. Jitter could sleep below `min_delay`
+
+Clamped: `time.sleep(max(self.min_delay, delay * random.uniform(...)))`.
+Jitter may now only ever slow a request down.
+**Test:** `test_rate_limiter_jitter_never_sleeps_below_the_min_delay_floor`.
+
+Per the review, delay is **not** scaled by worker count. The aggregate request
+rate scaling roughly linearly with `--workers` is the intended trade, and is
+now stated plainly in both `--help` and `_run_worker_pool`'s docstring so it
+reads as a deliberate choice rather than a surprise.
+
+## E. Minors
+
+- `f.result()` moved into a `finally`, so a worker's exception is surfaced even
+  when the coordinator body itself raises.
+  **Test:** `test_worker_pool_surfaces_a_worker_crash_even_when_the_coordinator_also_raises`.
+- `_queue_is_drained` is an existence check (`SELECT 1 ... LIMIT 1`), not
+  `COUNT(*)` over ~32k pending rows on every ~1s poll — the same unindexed-scan
+  mistake this project already fixed once in `select_next_player`.
+- The `error` write routes through `crawler.set_status` (promoted from
+  `_set_status`; nothing outside `crawler.py` referenced it) instead of
+  duplicating the `claimed_at` invariant inline.
+  **Test:** `test_run_marks_a_fetch_error_through_the_one_terminal_status_writer`.
+
+## F. Re-verification after all fixes
+
+- Full suite: **125 passed, 3 deselected**, 8/8 consecutive clean runs, ~3.1s.
+  The live suite was not run.
+- 1-worker vs 3-worker end-to-end data equivalence (real `crawl_player` +
+  `ingest_match`, fake network) — identical on every table, `integrity_check`
+  ok, no FK violations, and now identical request counts too (82 vs 82).
+- Real `SIGINT` against a real 3-worker process: `RETURNED_CLEANLY`,
+  94 done / 817 pending, **0 rows still holding a claim**, integrity ok.
+
+## G. Deliberately not addressed (per instruction)
+
+- Scaling delay by worker count — would defeat the feature.
+- Retrying across the top-5 claim candidates — negligible at 3 workers.
+- **Known documentation gap:** `_upsert_discovered_player`'s write-lock
+  invariant is still uncommented. Real but not urgent; noted here rather than
+  fixed.
+- The shared circuit breaker's symmetric-reset nuance, and double-Ctrl-C
+  shutdown latency — accepted behaviours.
+
+## H. One process-level note
+
+Two of the new tests were flaky when first written, and both flakes were mine,
+not the code's:
+1. The contention test originally used `reseed_interval_seconds=-1`, which
+   fires a tick on *every* ~10ms coordinator pass — a reseed holding the write
+   lock essentially continuously. That is an impossible schedule (the real one
+   runs once a day) and it starved the pool outright. It now uses spaced ticks
+   with a hold short enough that a worker's retries outlast it.
+2. Asserting "contention happened" via reseed tick counts was racy; it now
+   asserts on the `database busy` log line, and the fake crawl is slowed so the
+   pool is still working when the lock-holding ticks land.
+
+Both were caught by running the suite 8-10x rather than once. Worth keeping
+that habit for this file specifically — a concurrency test that passes once
+has not told you very much.
