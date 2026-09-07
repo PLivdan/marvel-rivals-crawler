@@ -133,7 +133,32 @@ class RivalsMetaClient:
         self._state_lock = threading.Lock()
 
     def get_json(self, path, params=None):
-        return self._request(path, params).json()
+        # A response _request() already treated as a success (2xx) can still
+        # fail to parse: an empty body, or an HTML challenge/error page
+        # served with a 200 status instead of one of the statuses _request()
+        # itself already retries on. Without this, a raw
+        # requests.exceptions.JSONDecodeError (a ValueError subclass) would
+        # escape as an "unexpected exception" and crash the whole run —
+        # observed live, not hypothetical.
+        #
+        # This does NOT also feed the circuit breaker: _request()'s success
+        # path already calls _reset_failures() on every 2xx before handing
+        # the response back here, so a _register_failure() call made after
+        # the fact would just be undone by the next attempt's own 2xx —
+        # accumulating nothing. Fixing that needs _request() itself to know
+        # in advance that its caller may still reject a "successful"
+        # response, which is a bigger change than this fix calls for. The
+        # rate limiter backoff below is unaffected by that reset and still
+        # applies correctly.
+        last_exc = None
+        for _ in range(self.MAX_RETRIES):
+            resp = self._request(path, params)
+            try:
+                return resp.json()
+            except ValueError as exc:
+                last_exc = exc
+                self.limiter.record_failure()
+        raise FetchError(f"non-JSON response after {self.MAX_RETRIES} attempts: {path}") from last_exc
 
     def get_text(self, path, params=None):
         return self._request(path, params).text

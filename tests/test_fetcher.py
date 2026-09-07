@@ -22,6 +22,8 @@ class FakeResponse:
         self.text = text
 
     def json(self):
+        if isinstance(self._payload, Exception):
+            raise self._payload
         return self._payload
 
 
@@ -93,6 +95,41 @@ def test_get_json_exhausts_retries_and_raises_fetch_error():
     with pytest.raises(FetchError):
         client.get_json("/api/player/1")
     assert session.calls == 3
+
+
+def test_get_json_retries_a_200_with_unparseable_body_then_succeeds():
+    # Observed live: the site can answer with a 200 whose body isn't valid
+    # JSON (empty body, or an HTML page) — _request() has no status code to
+    # object to, so this can only be caught at the .json() parsing step.
+    bad = FakeResponse(200, payload=ValueError("Expecting value: line 1 column 1 (char 0)"))
+    good = FakeResponse(200, payload={"ok": True})
+    session = FakeSession([bad, good])
+    client = RivalsMetaClient(session=session, limiter=NoSleepLimiter())
+    assert client.get_json("/api/player/1") == {"ok": True}
+    assert session.calls == 2
+
+
+def test_get_json_exhausts_retries_on_persistent_bad_json_and_raises_fetch_error():
+    bad = ValueError("Expecting value: line 1 column 1 (char 0)")
+    session = FakeSession([FakeResponse(200, payload=bad) for _ in range(3)])
+    client = RivalsMetaClient(session=session, limiter=NoSleepLimiter())
+    with pytest.raises(FetchError):
+        client.get_json("/api/player/1")
+    assert session.calls == 3
+
+
+def test_get_json_bad_json_still_backs_off_the_shared_rate_limiter():
+    # It doesn't trip the circuit breaker (see the comment in get_json for
+    # why), but it must still slow the shared pacing down like any other
+    # failure — that part doesn't depend on _request()'s success bookkeeping.
+    bad = ValueError("Expecting value: line 1 column 1 (char 0)")
+    session = FakeSession([FakeResponse(200, payload=bad)] * 3)
+    limiter = NoSleepLimiter()
+    before = limiter.current_delay
+    client = RivalsMetaClient(session=session, limiter=limiter)
+    with pytest.raises(FetchError):
+        client.get_json("/api/player/1")
+    assert limiter.current_delay > before
 
 
 def test_sustained_429_raises_rate_limited_error_not_fetch_error():
