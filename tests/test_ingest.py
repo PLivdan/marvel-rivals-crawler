@@ -11,6 +11,10 @@ def load_match():
     return json.loads((FIXTURES / "match_detail.json").read_text())
 
 
+def load_history_page():
+    return json.loads((FIXTURES / "player_match_history_page.json").read_text())
+
+
 def make_conn():
     conn = db.connect(":memory:")
     db.init_schema(conn)
@@ -79,6 +83,37 @@ def test_ingest_match_does_not_overwrite_existing_players_discovery_hero_id_or_s
         "SELECT discovery_hero_id, crawl_status FROM players WHERE uid=130729830"
     ).fetchone()
     assert row == (9999, "done")
+
+
+def test_ingest_match_stores_map_id_from_history_entry():
+    # /api/matches/{uid} has NO map_id / match_map_id key — the map id only
+    # exists on the player-match-history entry that surfaced the match, so
+    # production code must pass that entry through or map_id is always NULL.
+    conn = make_conn()
+    match = load_match()
+    # The two captured fixtures are from different matches, so pair the real
+    # history entry's real match_map_id with the detail fixture's match_uid.
+    history_entry = dict(load_history_page()[0])
+    assert history_entry["match_map_id"] == 1245  # real captured value
+    history_entry["match_uid"] = match["match_uid"]
+
+    ingest.ingest_match(conn, match, season=19, history_entry=history_entry)
+
+    map_id = conn.execute(
+        "SELECT map_id FROM matches WHERE match_uid=?", (match["match_uid"],)
+    ).fetchone()[0]
+    assert map_id is not None
+    assert map_id == 1245
+
+
+def test_ingest_match_leaves_map_id_null_without_a_history_entry():
+    conn = make_conn()
+    match = load_match()
+    ingest.ingest_match(conn, match, season=19)
+    map_id = conn.execute(
+        "SELECT map_id FROM matches WHERE match_uid=?", (match["match_uid"],)
+    ).fetchone()[0]
+    assert map_id is None
 
 
 def test_ingest_match_records_newly_seen_heroes():

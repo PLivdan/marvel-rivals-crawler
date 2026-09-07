@@ -1,7 +1,12 @@
 import db
 
 
-def ingest_match(conn, match_detail, season):
+def ingest_match(conn, match_detail, season, history_entry=None):
+    """Store one match. `history_entry` is the corresponding entry from the
+    player-match-history page that surfaced this match — it is the ONLY place
+    the map id is exposed (`match_map_id`); /api/matches/{uid} carries no
+    map_id/match_map_id key at all, so without it matches.map_id is always
+    NULL."""
     match_uid = match_detail["match_uid"]
 
     db.upsert(
@@ -13,7 +18,7 @@ def ingest_match(conn, match_detail, season):
             "match_time_stamp": match_detail.get("match_time_stamp"),
             "match_play_duration": match_detail.get("match_play_duration"),
             "game_mode_id": match_detail.get("game_mode_id"),
-            "map_id": match_detail.get("match_map_id") or match_detail.get("map_id"),
+            "map_id": history_entry.get("match_map_id") if history_entry else None,
             "season": season,
             "winner_side": _winner_side(match_detail),
             "mvp_uid": match_detail.get("mvp_uid"),

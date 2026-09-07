@@ -82,7 +82,9 @@ def crawl_player(conn, client, uid, season):
                 hit_known = True
                 break
             detail = rivalsmeta.get_match_detail(client, match_uid)
-            ingest.ingest_match(conn, detail, season)
+            # The history entry carries match_map_id, which the match-detail
+            # endpoint does not expose at all — pass it through so map_id lands.
+            ingest.ingest_match(conn, detail, season, history_entry=entry)
         if hit_known or len(page) < 20:
             break
         skip += 20

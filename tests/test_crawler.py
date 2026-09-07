@@ -148,7 +148,8 @@ def test_crawl_player_public_diamond_pulls_matches_and_stops_at_known_match():
     db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "pending"})
     profile = load("player_public.json")
 
-    history_page_1 = [{"match_uid": match_uid}]
+    # match_map_id lives only on the history entry, never on the match detail.
+    history_page_1 = [{"match_uid": match_uid, "match_map_id": 1245}]
 
     class PublicClient:
         def __init__(self):
@@ -171,6 +172,10 @@ def test_crawl_player_public_diamond_pulls_matches_and_stops_at_known_match():
     assert status == "done"
     assert client.match_detail_calls == 1
     assert conn.execute("SELECT COUNT(*) FROM matches WHERE match_uid=?", (match_uid,)).fetchone()[0] == 1
+    # crawl_player must forward the history entry so map_id is actually stored.
+    assert conn.execute(
+        "SELECT map_id FROM matches WHERE match_uid=?", (match_uid,)
+    ).fetchone()[0] == 1245
 
     # Re-crawling should stop immediately at the already-known match without
     # re-fetching its detail.
