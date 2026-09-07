@@ -85,12 +85,12 @@ def crawl_player(conn, client, uid, season):
         "SELECT latest_known_level FROM players WHERE uid=?", (uid,)
     ).fetchone()
     if row and row[0] is not None and not rivalsmeta.is_diamond_plus(row[0]):
-        return _set_status(conn, uid, "skipped_floor")
+        return set_status(conn, uid, "skipped_floor")
 
     try:
         profile = rivalsmeta.get_player(client, uid, season)
     except fetcher.PlayerNotFoundError:
-        return _set_status(conn, uid, "not_indexed")
+        return set_status(conn, uid, "not_indexed")
 
     visibility = profile.get("visibility") or {}
     rank_blob = rivalsmeta.current_season_rank(profile, season) or {}
@@ -113,10 +113,10 @@ def crawl_player(conn, client, uid, season):
     conn.commit()
 
     if not visibility.get("match_history", False):
-        return _set_status(conn, uid, "skipped_private")
+        return set_status(conn, uid, "skipped_private")
 
     if level is not None and not rivalsmeta.is_diamond_plus(level):
-        return _set_status(conn, uid, "skipped_floor")
+        return set_status(conn, uid, "skipped_floor")
 
     # Stop-at-first-known is only correct for a REVISIT. On a player's
     # first-ever crawl, an already-known match_uid means a previous attempt
@@ -177,14 +177,14 @@ def crawl_player(conn, client, uid, season):
             break
         skip += 20
 
-    return _set_status(conn, uid, "done")
+    return set_status(conn, uid, "done")
 
 
 def requeue_stale_players(
     conn,
     done_revisit_seconds=43200,
     error_retry_seconds=3600,
-    claimed_stale_seconds=600,
+    claimed_stale_seconds=3600,
 ):
     """Return stale players to the frontier, so the crawl is actually ongoing.
 
@@ -210,9 +210,15 @@ def requeue_stale_players(
       terminal status. Same reasoning as 'error' — the crawl it was in the
       middle of never finished, so last_crawled_at is CLEARED to NULL and the
       retry runs with fresh-crawl semantics. `claimed_at` is cleared too, so
-      the row stops looking claimed. The default window (10 minutes) is
-      generously longer than any single player's crawl should take even with a
-      large match history, so a live worker is never robbed of its player.
+      the row stops looking claimed.
+
+      The window must stay comfortably longer than a real crawl, or this sweep
+      steals a live worker's player: idempotent writes make that harmless, but
+      it burns requests for nothing, which is precisely what the politeness
+      budget cannot spare. A fully-crawled player runs to ~112 matches, and the
+      shared limiter can sit at max_delay=8s under sustained strain, so a
+      single legitimate crawl can take ~15 minutes — which a 10-minute window
+      would wrongly reap. Hence one hour.
 
     A NULL timestamp never satisfies `< cutoff` in SQL, so rows in an
     unexpected state are left alone rather than requeued.
@@ -261,11 +267,23 @@ def reseed(conn, client, hero_refresh_seconds=86400):
             name = p.get("info", {}).get("name")
             queued += _seed_player(conn, uid=int(uid), name=name, discovery_hero_id=hero_id)
         db.upsert(conn, "heroes", ["hero_id"], {"hero_id": hero_id, "last_seeded_at": db.now()})
+        # Commit per hero, NOT once at the end. pysqlite opens the write
+        # transaction at the first write and holds SQLite's single write lock
+        # until the commit, so a trailing commit would hold that lock across
+        # every remaining hero-leaderboard fetch (~42 requests, minutes of
+        # wall time once the adaptive limiter has backed off). Every concurrent
+        # worker's claim/ingest/status write would then block for busy_timeout
+        # and fail with "database is locked". Committing here means no network
+        # call is ever made while this connection holds the write lock.
+        conn.commit()
 
+    # Safe to fetch now: the loop above left no transaction open.
     board = rivalsmeta.get_global_leaderboard(client)
     for p in board["players"]:
         queued += _seed_player(conn, uid=int(p["uid"]), name=p.get("name"), discovery_hero_id=None)
 
+    # This loop makes no network calls of its own, so one commit after it holds
+    # the write lock only for the seeding itself.
     conn.commit()
     return queued
 
@@ -288,10 +306,15 @@ def _seed_player(conn, uid, name, discovery_hero_id):
     return 1
 
 
-def _set_status(conn, uid, status):
-    # claimed_at is cleared alongside the terminal status so it only ever means
-    # "a worker is holding this player right now", which is what the orphaned-
-    # claim sweep in requeue_stale_players relies on.
+def set_status(conn, uid, status):
+    """The single writer of a terminal crawl status. Public so that every
+    caller — including main.py's transient-failure handler, which marks a
+    player 'error' — goes through one place, rather than each re-implementing
+    the claimed_at invariant inline and risking one of them forgetting it.
+
+    claimed_at is cleared alongside the terminal status so it only ever means
+    "a worker is holding this player right now", which is what the orphaned-
+    claim sweep in requeue_stale_players relies on."""
     db.upsert(
         conn,
         "players",

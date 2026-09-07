@@ -74,7 +74,12 @@ class AdaptiveRateLimiter:
         # Sleeping outside the lock is the point: holding it here would make
         # every worker's wait strictly sequential, collapsing the pool back to
         # one request at a time.
-        time.sleep(delay * random.uniform(1.0 - self.jitter, 1.0 + self.jitter))
+        #
+        # Clamped at min_delay so jitter cannot undercut the floor: without it,
+        # a delay already eased down to min_delay=0.2 would sleep as little as
+        # 0.176s, and min_delay would no longer be the hard floor it is
+        # documented to be. Jitter may only ever slow a request down.
+        time.sleep(max(self.min_delay, delay * random.uniform(1.0 - self.jitter, 1.0 + self.jitter)))
 
     def record_success(self, latency):
         with self._lock:

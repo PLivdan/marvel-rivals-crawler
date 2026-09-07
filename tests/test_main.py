@@ -234,6 +234,73 @@ def test_run_releases_the_claim_when_the_circuit_opens():
     assert claimed_at is None
 
 
+def test_run_releases_the_claim_when_the_crawl_raises_something_unexpected():
+    # Only three exception types are handled by name. Anything else — an
+    # unwrapped PlayerNotFoundError from the match-history endpoint, a
+    # JSONDecodeError when the site answers with an HTML challenge page (a
+    # RequestException, so NOT a FetchError) — used to kill the process, but it
+    # left the player 'pending' and instantly retryable. Now they are claimed,
+    # so an unhandled exception must hand the claim back on its way out or the
+    # player sits out the whole orphan-sweep window for no reason.
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
+    flag = main.ShutdownFlag()
+
+    class UnexpectedError(Exception):
+        pass
+
+    def explode(conn_, client_, uid, season):
+        raise UnexpectedError("an HTML challenge page, say")
+
+    with pytest.raises(UnexpectedError):
+        main.run(
+            conn,
+            object(),
+            season=19,
+            shutdown_flag=flag,
+            reseed_interval_seconds=10**9,
+            crawl_player_fn=explode,
+            reseed_fn=lambda conn_, client_: 0,
+        )
+
+    status, claimed_at = conn.execute(
+        "SELECT crawl_status, claimed_at FROM players WHERE uid=1"
+    ).fetchone()
+    assert status == "pending"  # not stranded at 'claimed'
+    assert claimed_at is None
+
+
+def test_run_marks_a_fetch_error_through_the_one_terminal_status_writer():
+    # crawler.set_status is the single writer of a terminal status, and the
+    # only place that clears claimed_at alongside it. Duplicating that upsert
+    # inline here is exactly how a future edit forgets the invariant the
+    # orphaned-claim sweep depends on.
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
+    flag = main.ShutdownFlag()
+
+    def always_fetch_error(conn_, client_, uid, season):
+        flag.requested = True
+        raise fetcher.FetchError("boom")
+
+    main.run(
+        conn,
+        object(),
+        season=19,
+        shutdown_flag=flag,
+        reseed_interval_seconds=10**9,
+        crawl_player_fn=always_fetch_error,
+        reseed_fn=lambda conn_, client_: 0,
+    )
+
+    status, claimed_at, last = conn.execute(
+        "SELECT crawl_status, claimed_at, last_crawled_at FROM players WHERE uid=1"
+    ).fetchone()
+    assert status == "error"
+    assert claimed_at is None  # the claim invariant survived the error path
+    assert last is not None
+
+
 def test_run_requeues_stale_players_at_startup_and_on_the_periodic_interval():
     conn = make_conn()
     db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
@@ -760,6 +827,102 @@ def test_worker_pool_lets_every_in_flight_player_finish_on_shutdown(tmp_path):
     coordinator_conn.close()
 
 
+def test_worker_pool_survives_a_periodic_reseed_that_writes_before_it_fetches(
+    tmp_path, monkeypatch, capsys
+):
+    """The regression this pool was missing: a REAL periodic reseed tick,
+    running concurrently with real workers doing real claims.
+
+    Every other pool test either disables the reseed (interval 10**9) or uses a
+    no-op fake, so none of them ever exercised a reseed that writes, then goes
+    to the network, then commits. That is exactly crawler.reseed's shape: it
+    upserts heroes and seeds players inside a ~42-iteration loop and commits
+    only at the very end. pysqlite opens the write transaction at the first
+    write, so the coordinator holds SQLite's single write lock across every one
+    of those network calls, and every worker's claim/ingest/status write blocks
+    for busy_timeout and then raises OperationalError.
+
+    The fake below reproduces that shape at test speed: write, sleep (standing
+    in for one hero-leaderboard fetch), commit. Worker connections use a short
+    busy_timeout so the contention surfaces in milliseconds rather than the 5s
+    the real one would take.
+    """
+    monkeypatch.setattr(main, "DB_BUSY_SLEEP_SECONDS", 0.02)  # keep the test quick
+    path, coordinator_conn = _pool_db(tmp_path, 40)
+    reseed_calls = []
+    lock = threading.Lock()
+    # Tick 1 is the startup reseed, which runs before any worker exists and so
+    # cannot contend; ticks 2..4 land while the pool is crawling.
+    hold_ticks = 4
+
+    def reseed_that_holds_the_write_lock(conn_, client_):
+        with lock:
+            reseed_calls.append(1)
+            n = len(reseed_calls)
+        if n > hold_ticks:
+            # Later ticks do nothing. A reseed that held the lock on every pass
+            # forever would starve the pool outright — an impossible schedule
+            # (the real one runs once a day), not the contention under test.
+            return 0
+        db.upsert(conn_, "heroes", ["hero_id"], {"hero_id": n, "last_seeded_at": db.now()})
+        # Stands in for one hero-leaderboard fetch made inside the open write
+        # transaction. Long enough that workers (busy_timeout 50ms) really do
+        # hit "database is locked", short enough that a worker's retries
+        # outlast it — the point is that contention is survivable, not that a
+        # writer may hog the lock for longer than anyone is willing to wait.
+        time.sleep(0.08)
+        conn_.commit()
+        return 0
+
+    def short_timeout_worker_conn():
+        conn_ = db.connect(path)
+        conn_.execute("PRAGMA busy_timeout=50")
+        return conn_
+
+    def fake_crawl_player(conn_, client_, uid, season):
+        # ~0.27s of total work across 3 workers, so the pool is still busy when
+        # the lock-holding ticks land 0.05s apart — otherwise the queue can
+        # drain before any contention happens and the test silently stops
+        # exercising the thing it exists for.
+        time.sleep(0.02)
+        db.upsert(
+            conn_,
+            "players",
+            ["uid"],
+            {"uid": uid, "crawl_status": "done", "last_crawled_at": db.now(), "claimed_at": None},
+        )
+        conn_.commit()
+        return "done"
+
+    main.run(
+        coordinator_conn,
+        object(),
+        season=19,
+        shutdown_flag=main.ShutdownFlag(),
+        reseed_interval_seconds=0.05,  # real periodic ticks, spaced out
+        crawl_player_fn=fake_crawl_player,
+        reseed_fn=reseed_that_holds_the_write_lock,
+        requeue_fn=lambda conn_: 0,
+        workers=3,
+        worker_conn_fn=short_timeout_worker_conn,
+        worker_idle_sleep_seconds=0.01,
+        coordinator_poll_seconds=0.01,
+    )
+
+    # The contention really happened, rather than the pool quietly draining
+    # before the first tick ever took the lock — otherwise this test could stop
+    # exercising the bug without anyone noticing.
+    assert "database busy" in capsys.readouterr().err
+    # No OperationalError escaped run(), every player finished, and none was
+    # left stranded in 'claimed' by a worker that died on a locked database.
+    statuses = dict(coordinator_conn.execute("SELECT uid, crawl_status FROM players").fetchall())
+    assert statuses == {uid: "done" for uid in range(1, 41)}
+    assert coordinator_conn.execute(
+        "SELECT COUNT(*) FROM players WHERE crawl_status='claimed' OR claimed_at IS NOT NULL"
+    ).fetchone()[0] == 0
+    coordinator_conn.close()
+
+
 def test_worker_pool_surfaces_a_worker_crash_instead_of_swallowing_it(tmp_path):
     # An unexpected exception used to kill the process outright. Buried in a
     # future it would instead leave the crawl silently running short-handed —
@@ -785,6 +948,94 @@ def test_worker_pool_surfaces_a_worker_crash_instead_of_swallowing_it(tmp_path):
             worker_idle_sleep_seconds=0.01,
             coordinator_poll_seconds=0.01,
         )
+    coordinator_conn.close()
+
+
+def test_worker_pool_surfaces_a_worker_crash_even_when_the_coordinator_also_raises(tmp_path):
+    # The f.result() loop lives in a finally for this case: if the coordinator
+    # body raises, its exception would otherwise sail straight past the loop
+    # and a worker's real exception would stay buried in its future, unseen.
+    path, coordinator_conn = _pool_db(tmp_path, 5)
+    worker_crashed = threading.Event()
+
+    def exploding_crawl_player(conn_, client_, uid, season):
+        worker_crashed.set()
+        raise RuntimeError("worker bug")
+
+    def exploding_requeue(conn_):
+        # Quiet at startup (which runs before the pool exists, so raising there
+        # would never reach the futures at all), then fails on the first
+        # periodic tick after a worker has actually crashed.
+        if not worker_crashed.is_set():
+            return 0
+        raise RuntimeError("coordinator bug")
+
+    with pytest.raises(RuntimeError) as excinfo:
+        main.run(
+            coordinator_conn,
+            object(),
+            season=19,
+            shutdown_flag=main.ShutdownFlag(),
+            reseed_interval_seconds=-1,  # force the periodic tick, and the raise
+            crawl_player_fn=exploding_crawl_player,
+            reseed_fn=lambda conn_, client_: 0,
+            requeue_fn=exploding_requeue,
+            workers=2,
+            worker_conn_fn=lambda: db.connect(path),
+            worker_idle_sleep_seconds=0.01,
+            coordinator_poll_seconds=0.01,
+        )
+
+    # Both failures are visible: whichever surfaces, the other is its context.
+    chain = []
+    exc = excinfo.value
+    while exc is not None:
+        chain.append(str(exc))
+        exc = exc.__context__
+    assert any("worker bug" in m for m in chain), chain
+    coordinator_conn.close()
+
+
+def test_worker_pool_stops_even_when_a_claim_cannot_be_released(tmp_path):
+    # A 'claimed' row that no live worker holds must not wedge the pool: it can
+    # be a leftover from a killed process, or from a release that lost a race
+    # with a busy database. Waiting on it is waiting for a drain nothing alive
+    # can deliver — observed as 39 of 40 players finished and the pool spinning
+    # until killed. Freeing it is the orphaned-claim sweep's job, not shutdown's.
+    path, coordinator_conn = _pool_db(tmp_path, 3)
+    # A pre-existing orphan from some earlier, long-dead process.
+    db.upsert(
+        coordinator_conn,
+        "players",
+        ["uid"],
+        {"uid": 99, "crawl_status": "claimed", "claimed_at": db.now()},
+    )
+    coordinator_conn.commit()
+
+    def fake_crawl_player(conn_, client_, uid, season):
+        db.upsert(conn_, "players", ["uid"], {"uid": uid, "crawl_status": "done", "claimed_at": None})
+        conn_.commit()
+        return "done"
+
+    main.run(
+        coordinator_conn,
+        object(),
+        season=19,
+        shutdown_flag=main.ShutdownFlag(),
+        reseed_interval_seconds=10**9,
+        crawl_player_fn=fake_crawl_player,
+        reseed_fn=lambda conn_, client_: 0,
+        requeue_fn=lambda conn_: 0,
+        workers=2,
+        worker_conn_fn=lambda: db.connect(path),
+        worker_idle_sleep_seconds=0.01,
+        coordinator_poll_seconds=0.01,
+    )
+
+    # run() returned rather than spinning forever, the real queue drained, and
+    # the orphan is left exactly as found for the sweep to deal with.
+    statuses = dict(coordinator_conn.execute("SELECT uid, crawl_status FROM players").fetchall())
+    assert statuses == {1: "done", 2: "done", 3: "done", 99: "claimed"}
     coordinator_conn.close()
 
 

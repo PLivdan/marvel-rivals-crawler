@@ -259,6 +259,22 @@ def test_rate_limiter_jitters_each_sleep_around_the_current_delay(monkeypatch):
     assert 1.9 < sum(slept) / len(slept) < 2.1
 
 
+def test_rate_limiter_jitter_never_sleeps_below_the_min_delay_floor(monkeypatch):
+    # min_delay is documented as a hard floor, so jitter may only ever slow a
+    # request down. Unclamped, a delay already eased down to min_delay=0.2
+    # would sleep as little as 0.176s and quietly undercut the floor the whole
+    # politeness design rests on.
+    limiter = AdaptiveRateLimiter(initial_delay=0.2, min_delay=0.2, jitter=0.12)
+    slept = []
+    monkeypatch.setattr(fetcher.time, "sleep", slept.append)
+
+    for _ in range(500):
+        limiter.wait()
+
+    assert min(slept) >= 0.2
+    assert max(slept) > 0.2  # still jittering upward, not pinned flat
+
+
 def test_rate_limiter_does_not_hold_its_lock_while_sleeping(monkeypatch):
     # The one rule that keeps a shared limiter from serializing the whole pool:
     # the delay is read under the lock, then slept OUTSIDE it. Holding it here

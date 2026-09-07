@@ -1,6 +1,7 @@
 import copy
 import json
 import pathlib
+import sqlite3
 import time
 
 import pytest
@@ -741,11 +742,28 @@ def test_requeue_stale_players_counts_orphaned_claims_alongside_the_other_catego
     now = db.now()
     db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "done", "last_crawled_at": now - 50000})
     db.upsert(conn, "players", ["uid"], {"uid": 2, "crawl_status": "error", "last_crawled_at": now - 7200})
-    db.upsert(conn, "players", ["uid"], {"uid": 3, "crawl_status": "claimed", "claimed_at": now - 1200})
-    db.upsert(conn, "players", ["uid"], {"uid": 4, "crawl_status": "claimed", "claimed_at": now})
+    # Older than the 1-hour default orphan window, so it is reaped...
+    db.upsert(conn, "players", ["uid"], {"uid": 3, "crawl_status": "claimed", "claimed_at": now - 7200})
+    # ...while a claim a worker could still plausibly be working on is not.
+    db.upsert(conn, "players", ["uid"], {"uid": 4, "crawl_status": "claimed", "claimed_at": now - 1200})
 
     assert crawler.requeue_stale_players(conn) == 3
     assert conn.execute("SELECT crawl_status FROM players WHERE uid=4").fetchone()[0] == "claimed"
+
+
+def test_requeue_stale_players_default_orphan_window_outlasts_a_real_crawl():
+    # A fully-crawled player runs to ~112 matches, and the shared limiter can
+    # sit at max_delay=8s under sustained strain, so one legitimate crawl can
+    # take ~15 minutes. The default window must comfortably exceed that or this
+    # sweep steals players out from under live workers — idempotent, so
+    # harmless to the data, but it burns requests the politeness budget cannot
+    # spare. A half-hour-old claim must therefore survive the default.
+    conn = make_conn()
+    now = db.now()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "claimed", "claimed_at": now - 1800})
+
+    assert crawler.requeue_stale_players(conn) == 0
+    assert conn.execute("SELECT crawl_status FROM players WHERE uid=1").fetchone()[0] == "claimed"
 
 
 def test_requeue_stale_players_ignores_a_claimed_row_with_no_claim_timestamp():
@@ -804,6 +822,65 @@ def test_requeued_error_player_is_recrawled_as_a_fresh_first_crawl():
     client = RetryClient()
     assert crawler.crawl_player(conn, client, uid=uid, season=19) == "done"
     assert client.detail_calls == [unseen_uid]
+
+
+def test_reseed_never_holds_the_write_lock_across_a_network_call(tmp_path):
+    """The root cause of the worst bug this pool could have.
+
+    reseed writes (seeding players, stamping heroes.last_seeded_at) inside a
+    loop that makes one network call per hero, ~42 of them, plus the global
+    board. pysqlite opens the write transaction at the first write and holds
+    SQLite's single write lock until commit — so committing only at the end
+    would hold that lock across every one of those fetches: 40s at the default
+    delay, minutes once the shared limiter has backed off to max_delay. Every
+    concurrent worker's claim, ingest and status write would block for the full
+    busy_timeout and then raise "database is locked".
+
+    This probes from a SECOND connection at the exact moment reseed is inside a
+    network call, and asserts the database is writable there every time.
+    """
+    path = str(tmp_path / "reseed_lock.db")
+    conn = db.connect(path)
+    db.init_schema(conn)
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
+    for hero_id in (1047, 1048, 1049):
+        db.upsert(conn, "heroes", ["hero_id"], {"hero_id": hero_id})
+    conn.commit()
+
+    other = db.connect(path)
+    other.execute("PRAGMA busy_timeout=50")  # fail fast rather than wait 5s
+    raw_leaderboard_text = (FIXTURES / "leaderboard_payload.json").read_text()
+    hero_lb = load("hero_leaderboard.json")
+    observations = []
+
+    def probe(where):
+        # Stands in for a worker trying to claim/ingest while reseed is out on
+        # the network.
+        try:
+            other.execute("UPDATE players SET nick_name='probe' WHERE uid=1")
+            other.commit()
+            observations.append((where, "writable"))
+        except sqlite3.OperationalError:
+            other.rollback()
+            observations.append((where, "LOCKED"))
+
+    class ProbingClient:
+        def get_json(self, path_, params=None):
+            probe("hero_leaderboard")
+            return hero_lb
+
+        def get_text(self, path_, params=None):
+            probe("global_leaderboard")
+            return raw_leaderboard_text
+
+    crawler.reseed(conn, ProbingClient())
+
+    # One probe per hero fetch plus one for the global board, and every single
+    # one found the database writable.
+    assert len(observations) == 4
+    assert [w for _, w in observations] == ["writable"] * 4, observations
+    conn.close()
+    other.close()
 
 
 def test_reseed_queues_players_from_global_and_hero_leaderboards():
