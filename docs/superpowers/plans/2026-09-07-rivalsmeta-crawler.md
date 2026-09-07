@@ -1421,15 +1421,20 @@ git commit -m "feat: add crawl orchestrator with priority queue and leaderboard 
 
 ---
 
-### Task 7: CLI entrypoint — main loop, graceful shutdown, progress logging
+### Task 7: CLI entrypoint — main loop, graceful shutdown, progress logging, ETA, and transient-failure handling
 
 **Files:**
 - Create: `main.py`
 - Test: `tests/test_main.py`
 
 **Interfaces:**
-- Consumes: `db.*`, `fetcher.RivalsMetaClient`, `rivalsmeta.resolve_current_season`, `crawler.select_next_player`, `crawler.crawl_player`, `crawler.reseed`.
-- Produces: `main.format_progress_line(conn) -> str`, `main.ShutdownFlag` (a small class with `.requested: bool` and `.request(self, *_)` as a signal handler), `main.run(conn, client, season, shutdown_flag, reseed_interval_seconds=86400)` (one bounded pass usable by tests), `main.main()` (real CLI entrypoint).
+- Consumes: `db.*`, `fetcher.RivalsMetaClient`, `fetcher.FetchError`, `fetcher.CircuitOpenError`, `rivalsmeta.resolve_current_season`, `crawler.select_next_player`, `crawler.crawl_player`, `crawler.reseed`.
+- Produces: `main.format_progress_line(conn, window_seconds=600) -> str`, `main.ShutdownFlag` (a small class with `.requested: bool` and `.request(self, *_)` as a signal handler), `main.run(conn, client, season, shutdown_flag, reseed_interval_seconds=86400, crawl_player_fn=None, reseed_fn=None, circuit_cooldown_seconds=60, sleep_fn=time.sleep)` (one bounded pass usable by tests), `main.main(argv=None)` (real CLI entrypoint, `argv` overridable for tests).
+
+This task folds in two requirements that came up after the plan was first written:
+
+1. **ETA/throughput must be trivially checkable, not just visible in scrolling log output.** `format_progress_line` computes a real rate (players finished in the last `window_seconds`, using the `players.last_crawled_at` column that already exists — no schema change needed) and an ETA to drain the current pending queue at that rate. `main.py` gets a `--status` flag that connects to the DB, prints this line once, and exits immediately — no network client is constructed, no crawling happens, so checking progress while a crawl runs in another terminal/process is instant and free.
+2. **The crawl loop must not crash on transient failures.** Task 6's `crawl_player`/`reseed` only handle `PlayerNotFoundError` themselves (by design — that's a normal, expected per-player outcome, not a failure). Everything else (`FetchError` after retries are exhausted, or `CircuitOpenError` when the breaker has tripped) must be handled here, in the loop that owns "what happens when one player's crawl goes wrong." A `FetchError` marks just that player `error` (so the loop moves on — a future task/manual pass can requeue `error` players by resetting their `crawl_status`, per the spec's "mark the player error for a later pass" language; this plan doesn't build that requeue mechanism yet, since nothing has produced an `error` row to requeue before this task exists). A `CircuitOpenError` means "stop hammering the site entirely for a while" — the loop sleeps for `circuit_cooldown_seconds` and then retries (the same player will likely be selected again, since its status is untouched).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1437,6 +1442,7 @@ Create `tests/test_main.py`:
 
 ```python
 import db
+import fetcher
 import main
 
 
@@ -1464,6 +1470,34 @@ def test_format_progress_line_reports_counts_by_status_and_hero_coverage():
     assert "matches=1" in line
 
 
+def test_format_progress_line_reports_rate_and_eta_from_recent_throughput():
+    conn = make_conn()
+    now = db.now()
+    for uid in range(5):
+        db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "done", "last_crawled_at": now})
+    for uid in range(5, 15):
+        db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "pending"})
+
+    line = main.format_progress_line(conn, window_seconds=60)
+
+    assert "rate=5.0/min" in line
+    assert "eta_to_drain_queue=~2m" in line
+
+
+def test_format_progress_line_eta_unknown_when_no_recent_throughput():
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
+    line = main.format_progress_line(conn, window_seconds=60)
+    assert "eta_to_drain_queue=unknown" in line
+
+
+def test_format_progress_line_eta_shows_queue_empty_when_nothing_pending():
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "done", "last_crawled_at": db.now()})
+    line = main.format_progress_line(conn, window_seconds=60)
+    assert "eta_to_drain_queue=queue empty" in line
+
+
 def test_shutdown_flag_starts_false_and_becomes_true_on_signal():
     flag = main.ShutdownFlag()
     assert flag.requested is False
@@ -1479,9 +1513,6 @@ def test_run_stops_after_shutdown_flag_is_set_between_players():
     flag = main.ShutdownFlag()
     calls = []
 
-    class StopAfterOneClient:
-        pass
-
     def fake_crawl_player(conn_, client_, uid, season):
         calls.append(uid)
         flag.requested = True  # pretend a shutdown arrived mid-run
@@ -1489,7 +1520,7 @@ def test_run_stops_after_shutdown_flag_is_set_between_players():
 
     main.run(
         conn,
-        StopAfterOneClient(),
+        object(),
         season=19,
         shutdown_flag=flag,
         reseed_interval_seconds=10**9,
@@ -1497,6 +1528,95 @@ def test_run_stops_after_shutdown_flag_is_set_between_players():
         reseed_fn=lambda conn_, client_: 0,
     )
     assert len(calls) == 1
+
+
+def test_run_marks_player_error_and_continues_after_fetch_error():
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
+    db.upsert(conn, "players", ["uid"], {"uid": 2, "crawl_status": "pending"})
+    flag = main.ShutdownFlag()
+    calls = []
+
+    def flaky_crawl_player(conn_, client_, uid, season):
+        calls.append(uid)
+        if uid == 1:
+            raise fetcher.FetchError("boom")
+        flag.requested = True
+        return "done"
+
+    main.run(
+        conn,
+        object(),
+        season=19,
+        shutdown_flag=flag,
+        reseed_interval_seconds=10**9,
+        crawl_player_fn=flaky_crawl_player,
+        reseed_fn=lambda conn_, client_: 0,
+    )
+
+    assert calls == [1, 2]
+    status = conn.execute("SELECT crawl_status FROM players WHERE uid=1").fetchone()[0]
+    assert status == "error"
+
+
+def test_run_pauses_on_circuit_open_error_then_retries():
+    conn = make_conn()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
+    flag = main.ShutdownFlag()
+    calls = []
+    sleeps = []
+
+    def circuit_then_success(conn_, client_, uid, season):
+        calls.append(uid)
+        if len(calls) == 1:
+            raise fetcher.CircuitOpenError("open")
+        flag.requested = True
+        return "done"
+
+    main.run(
+        conn,
+        object(),
+        season=19,
+        shutdown_flag=flag,
+        reseed_interval_seconds=10**9,
+        crawl_player_fn=circuit_then_success,
+        reseed_fn=lambda conn_, client_: 0,
+        circuit_cooldown_seconds=0,
+        sleep_fn=sleeps.append,
+    )
+
+    assert calls == [1, 1]
+    assert sleeps == [0]
+    # The fake crawl_player_fn never writes to the DB itself (that's real
+    # crawler.crawl_player's job, covered by Task 6's tests) — this asserts
+    # the narrower thing this test actually owns: run() must NOT mark a
+    # player "error" after a CircuitOpenError the way it does for a
+    # FetchError, since a tripped circuit isn't this player's fault.
+    status = conn.execute("SELECT crawl_status FROM players WHERE uid=1").fetchone()[0]
+    assert status == "pending"
+
+
+def test_status_flag_prints_progress_and_exits_without_crawling(monkeypatch, capsys, tmp_path):
+    db_path = str(tmp_path / "test.db")
+    conn = db.connect(db_path)
+    db.init_schema(conn)
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "done", "last_crawled_at": db.now()})
+    conn.commit()
+    conn.close()
+
+    def fail_if_called(*a, **k):
+        raise AssertionError("should not run a crawl loop for --status")
+
+    def fail_if_client_constructed():
+        raise AssertionError("should not construct a network client for --status")
+
+    monkeypatch.setattr(main, "run", fail_if_called)
+    monkeypatch.setattr(fetcher, "RivalsMetaClient", fail_if_client_constructed)
+
+    main.main(["--db-path", db_path, "--status"])
+
+    captured = capsys.readouterr()
+    assert "done=1" in captured.out
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1526,7 +1646,7 @@ class ShutdownFlag:
         self.requested = True
 
 
-def format_progress_line(conn):
+def format_progress_line(conn, window_seconds=600):
     status_counts = dict(
         conn.execute(
             "SELECT crawl_status, COUNT(*) FROM players GROUP BY crawl_status"
@@ -1547,14 +1667,48 @@ def format_progress_line(conn):
     else:
         hero_min = hero_median = hero_max = 0
 
+    pending = status_counts.get("pending", 0)
+    cutoff = db.now() - window_seconds
+    recently_finished = conn.execute(
+        "SELECT COUNT(*) FROM players WHERE last_crawled_at IS NOT NULL AND last_crawled_at >= ?",
+        (cutoff,),
+    ).fetchone()[0]
+    rate_per_min = recently_finished / (window_seconds / 60)
+    eta = _format_eta(pending, rate_per_min)
+
     status_part = " ".join(f"{status}={count}" for status, count in sorted(status_counts.items()))
     return (
         f"matches={n_matches} {status_part} "
-        f"hero_coverage(min/median/max)={hero_min}/{hero_median}/{hero_max}"
+        f"hero_coverage(min/median/max)={hero_min}/{hero_median}/{hero_max} "
+        f"rate={rate_per_min:.1f}/min eta_to_drain_queue={eta}"
     )
 
 
-def run(conn, client, season, shutdown_flag, reseed_interval_seconds=86400, crawl_player_fn=None, reseed_fn=None):
+def _format_eta(pending, rate_per_min):
+    if pending == 0:
+        return "queue empty"
+    if rate_per_min <= 0:
+        return "unknown (no recent throughput)"
+    minutes = pending / rate_per_min
+    if minutes < 60:
+        return f"~{minutes:.0f}m"
+    hours = minutes / 60
+    if hours < 48:
+        return f"~{hours:.1f}h"
+    return f"~{hours / 24:.1f}d"
+
+
+def run(
+    conn,
+    client,
+    season,
+    shutdown_flag,
+    reseed_interval_seconds=86400,
+    crawl_player_fn=None,
+    reseed_fn=None,
+    circuit_cooldown_seconds=60,
+    sleep_fn=time.sleep,
+):
     crawl_player_fn = crawl_player_fn or crawler.crawl_player
     reseed_fn = reseed_fn or crawler.reseed
 
@@ -1571,21 +1725,39 @@ def run(conn, client, season, shutdown_flag, reseed_interval_seconds=86400, craw
         if uid is None:
             break
 
-        crawl_player_fn(conn, client, uid, season)
+        try:
+            crawl_player_fn(conn, client, uid, season)
+        except fetcher.CircuitOpenError:
+            print(f"circuit open; pausing {circuit_cooldown_seconds}s", file=sys.stderr)
+            sleep_fn(circuit_cooldown_seconds)
+            continue
+        except fetcher.FetchError as exc:
+            print(f"transient failure crawling player {uid}: {exc}", file=sys.stderr)
+            db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "error", "last_crawled_at": db.now()})
+            conn.commit()
 
         if time.time() - last_progress_log > 60:
             print(format_progress_line(conn), file=sys.stderr)
             last_progress_log = time.time()
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--db-path", default="data/rivals.db")
     parser.add_argument("--reseed-interval-hours", type=float, default=24.0)
-    args = parser.parse_args()
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Print current progress/ETA and exit — no crawling, no network access.",
+    )
+    args = parser.parse_args(argv)
 
     conn = db.connect(args.db_path)
     db.init_schema(conn)
+
+    if args.status:
+        print(format_progress_line(conn))
+        return
 
     client = fetcher.RivalsMetaClient()
     season = rivalsmeta.resolve_current_season(client)
@@ -1604,13 +1776,13 @@ if __name__ == "__main__":
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_main.py -v`
-Expected: 3 passed
+Expected: 9 passed
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add main.py tests/test_main.py
-git commit -m "feat: add CLI entrypoint with graceful shutdown and progress logging"
+git commit -m "feat: add CLI entrypoint with ETA reporting and transient-failure handling"
 ```
 
 ---
