@@ -146,12 +146,16 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
 
-    conn = db.connect(args.db_path)
-    db.init_schema(conn)
-
     if args.status:
+        # Read-only, and deliberately no init_schema: --status is meant to be
+        # run against a DB a live crawl process is writing, so it must not take
+        # a write lock. The tables already exist if a crawl has ever run.
+        conn = db.connect_readonly(args.db_path)
         print(format_progress_line(conn))
         return
+
+    conn = db.connect(args.db_path)
+    db.init_schema(conn)
 
     client = fetcher.RivalsMetaClient()
     season = rivalsmeta.resolve_current_season(client)

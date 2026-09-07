@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import time
 
@@ -86,9 +87,26 @@ CREATE INDEX IF NOT EXISTS idx_match_player_heroes_hero_id ON match_player_heroe
 
 
 def connect(path):
+    # The documented run command is `python main.py --db-path data/rivals.db`,
+    # which would fail with "unable to open database file" on a fresh checkout
+    # where data/ doesn't exist yet.
+    if path != ":memory:" and os.path.dirname(path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
     conn = sqlite3.connect(path)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.row_factory = None
+    return conn
+
+
+def connect_readonly(path):
+    """Open an EXISTING database read-only, for out-of-band reads (--status)
+    that must not contend with a live crawl process on the same file. Takes no
+    write lock and creates nothing: the WAL/foreign-key pragmas connect() sets
+    only affect writes, and setting journal_mode on a read-only handle would
+    itself require a write. Errors if the database doesn't exist yet — correct,
+    since there's nothing to report on until a crawl has run."""
+    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     conn.row_factory = None
     return conn
 

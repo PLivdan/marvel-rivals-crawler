@@ -52,6 +52,41 @@ def test_upsert_is_idempotent():
     assert count == 1
 
 
+def test_connect_creates_a_missing_parent_directory(tmp_path):
+    # The documented run command is `--db-path data/rivals.db`, which fails
+    # with "unable to open database file" on a fresh checkout without this.
+    nested = tmp_path / "data" / "nested" / "rivals.db"
+    assert not nested.parent.exists()
+
+    conn = db.connect(str(nested))
+    db.init_schema(conn)
+    db.upsert(conn, "players", ["uid"], {"uid": 1})
+    conn.commit()
+    conn.close()
+
+    assert nested.exists()
+
+
+def test_connect_readonly_reads_without_taking_a_write_lock(tmp_path):
+    path = str(tmp_path / "ro.db")
+    writer = db.connect(path)
+    db.init_schema(writer)
+    db.upsert(writer, "players", ["uid"], {"uid": 1, "crawl_status": "done"})
+    writer.commit()
+
+    # Opened while the writer connection is still live, as `--status` would be.
+    reader = db.connect_readonly(path)
+    assert reader.execute("SELECT COUNT(*) FROM players").fetchone()[0] == 1
+    try:
+        reader.execute("INSERT INTO players (uid) VALUES (2)")
+        reader.commit()
+        raise AssertionError("read-only connection should refuse writes")
+    except sqlite3.OperationalError:
+        pass
+    reader.close()
+    writer.close()
+
+
 def test_players_created_at_defaults_without_caller_supplying_it():
     conn = make_conn()
     db.upsert(conn, "players", ["uid"], {"uid": 7, "nick_name": "Bob"})
