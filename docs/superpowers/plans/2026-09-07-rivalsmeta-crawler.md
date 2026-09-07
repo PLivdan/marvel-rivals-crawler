@@ -1842,14 +1842,21 @@ def test_resolve_current_season_against_live_site(client):
 
 
 def test_crawl_a_known_public_diamond_plus_player(conn, client):
-    # A verified-public player used throughout development of this crawler.
+    # A player used throughout development of this crawler, verified public
+    # at the time. Real players' rank and privacy settings both change over
+    # time (confirmed live: this exact uid flipped to a private profile
+    # during this project's own development) — any of these three is a
+    # correct, non-crashing outcome for whatever this player's current
+    # real-world state happens to be. This test asserts the crawler
+    # doesn't crash and returns a sane status against live data, not that
+    # any specific player stays in any specific state forever.
     uid = 457877313
     season = rivalsmeta.resolve_current_season(client)
     db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "pending"})
 
     status = crawler.crawl_player(conn, client, uid, season)
 
-    assert status in ("done", "skipped_floor")  # rank may have changed since verification
+    assert status in ("done", "skipped_floor", "skipped_private")
     n_matches = conn.execute("SELECT COUNT(*) FROM matches").fetchone()[0]
     if status == "done":
         assert n_matches >= 1
