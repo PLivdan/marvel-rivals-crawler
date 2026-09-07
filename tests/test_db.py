@@ -87,6 +87,55 @@ def test_connect_readonly_reads_without_taking_a_write_lock(tmp_path):
     writer.close()
 
 
+def test_connect_sets_a_busy_timeout_so_concurrent_writers_wait_instead_of_erroring():
+    # Without this, a worker whose commit lands while another worker holds the
+    # write lock fails immediately with "database is locked" instead of
+    # blocking and retrying for a few seconds.
+    conn = make_conn()
+    assert conn.execute("PRAGMA busy_timeout").fetchone()[0] == db.BUSY_TIMEOUT_MS
+
+
+def test_connect_readonly_also_sets_a_busy_timeout(tmp_path):
+    path = str(tmp_path / "ro.db")
+    writer = db.connect(path)
+    db.init_schema(writer)
+    writer.commit()
+    writer.close()
+
+    reader = db.connect_readonly(path)
+    assert reader.execute("PRAGMA busy_timeout").fetchone()[0] == db.BUSY_TIMEOUT_MS
+    reader.close()
+
+
+def test_init_schema_adds_claimed_at_to_a_database_created_before_that_column(tmp_path):
+    # CREATE TABLE IF NOT EXISTS is a no-op on an existing table, so a DB file
+    # written by an older build of this crawler would otherwise be missing
+    # claimed_at and every claim would fail with "no such column".
+    path = str(tmp_path / "legacy.db")
+    legacy = sqlite3.connect(path)
+    legacy.execute(
+        "CREATE TABLE players ("
+        "uid INTEGER PRIMARY KEY, nick_name TEXT, discovery_hero_id INTEGER, "
+        "latest_known_score REAL, latest_known_level INTEGER, visibility_json TEXT, "
+        "crawl_status TEXT NOT NULL DEFAULT 'pending', last_crawled_at INTEGER, "
+        "created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')))"
+    )
+    legacy.execute("INSERT INTO players (uid, crawl_status) VALUES (1, 'pending')")
+    legacy.commit()
+    legacy.close()
+
+    conn = db.connect(path)
+    db.init_schema(conn)
+
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(players)").fetchall()}
+    assert "claimed_at" in columns
+    # The pre-existing row survives the migration, with a NULL claim.
+    assert conn.execute("SELECT claimed_at FROM players WHERE uid=1").fetchone()[0] is None
+    # And re-running is still safe (the column is added at most once).
+    db.init_schema(conn)
+    assert conn.execute("SELECT COUNT(*) FROM players").fetchone()[0] == 1
+
+
 def test_players_created_at_defaults_without_caller_supplying_it():
     conn = make_conn()
     db.upsert(conn, "players", ["uid"], {"uid": 7, "nick_name": "Bob"})

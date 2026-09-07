@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS players (
     visibility_json TEXT,
     crawl_status TEXT NOT NULL DEFAULT 'pending',
     last_crawled_at INTEGER,
+    claimed_at INTEGER,
     created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
 );
 
@@ -85,6 +86,27 @@ CREATE INDEX IF NOT EXISTS idx_players_crawl_status ON players(crawl_status);
 CREATE INDEX IF NOT EXISTS idx_match_player_heroes_hero_id ON match_player_heroes(hero_id);
 """
 
+# Columns added to a table after this project's first DB files were created.
+# CREATE TABLE IF NOT EXISTS is a no-op on an existing table, so unlike the
+# CREATE INDEX IF NOT EXISTS statements above, a new column does NOT self-apply
+# to an already-existing DB file — it needs an explicit ALTER TABLE.
+ADDED_COLUMNS = {
+    "players": {
+        # Set by crawler.claim_next_player when a worker takes a player, and
+        # cleared when that player reaches a terminal status. Deliberately
+        # separate from last_crawled_at, which crawl_player reads as "has this
+        # player ever COMPLETED a crawl" — stamping that at claim time would
+        # make every first crawl look like a revisit.
+        "claimed_at": "INTEGER",
+    },
+}
+
+# Concurrent workers hold one connection each to the same WAL-mode file, so a
+# writer can briefly find the write lock held by another worker's commit. This
+# makes SQLite block and retry for up to 5s instead of failing the statement
+# immediately with "database is locked".
+BUSY_TIMEOUT_MS = 5000
+
 
 def connect(path):
     # The documented run command is `python main.py --db-path data/rivals.db`,
@@ -95,6 +117,7 @@ def connect(path):
     conn = sqlite3.connect(path)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
     conn.row_factory = None
     return conn
 
@@ -107,13 +130,32 @@ def connect_readonly(path):
     itself require a write. Errors if the database doesn't exist yet — correct,
     since there's nothing to report on until a crawl has run."""
     conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    # A pure connection-level setting that needs no write, so it is safe here
+    # even though journal_mode/foreign_keys are not: it lets --status wait out
+    # a worker's in-flight commit rather than erroring on a locked database.
+    conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
     conn.row_factory = None
     return conn
 
 
 def init_schema(conn):
     conn.executescript(SCHEMA)
+    _add_missing_columns(conn)
     conn.commit()
+
+
+def _add_missing_columns(conn):
+    """Apply ADDED_COLUMNS to a DB file created before those columns existed.
+
+    Keeps init_schema's "safe to re-run on every startup, self-applies to
+    already-existing DB files" property (see the CREATE INDEX comment in
+    SCHEMA), which CREATE TABLE IF NOT EXISTS alone does not give for columns.
+    """
+    for table, columns in ADDED_COLUMNS.items():
+        present = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        for name, decl in columns.items():
+            if name not in present:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
 
 
 def upsert(conn, table, pk_cols, row):

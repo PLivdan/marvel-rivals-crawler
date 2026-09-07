@@ -1,3 +1,5 @@
+import random
+import threading
 import time
 
 import requests
@@ -34,6 +36,14 @@ class AdaptiveRateLimiter:
       a single fast 200 must not immediately resume easing the delay down; it
       takes `cooldown_successes` consecutive fast responses to earn that. Once
       earned, every further fast response keeps easing down.
+
+    One limiter instance is shared by every crawl worker thread, which is what
+    makes a concurrent crawl a single coordinated traffic pattern rather than N
+    independent crawlers: a failure any one worker sees immediately widens the
+    delay every other worker will use next. All read-modify-writes of the
+    shared delay/counter therefore happen under `_lock` — but the lock is NEVER
+    held across the sleep in wait(), so workers serialize only on the brief
+    bookkeeping, never on each other's waiting.
     """
 
     def __init__(
@@ -43,6 +53,7 @@ class AdaptiveRateLimiter:
         max_delay=8.0,
         latency_threshold=2.0,
         cooldown_successes=3,
+        jitter=0.12,
     ):
         self.current_delay = initial_delay
         self.min_delay = min_delay
@@ -50,30 +61,50 @@ class AdaptiveRateLimiter:
         self.latency_threshold = latency_threshold
         self.cooldown_successes = cooldown_successes
         self.consecutive_fast_successes = 0
+        # Randomizing each sleep by +/- `jitter` keeps concurrent workers from
+        # firing in lockstep bursts (they desynchronize on their own), and is
+        # good manners even single-threaded: a metronome-exact request cadence
+        # is a machine signature no human traffic produces.
+        self.jitter = jitter
+        self._lock = threading.Lock()
 
     def wait(self):
-        time.sleep(self.current_delay)
+        with self._lock:
+            delay = self.current_delay
+        # Sleeping outside the lock is the point: holding it here would make
+        # every worker's wait strictly sequential, collapsing the pool back to
+        # one request at a time.
+        time.sleep(delay * random.uniform(1.0 - self.jitter, 1.0 + self.jitter))
 
     def record_success(self, latency):
-        if latency > self.latency_threshold:
-            # A slow 200 is a strain signal, not a green light. Back off
-            # (gentler than a hard failure) and restart the cooldown clock.
-            self.current_delay = min(self.max_delay, self.current_delay * 1.5)
-            self.consecutive_fast_successes = 0
-            return
+        with self._lock:
+            if latency > self.latency_threshold:
+                # A slow 200 is a strain signal, not a green light. Back off
+                # (gentler than a hard failure) and restart the cooldown clock.
+                self.current_delay = min(self.max_delay, self.current_delay * 1.5)
+                self.consecutive_fast_successes = 0
+                return
 
-        self.consecutive_fast_successes += 1
-        # The counter is deliberately NOT reset after easing down: the cooldown
-        # gates when easing may *start*, then a clean run keeps easing.
-        if self.consecutive_fast_successes >= self.cooldown_successes:
-            self.current_delay = max(self.min_delay, self.current_delay * 0.95)
+            self.consecutive_fast_successes += 1
+            # The counter is deliberately NOT reset after easing down: the
+            # cooldown gates when easing may *start*, then a clean run keeps
+            # easing.
+            if self.consecutive_fast_successes >= self.cooldown_successes:
+                self.current_delay = max(self.min_delay, self.current_delay * 0.95)
 
     def record_failure(self):
-        self.current_delay = min(self.max_delay, self.current_delay * 2)
-        self.consecutive_fast_successes = 0
+        with self._lock:
+            self.current_delay = min(self.max_delay, self.current_delay * 2)
+            self.consecutive_fast_successes = 0
 
 
 class RivalsMetaClient:
+    """One client instance is shared by every crawl worker thread, so the
+    adaptive delay and the circuit breaker are genuinely shared signals rather
+    than per-worker guesses. `_state_lock` guards the failure counter and the
+    circuit deadline; like the limiter's lock it is never held across
+    `session.get` or `limiter.wait()`, only across the counter bookkeeping."""
+
     BASE_URL = "https://rivalsmeta.com"
     USER_AGENT = (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -94,6 +125,7 @@ class RivalsMetaClient:
         self.limiter = limiter or AdaptiveRateLimiter()
         self._consecutive_failures = 0
         self._circuit_open_until = 0.0
+        self._state_lock = threading.Lock()
 
     def get_json(self, path, params=None):
         return self._request(path, params).json()
@@ -102,8 +134,10 @@ class RivalsMetaClient:
         return self._request(path, params).text
 
     def _request(self, path, params=None):
-        if time.time() < self._circuit_open_until:
-            raise CircuitOpenError(f"circuit open until {self._circuit_open_until}")
+        with self._state_lock:
+            open_until = self._circuit_open_until
+        if time.time() < open_until:
+            raise CircuitOpenError(f"circuit open until {open_until}")
 
         url = f"{self.BASE_URL}{path}"
         last_exc = None
@@ -121,7 +155,7 @@ class RivalsMetaClient:
 
             if resp.status_code == 404:
                 self.limiter.record_success(latency)
-                self._consecutive_failures = 0
+                self._reset_failures()
                 raise PlayerNotFoundError(path)
 
             if resp.status_code in (429, 403):
@@ -135,7 +169,7 @@ class RivalsMetaClient:
                 continue
 
             self.limiter.record_success(latency)
-            self._consecutive_failures = 0
+            self._reset_failures()
             return resp
 
         self._register_failure()
@@ -147,7 +181,12 @@ class RivalsMetaClient:
             raise FetchError(f"failed after {self.MAX_RETRIES} attempts: {path}") from last_exc
         raise last_exc or FetchError(f"failed after {self.MAX_RETRIES} attempts: {path}")
 
+    def _reset_failures(self):
+        with self._state_lock:
+            self._consecutive_failures = 0
+
     def _register_failure(self):
-        self._consecutive_failures += 1
-        if self._consecutive_failures >= self.CIRCUIT_FAILURE_THRESHOLD:
-            self._circuit_open_until = time.time() + self.CIRCUIT_COOLDOWN_SECONDS
+        with self._state_lock:
+            self._consecutive_failures += 1
+            if self._consecutive_failures >= self.CIRCUIT_FAILURE_THRESHOLD:
+                self._circuit_open_until = time.time() + self.CIRCUIT_COOLDOWN_SECONDS

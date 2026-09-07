@@ -1,6 +1,10 @@
+import sys
+import threading
+
 import pytest
 import requests
 
+import fetcher
 from fetcher import (
     AdaptiveRateLimiter,
     RivalsMetaClient,
@@ -38,6 +42,28 @@ class FakeSession:
 class NoSleepLimiter(AdaptiveRateLimiter):
     def wait(self):
         pass  # skip real sleeping in tests
+
+
+class RecordingLock:
+    """A real lock that also reports whether it is currently held, so a test
+    can prove where the lock IS taken and — just as importantly — where it is
+    not (never across a sleep or a network call)."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.acquisitions = 0
+        self.held = False
+
+    def __enter__(self):
+        self._lock.acquire()
+        self.acquisitions += 1
+        self.held = True
+        return self
+
+    def __exit__(self, *exc_info):
+        self.held = False
+        self._lock.release()
+        return False
 
 
 def test_get_json_success_returns_payload():
@@ -210,3 +236,213 @@ def test_rate_limiter_failure_resets_the_cooldown_clock():
     after_failure = limiter.current_delay
     limiter.record_success(latency=0.1)
     assert limiter.current_delay == after_failure  # must re-earn the cooldown
+
+
+# --- thread safety: one limiter and one circuit breaker shared by N workers ---
+
+
+def test_rate_limiter_jitters_each_sleep_around_the_current_delay(monkeypatch):
+    # Concurrent workers that all sleep exactly `current_delay` would fire in
+    # lockstep bursts; jitter desynchronizes them. It is also plain good
+    # manners single-threaded — a metronome-exact cadence is a machine
+    # signature no human traffic produces.
+    limiter = AdaptiveRateLimiter(initial_delay=2.0, jitter=0.12)
+    slept = []
+    monkeypatch.setattr(fetcher.time, "sleep", slept.append)
+
+    for _ in range(200):
+        limiter.wait()
+
+    assert all(2.0 * 0.88 <= s <= 2.0 * 1.12 for s in slept)
+    assert len(set(slept)) > 1  # actually varying, not a fixed offset
+    # Centred on the configured delay, so throughput is unchanged on average.
+    assert 1.9 < sum(slept) / len(slept) < 2.1
+
+
+def test_rate_limiter_does_not_hold_its_lock_while_sleeping(monkeypatch):
+    # The one rule that keeps a shared limiter from serializing the whole pool:
+    # the delay is read under the lock, then slept OUTSIDE it. Holding it here
+    # would make every worker's wait strictly sequential and collapse the pool
+    # back to a single request at a time.
+    limiter = AdaptiveRateLimiter(initial_delay=0.01)
+    lock = RecordingLock()
+    limiter._lock = lock
+    held_during_sleep = []
+    monkeypatch.setattr(fetcher.time, "sleep", lambda _d: held_during_sleep.append(lock.held))
+
+    limiter.wait()
+
+    assert lock.acquisitions == 1  # the delay was read under the lock
+    assert held_during_sleep == [False]  # and released before sleeping
+
+
+def test_rate_limiter_mutations_happen_under_the_lock():
+    limiter = AdaptiveRateLimiter()
+    lock = RecordingLock()
+    limiter._lock = lock
+
+    limiter.record_success(latency=0.1)
+    limiter.record_success(latency=99.0)  # the slow-response branch
+    limiter.record_failure()
+
+    assert lock.acquisitions == 3
+    assert lock.held is False  # every acquisition was released
+
+
+def test_rate_limiter_survives_concurrent_access_from_many_real_threads():
+    limiter = AdaptiveRateLimiter(initial_delay=1.0, min_delay=0.2, max_delay=8.0)
+    out_of_bounds = []
+    errors = []
+    barrier = threading.Barrier(8)
+
+    def hammer(seed):
+        try:
+            barrier.wait()  # maximize real overlap
+            for i in range(500):
+                if (i + seed) % 3 == 0:
+                    limiter.record_failure()
+                elif (i + seed) % 3 == 1:
+                    limiter.record_success(latency=0.01)
+                else:
+                    limiter.record_success(latency=99.0)
+                # Sampled from inside the race, not just at the end: the delay
+                # must never be observable outside its configured bounds.
+                delay = limiter.current_delay
+                if not (limiter.min_delay <= delay <= limiter.max_delay):
+                    out_of_bounds.append(delay)
+        except Exception as exc:  # pragma: no cover - only on a real defect
+            errors.append(exc)
+
+    threads = [threading.Thread(target=hammer, args=(s,)) for s in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == []
+    assert out_of_bounds == []
+    assert limiter.min_delay <= limiter.current_delay <= limiter.max_delay
+    assert limiter.consecutive_fast_successes >= 0
+
+
+def test_circuit_breaker_state_is_mutated_under_the_lock():
+    # The deterministic half of the circuit-breaker thread-safety proof, and
+    # the one that actually fails if the locking is dropped.
+    #
+    # It is white-box on purpose. The black-box version — many threads
+    # registering failures, then asserting an exact count — cannot fail on
+    # CPython 3.12 even with the lock removed (verified): the eval breaker is
+    # only polled at jumps and calls, so the straight-line read-modify-write in
+    # `+= 1` is never preempted. That makes the exact-count assertion a test of
+    # this interpreter's scheduling, not of our locking. Asserting the lock is
+    # taken tests the thing we actually control.
+    client = RivalsMetaClient(session=FakeSession([]), limiter=NoSleepLimiter())
+    lock = RecordingLock()
+    client._state_lock = lock
+
+    client._register_failure()
+    client._reset_failures()
+
+    assert lock.acquisitions == 2
+    assert lock.held is False  # both acquisitions were released
+
+
+def test_circuit_breaker_survives_concurrent_registration_from_many_threads():
+    # The black-box companion: whatever the interpreter's scheduling does, many
+    # threads registering failures at once must not corrupt the counter, raise,
+    # or leave the circuit deadline in a nonsensical state.
+    client = RivalsMetaClient(session=FakeSession([]), limiter=NoSleepLimiter())
+    client.CIRCUIT_FAILURE_THRESHOLD = 10**9  # keep the circuit shut; count only
+    barrier = threading.Barrier(8)
+    errors = []
+
+    def hammer():
+        try:
+            barrier.wait()
+            for _ in range(2000):
+                client._register_failure()
+        except Exception as exc:  # pragma: no cover - only on a real defect
+            errors.append(exc)
+
+    original_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)  # maximize preemption between the threads
+    try:
+        threads = [threading.Thread(target=hammer) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+    finally:
+        sys.setswitchinterval(original_interval)
+
+    assert errors == []
+    assert client._consecutive_failures == 8 * 2000
+    assert client._circuit_open_until == 0.0  # threshold never reached
+
+
+def test_circuit_opens_for_every_worker_at_once_once_the_threshold_is_hit():
+    # The shared-breaker payoff: the deadline one worker's failures set is the
+    # same deadline every other worker checks, so the whole pool stops together
+    # rather than each worker having to discover the outage for itself.
+    session = FakeSession(
+        [FakeResponse(500)] * (RivalsMetaClient.CIRCUIT_FAILURE_THRESHOLD * RivalsMetaClient.MAX_RETRIES)
+    )
+    client = RivalsMetaClient(session=session, limiter=NoSleepLimiter())
+    for _ in range(RivalsMetaClient.CIRCUIT_FAILURE_THRESHOLD):
+        with pytest.raises(FetchError):
+            client.get_json("/api/player/1")
+
+    seen = []
+
+    def other_worker():
+        try:
+            client.get_json("/api/player/2")
+        except Exception as exc:
+            seen.append(type(exc))
+
+    threads = [threading.Thread(target=other_worker) for _ in range(3)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert seen == [CircuitOpenError] * 3
+    assert session.calls == RivalsMetaClient.CIRCUIT_FAILURE_THRESHOLD * RivalsMetaClient.MAX_RETRIES
+
+
+def test_request_does_not_hold_the_circuit_lock_across_the_network_call():
+    # The mirror of the limiter rule: workers must serialize only on the brief
+    # failure-counter bookkeeping, never on each other's HTTP round trips.
+    lock = RecordingLock()
+    held_during_get = []
+
+    class ProbingSession:
+        def get(self, url, params=None, timeout=None):
+            held_during_get.append(lock.held)
+            return FakeResponse(200, payload={"ok": True})
+
+    client = RivalsMetaClient(session=ProbingSession(), limiter=NoSleepLimiter())
+    client._state_lock = lock
+
+    assert client.get_json("/api/player/1") == {"ok": True}
+    assert held_during_get == [False]
+    assert lock.acquisitions >= 2  # the circuit check, then the success reset
+    assert lock.held is False
+
+
+def test_a_failure_seen_by_one_thread_immediately_widens_every_thread_delay():
+    # The point of sharing one limiter across the pool: a throttling signal any
+    # single worker meets is applied to what all of them do next, instead of
+    # each worker learning it separately by getting throttled itself.
+    limiter = AdaptiveRateLimiter(initial_delay=1.0, max_delay=8.0)
+    observed = []
+
+    def other_worker():
+        observed.append(limiter.current_delay)
+
+    limiter.record_failure()  # worker A meets a 429
+    t = threading.Thread(target=other_worker)  # worker B's very next request
+    t.start()
+    t.join()
+
+    assert observed == [2.0]
