@@ -1,5 +1,6 @@
 import json
 import pathlib
+import time
 
 import pytest
 
@@ -49,6 +50,49 @@ def test_select_next_player_deprioritizes_untagged_players():
 def test_select_next_player_returns_none_when_queue_empty():
     conn = make_conn()
     assert crawler.select_next_player(conn) is None
+
+
+def test_select_next_player_stays_fast_at_realistic_queue_size():
+    # A single reseed can queue ~21,000 pending players across ~42 heroes.
+    # The original correlated-subquery form measured ~5.2s at only 2,000
+    # pending players; this guards the aggregate+LEFT JOIN rewrite (and the
+    # supporting indexes) so that regression can't silently return.
+    conn = make_conn()
+    n_players = 2000
+    n_matches = 400
+    n_heroes = 40
+
+    conn.executemany(
+        "INSERT INTO players (uid, discovery_hero_id, crawl_status) VALUES (?, ?, 'pending')",
+        [(uid, 1000 + (uid % n_heroes)) for uid in range(n_players)],
+    )
+    conn.executemany(
+        "INSERT INTO matches (match_uid) VALUES (?)",
+        [(f"perf{i}",) for i in range(n_matches)],
+    )
+    # 400 matches x 12 players x 5 hero segments = 24,000 match_player_heroes rows.
+    conn.executemany(
+        "INSERT INTO match_player_heroes (match_uid, player_uid, hero_id) VALUES (?, ?, ?)",
+        [
+            (f"perf{i}", p, 1000 + ((i * 12 + p) * 7 + s * 3) % n_heroes)
+            for i in range(n_matches)
+            for p in range(12)
+            for s in range(5)
+        ],
+    )
+    conn.commit()
+
+    assert conn.execute("SELECT COUNT(*) FROM match_player_heroes").fetchone()[0] >= 20000
+    assert conn.execute(
+        "SELECT COUNT(*) FROM players WHERE crawl_status='pending'"
+    ).fetchone()[0] >= 2000
+
+    start = time.time()
+    uid = crawler.select_next_player(conn)
+    elapsed = time.time() - start
+
+    assert uid is not None
+    assert elapsed < 1.0, f"select_next_player took {elapsed:.2f}s at 2000 pending players"
 
 
 def test_crawl_player_below_floor_precheck_skips_without_profile_fetch():

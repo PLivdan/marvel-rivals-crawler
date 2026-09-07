@@ -75,6 +75,13 @@ CREATE TABLE IF NOT EXISTS match_player_heroes (
     play_time REAL,
     PRIMARY KEY (match_uid, player_uid, hero_id)
 );
+
+-- Indexes for crawler.select_next_player, which runs once per crawled player
+-- and scans the whole pending frontier (a single reseed can queue ~21,000
+-- pending players across ~42 heroes). CREATE INDEX IF NOT EXISTS is safe to
+-- re-run on every startup, so these self-apply to already-existing DB files.
+CREATE INDEX IF NOT EXISTS idx_players_crawl_status ON players(crawl_status);
+CREATE INDEX IF NOT EXISTS idx_match_player_heroes_hero_id ON match_player_heroes(hero_id);
 """
 
 

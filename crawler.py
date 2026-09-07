@@ -5,14 +5,21 @@ import fetcher
 import ingest
 import rivalsmeta
 
+# Hero coverage is computed ONCE as an aggregate CTE and LEFT JOINed, rather
+# than as a correlated subquery evaluated per candidate row (which measured
+# ~5.2s at only 2000 pending players, and gets far worse at realistic scale).
+# Ordering semantics are identical to the correlated form: untagged players
+# sort last, then fewest collected hero-rows first, then oldest-created first.
 PRIORITY_SQL = """
-SELECT uid FROM players
-WHERE crawl_status = 'pending'
+WITH hero_counts AS (
+    SELECT hero_id, COUNT(*) AS c FROM match_player_heroes GROUP BY hero_id
+)
+SELECT p.uid FROM players p
+LEFT JOIN hero_counts h ON h.hero_id = p.discovery_hero_id
+WHERE p.crawl_status = 'pending'
 ORDER BY
-    CASE WHEN discovery_hero_id IS NULL THEN 999999999
-         ELSE (SELECT COUNT(*) FROM match_player_heroes mph WHERE mph.hero_id = players.discovery_hero_id)
-    END ASC,
-    created_at ASC
+    CASE WHEN p.discovery_hero_id IS NULL THEN 999999999 ELSE COALESCE(h.c, 0) END ASC,
+    p.created_at ASC
 LIMIT 1
 """
 
