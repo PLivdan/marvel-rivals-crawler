@@ -102,6 +102,15 @@ def crawl_player(conn, client, uid, season):
                 # match-detail endpoint does not expose at all — pass it
                 # through so map_id lands.
                 ingest.ingest_match(conn, detail, season, history_entry=entry)
+            except fetcher.PlayerNotFoundError:
+                # A match that showed up in this player's history but is no
+                # longer fetchable (404) — normal attrition, not an error and
+                # not a payload problem. Nothing was written, so no rollback.
+                print(
+                    f"match {match_uid} no longer available (404); skipping",
+                    file=sys.stderr,
+                )
+                continue
             except (KeyError, TypeError, ValueError) as exc:
                 # This is an undocumented third-party API that can change
                 # shape without notice. One malformed match must not take

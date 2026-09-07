@@ -326,6 +326,47 @@ def test_crawl_player_skips_a_malformed_match_and_keeps_going():
     ).fetchone()[0] == 12
 
 
+def test_crawl_player_skips_a_match_that_404s_and_keeps_going():
+    # A match can appear in a player's history and still 404 on the detail
+    # endpoint. That raised PlayerNotFoundError, which crawl_player only
+    # caught around the *profile* fetch — so it escaped crawl_player, escaped
+    # run() (which has no handler for it), and killed the process.
+    conn = make_conn()
+    match = load("match_detail.json")
+    sane_uid = match["match_uid"]
+    gone_uid = "match_that_404s"
+    uid = 457877313
+    db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "pending"})
+    profile = load("player_public.json")
+
+    history_page = [
+        {"match_uid": gone_uid, "match_map_id": 1200},
+        {"match_uid": sane_uid, "match_map_id": 1245},
+    ]
+
+    class MissingMatchClient:
+        def get_json(self, path, params=None):
+            if path == f"/api/player/{uid}":
+                return profile
+            if path == f"/api/player-match-history/{uid}":
+                return history_page if params["skip"] == 0 else []
+            if path == f"/api/matches/{gone_uid}":
+                raise fetcher.PlayerNotFoundError(path)
+            if path == f"/api/matches/{sane_uid}":
+                return match
+            raise AssertionError(f"unexpected call: {path} {params}")
+
+    status = crawler.crawl_player(conn, MissingMatchClient(), uid=uid, season=19)
+
+    assert status == "done"  # did not raise
+    stored = {row[0] for row in conn.execute("SELECT match_uid FROM matches").fetchall()}
+    assert gone_uid not in stored
+    assert sane_uid in stored  # the rest of the page still got ingested
+    assert conn.execute(
+        "SELECT COUNT(*) FROM match_players WHERE match_uid=?", (sane_uid,)
+    ).fetchone()[0] == 12
+
+
 def test_requeue_stale_players_revisits_done_players_keeping_last_crawled_at():
     conn = make_conn()
     now = db.now()
