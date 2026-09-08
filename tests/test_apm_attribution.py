@@ -43,6 +43,22 @@ def test_w2_gives_the_whole_slot_to_the_dominant_hero():
     assert frame.loc[0, "weight"] == pytest.approx(1.0)
 
 
+def test_w2_tie_does_not_hand_the_player_two_slots():
+    conn = make_conn()
+    # Player 1 swapped between two heroes and played each for exactly the
+    # same amount of time: a play-time tie must still collapse to one row,
+    # or the camp total silently becomes 7.0 instead of 6.0.
+    add_player(conn, "m1", 1, 0, {2001: 300.0, 2002: 300.0})
+    for i in range(2, 7):
+        add_player(conn, "m1", i, 0, {3000 + i: 300.0})
+    frame = attribution.attribution_weights(conn, {"m1"}, "W2")
+    tied_rows = frame[frame["hero_id"].isin({2001, 2002})]
+    assert len(tied_rows) == 1
+    assert tied_rows["weight"].iloc[0] == pytest.approx(1.0)
+    totals = frame.groupby("camp")["weight"].sum()
+    assert totals[0] == pytest.approx(6.0)
+
+
 def test_weights_sum_to_six_per_team_under_both_rules():
     conn = make_conn()
     for i in range(6):
