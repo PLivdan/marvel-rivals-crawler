@@ -78,12 +78,69 @@ CREATE TABLE IF NOT EXISTS match_player_heroes (
     PRIMARY KEY (match_uid, player_uid, hero_id)
 );
 
+-- Reference data scraped from the site's client bundle by refresh_reference.py,
+-- NOT from the JSON API and NOT touched by the crawl. hero_id/teamup_id are the
+-- same ids the match endpoints emit, so these join straight onto match_players,
+-- match_player_heroes and match_bans to turn opaque ids into names.
+CREATE TABLE IF NOT EXISTS hero_info (
+    hero_id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    role TEXT,
+    class INTEGER,
+    difficulty INTEGER,
+    gender TEXT,
+    attack_method TEXT,
+    internal_name TEXT,
+    real_name TEXT,
+    refreshed_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+);
+
+-- One row per team-up ability. `anchor_hero_id` is the hero who owns the
+-- ability; the partner(s) who enable it live in teamup_heroes. end_sub_season
+-- IS NULL means the team-up is live in the current season — team-ups are
+-- re-worked between seasons, so a match's team-ups are only meaningful
+-- alongside matches.season.
+CREATE TABLE IF NOT EXISTS teamups (
+    teamup_id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    anchor_hero_id INTEGER,
+    start_sub_season TEXT,
+    end_sub_season TEXT,
+    description TEXT,
+    refreshed_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+);
+
+-- Membership edge. Includes the anchor itself (is_anchor=1), so the full
+-- roster of a team-up is one query with no union against teamups.
+CREATE TABLE IF NOT EXISTS teamup_heroes (
+    teamup_id INTEGER NOT NULL REFERENCES teamups(teamup_id),
+    hero_id INTEGER NOT NULL,
+    is_anchor INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (teamup_id, hero_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_teamup_heroes_hero_id ON teamup_heroes(hero_id);
+
 -- Indexes for crawler.select_next_player, which runs once per crawled player
 -- and scans the whole pending frontier (a single reseed can queue ~21,000
 -- pending players across ~42 heroes). CREATE INDEX IF NOT EXISTS is safe to
 -- re-run on every startup, so these self-apply to already-existing DB files.
 CREATE INDEX IF NOT EXISTS idx_players_crawl_status ON players(crawl_status);
 CREATE INDEX IF NOT EXISTS idx_match_player_heroes_hero_id ON match_player_heroes(hero_id);
+
+-- Indexes for reading the data back out, not for the crawl itself. Both
+-- match_players and match_player_heroes are keyed by (match_uid, ...), so
+-- player_uid is only ever a non-leading column and any per-player lookup
+-- degrades to a full table scan (measured: a per-player EXISTS over the
+-- players table did not finish in 120s at 1.1M match_player rows).
+-- cur_hero_id and match_time_stamp carry the hero-level and patch-window
+-- filters the regression is built on. Write cost is negligible here: the
+-- crawler is network-bound at ~18 requests/sec, so index maintenance never
+-- becomes the bottleneck, while the tables are headed for millions of rows.
+CREATE INDEX IF NOT EXISTS idx_match_players_player_uid ON match_players(player_uid);
+CREATE INDEX IF NOT EXISTS idx_match_player_heroes_player_uid ON match_player_heroes(player_uid);
+CREATE INDEX IF NOT EXISTS idx_match_players_cur_hero_id ON match_players(cur_hero_id);
+CREATE INDEX IF NOT EXISTS idx_matches_time_stamp ON matches(match_time_stamp);
 """
 
 # Columns added to a table after this project's first DB files were created.
