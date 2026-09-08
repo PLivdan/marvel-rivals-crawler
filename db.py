@@ -141,6 +141,40 @@ CREATE INDEX IF NOT EXISTS idx_match_players_player_uid ON match_players(player_
 CREATE INDEX IF NOT EXISTS idx_match_player_heroes_player_uid ON match_player_heroes(player_uid);
 CREATE INDEX IF NOT EXISTS idx_match_players_cur_hero_id ON match_players(cur_hero_id);
 CREATE INDEX IF NOT EXISTS idx_matches_time_stamp ON matches(match_time_stamp);
+
+-- Model results. Coefficients are meaningless without the run metadata that
+-- produced them, so apm_runs records the specification, attribution rule,
+-- sample filters and git commit alongside every fit.
+CREATE TABLE IF NOT EXISTS apm_runs (
+    run_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+    spec TEXT NOT NULL,
+    attribution_rule TEXT NOT NULL,
+    forfeit_floor INTEGER,
+    n_matches INTEGER,
+    n_players INTEGER,
+    exclusions TEXT,
+    git_commit TEXT
+);
+
+CREATE TABLE IF NOT EXISTS apm_hero_effects (
+    run_id INTEGER NOT NULL REFERENCES apm_runs(run_id),
+    hero_id INTEGER NOT NULL,
+    effect_logodds REAL,
+    std_error REAL,
+    ci_low REAL,
+    ci_high REAL,
+    p_adjusted REAL,
+    PRIMARY KEY (run_id, hero_id)
+);
+
+CREATE TABLE IF NOT EXISTS apm_teamup_effects (
+    run_id INTEGER NOT NULL REFERENCES apm_runs(run_id),
+    teamup_id INTEGER NOT NULL,
+    effect_logodds REAL,
+    std_error REAL,
+    PRIMARY KEY (run_id, teamup_id)
+);
 """
 
 # Columns added to a table after this project's first DB files were created.
