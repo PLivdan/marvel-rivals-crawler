@@ -92,3 +92,65 @@ def test_outcome_vector_matches_the_sample():
     frame, _ = sample_mod.build_sample(conn)
     design = features.build_design(conn, frame)
     assert design.y.tolist() == [0]
+
+
+def test_composition_shape_block_is_reduced_when_two_shapes_are_common():
+    # camp0 is 2-2-2 (SIX_A); camp1 swaps one damage hero out for a third
+    # damage hero, giving a genuinely different 1-3-2 shape rather than
+    # relabelling the same shape "other". With min_shape_count=1 both shapes
+    # clear the threshold, so the degenerate all-"other" branch is not taken
+    # and the sum-to-zero reduction on the shape block actually runs.
+    conn = make_conn()
+    conn.execute("INSERT INTO hero_info (hero_id, name, role) VALUES (1077,'G','Damage')")
+    conn.commit()
+    camp1 = [1011, 1033, 1044, 1077, 1055, 1066]
+    add_match(conn, "m1", SIX_A, camp1)
+    from apm import sample as sample_mod
+    frame, _ = sample_mod.build_sample(conn)
+    design = features.build_design(conn, frame, min_shape_count=1)
+
+    shape_cols = [c for c in design.column_names if c.startswith("shape_free_")]
+    # Three labels survive (1-3-2, 2-2-2, other) -> two free parameters.
+    assert shape_cols == ["shape_free_0", "shape_free_1"]
+    idx = [design.column_names.index(c) for c in shape_cols]
+    shape_block = design.X[:, idx]
+    assert shape_block.shape == (1, 2)
+    assert not np.allclose(shape_block, 0.0)
+
+
+def test_team_up_membership_is_plus_one_minus_one_or_zero():
+    # A team-up needs both its heroes fielded by the same camp. Cover all
+    # three outcomes: the pair together on camp0, together on camp1, and
+    # split across camps -- the split case is what distinguishes real
+    # subset-membership logic from a check that only ever fires on one side.
+    conn = make_conn()
+    conn.execute("INSERT INTO hero_info (hero_id, name, role) VALUES (1077,'G','Damage')")
+    conn.execute("INSERT INTO hero_info (hero_id, name, role) VALUES (1088,'H','Support')")
+    conn.execute(
+        "INSERT INTO teamups (teamup_id, name, anchor_hero_id) VALUES (1,'Duo',1011)")
+    conn.execute(
+        "INSERT INTO teamup_heroes (teamup_id, hero_id, is_anchor) VALUES (1,1011,1)")
+    conn.execute(
+        "INSERT INTO teamup_heroes (teamup_id, hero_id, is_anchor) VALUES (1,1022,0)")
+    conn.commit()
+
+    no_pair = [1033, 1044, 1055, 1066, 1077, 1088]
+    add_match(conn, "pair_camp0", SIX_A, no_pair, timestamp=1_787_000_000)
+    add_match(conn, "pair_camp1", no_pair, SIX_B, timestamp=1_787_000_100)
+    add_match(
+        conn, "pair_split",
+        [1011, 1033, 1044, 1055, 1066, 1077],
+        [1022, 1033, 1044, 1055, 1066, 1088],
+        timestamp=1_787_000_200,
+    )
+
+    from apm import sample as sample_mod
+    frame, _ = sample_mod.build_sample(conn)
+    design = features.build_design(conn, frame)
+
+    assert design.teamup_ids == [1]
+    idx = design.column_names.index("teamup_1")
+    by_match = dict(zip(design.match_uids, design.X[:, idx]))
+    assert by_match["pair_camp0"] == pytest.approx(1.0)
+    assert by_match["pair_camp1"] == pytest.approx(-1.0)
+    assert by_match["pair_split"] == pytest.approx(0.0)
