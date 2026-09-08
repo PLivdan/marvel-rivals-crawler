@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import statsmodels.api as sm
+from scipy.special import expit
 
 from apm import contrasts
 
@@ -53,7 +54,7 @@ def fit_logit(design):
 
 def predict_proba(design, fit):
     eta = design.X @ fit.params
-    return 1.0 / (1.0 + np.exp(-eta))
+    return expit(eta)
 
 
 def log_loss(y, p):

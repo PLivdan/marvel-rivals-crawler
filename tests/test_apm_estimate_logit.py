@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pytest
 
@@ -65,3 +67,22 @@ def test_log_loss_beats_a_coin_flip_on_the_training_data():
     fit = estimate.fit_logit(design)
     p = estimate.predict_proba(design, fit)
     assert estimate.log_loss(design.y, p) < np.log(2)
+
+
+def test_predict_proba_stays_finite_for_extreme_eta():
+    """The real design carries an unbounded skill_diff column, so eta can be
+    large in magnitude; predict_proba must not overflow or warn."""
+    design = DesignMatrix(
+        np.array([[-1000.0], [1000.0]]), np.array([0, 1]),
+        ["skill_diff"], [], np.zeros((0, 0)), slice(0, 0), [], ["m0", "m1"],
+    )
+    fit = estimate.FitResult(
+        params=np.array([1.0]), cov=np.zeros((1, 1)), column_names=["skill_diff"],
+        hero_effects={}, hero_cov=np.zeros((0, 0)), hero_ids=[], loglike=0.0, n=2,
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        p = estimate.predict_proba(design, fit)
+    assert np.all(np.isfinite(p))
+    assert p[0] == pytest.approx(0.0, abs=1e-12)
+    assert p[1] == pytest.approx(1.0, abs=1e-12)
