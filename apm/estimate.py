@@ -60,3 +60,51 @@ def predict_proba(design, fit):
 def log_loss(y, p):
     p = np.clip(p, 1e-12, 1 - 1e-12)
     return float(-np.mean(y * np.log(p) + (1 - y) * np.log(1 - p)))
+
+
+def within_transform(X, y, groups):
+    """Demean X and y by group.
+
+    With a single fixed-effect dimension this recovers the OLS slope estimates
+    exactly (Frisch-Waugh-Lovell), so no iterative absorption library is needed
+    and none is installed.
+    """
+    X = np.asarray(X, dtype=float)
+    y = np.asarray(y, dtype=float)
+    codes, inverse = np.unique(groups, return_inverse=True)
+    counts = np.bincount(inverse).astype(float)
+    x_sums = np.zeros((len(codes), X.shape[1]))
+    np.add.at(x_sums, inverse, X)
+    y_sums = np.zeros(len(codes))
+    np.add.at(y_sums, inverse, y)
+    return X - (x_sums / counts[:, None])[inverse], y - (y_sums / counts)[inverse]
+
+
+def fit_absorbed_lpm(X, y, groups, hero_ids, hero_basis, hero_slice,
+                     column_names):
+    """Linear probability model with one absorbed fixed-effect dimension.
+
+    An LPM rather than a fixed-effects logit: with roughly 5.6 matches per
+    player, a nonlinear model with a parameter per player is inconsistent
+    (incidental parameters). Predicted probabilities can fall outside [0,1];
+    that cost is reported as a diagnostic rather than hidden.
+    """
+    Xw, yw = within_transform(X, y, groups)
+    n, k = Xw.shape
+    n_groups = len(np.unique(groups))
+    xtx_inv = np.linalg.pinv(Xw.T @ Xw)
+    params = xtx_inv @ (Xw.T @ yw)
+    resid = yw - Xw @ params
+    dof = max(n - k - n_groups, 1)
+    sigma2 = float(resid @ resid) / dof
+    cov = sigma2 * xtx_inv
+    if len(hero_ids):
+        gamma = params[hero_slice]
+        beta = contrasts.effects_from_free(gamma, hero_basis)
+        hero_cov = contrasts.cov_from_free(cov[hero_slice, hero_slice], hero_basis)
+        effects = dict(zip(hero_ids, beta))
+    else:
+        effects, hero_cov = {}, np.zeros((0, 0))
+    return FitResult(params=params, cov=cov, column_names=column_names,
+                     hero_effects=effects, hero_cov=hero_cov,
+                     hero_ids=list(hero_ids), loglike=float("nan"), n=n)
