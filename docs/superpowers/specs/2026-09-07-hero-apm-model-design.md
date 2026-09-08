@@ -87,10 +87,18 @@ the exclusion table can be reported:
 3. Every player has non-null `new_score` and `add_score`, so pre-match rank is
    computable. Currently 100% of rows.
 4. Every player has at least one `match_player_heroes` row with `play_time > 0`.
-5. Match duration is finite and above a forfeit floor, set from the duration
-   distribution (p1 = 240s, median = 709s). The floor is a *reported robustness
-   parameter*, not a silent default: results are shown with no floor and with
-   floors at p1 and p5.
+5. Match duration is finite and above a forfeit floor. **Set the floor at 240s
+   (drops 0.7%), not at the 300-420s range that looks natural.** The floor
+   exists to remove matches decided by a disconnect or an early surrender rather
+   than by play, but it must be aggressive enough to catch those and no more,
+   because short matches turn out to be the *least* contaminated observations in
+   the sample: heroes per player rises monotonically with length — 1.49 below 5
+   minutes, 1.74 at 5-10, 2.06 at 10-15, 2.40 above 15 — so short matches are
+   where the swap endogeneity of Section 5.1 barely operates. A 360s floor would
+   discard 11.1% of matches, and precisely the cleanest ones.
+
+   The floor stays a *reported robustness parameter* rather than a silent
+   default: results are shown at 0s, 180s (0.2%), 240s (0.7%) and 300s (4.5%).
 
 Ban rows with `hero_id = 0` are empty ban slots, not heroes, and are dropped
 before any ban-derived variable is constructed (currently 18,200 rows).
@@ -217,7 +225,7 @@ do not establish that two heroes were on the field *simultaneously*. Team-up
 terms are therefore constructed under W2 (dominant hero) even in the primary
 specification, and this asymmetry is documented.
 
-### 5.6 Hero-specific experience — a validation subsample, not a universal control
+### 5.6 Hero-specific experience — considered and declined
 
 `GET /api/player/{uid}?season={N}` returns `heroes_ranked` and
 `heroes_unranked`: dicts keyed by hero id giving that player's `matches`,
@@ -250,20 +258,28 @@ There are also no lifetime totals to fall back on: `season=0` and `season=all`
 both return empty, and omitting the parameter defaults to the current season, so
 no pre-season baseline exists that would be cleanly pre-determined.
 
-**Design decision.** Collect these stats for a *random subsample* of roughly
-20-30k players (on the order of 30 minutes of crawling, versus 6+ hours for a
-full sweep) and use them to run the headline specification with hero-experience
-controls added, restricted to matches where they are observed. If hero
-coefficients do not move relative to the unrestricted fit, the untestable
-assumption in Section 7 has been converted into a **tested** one against a
-directly measured confounder — a materially stronger result than an Oster bound,
-which only asks how large an unobserved confounder would have to be. If they do
-move, that is the headline finding and the estimates must be reported with the
-control.
+**Decision: out of scope. Do not collect.** The option was costed and declined,
+and is recorded here so it is not re-litigated later.
 
-The subsample must be drawn at random from players appearing in the analysis
-matches, not from the crawl frontier, and the snapshot timestamp recorded, since
-these totals drift.
+What was on the table was a random subsample of ~20-30k players (roughly 30
+minutes of crawling against 6+ hours for a full sweep), used to refit the
+headline specification with hero-experience controls on the matches where they
+are observed. Had the hero coefficients not moved, the central assumption in
+Section 7 would have been converted from an assumption into a *tested* claim
+against a directly measured confounder.
+
+**What the project gives up by declining it.** Hero-specific human capital
+remains the one first-order confounder that is bounded but never measured. Oster
+(2019) asks only how large an unobserved confounder would have to be to overturn
+a sign; it cannot say whether this particular one actually is that large. The
+estimates are correspondingly weaker: adjusted associations with a sensitivity
+bound, not associations with the leading rival explanation ruled out. Section 13
+carries this as a stated limitation, and Section 7's residual-confounding row is
+the honest home for it.
+
+If the constraint later relaxes, the cheap version is the subsample above, not a
+full sweep — and quickplay hours, not competitive hours, are the variable worth
+collecting, for the post-treatment reason in point 1.
 
 ### 5.7 Bans, and why they mostly cancel
 
@@ -384,7 +400,7 @@ about them:
 
 | Threat | Mechanism | Treatment |
 |---|---|---|
-| Hero-specific human capital | A one-trick is not a random player assigned that hero | Partially addressed by Spec B (removes general skill only). Bounded by Oster (2019), and **directly measured on a validation subsample** (Section 5.6) rather than only bounded. |
+| Hero-specific human capital | A one-trick is not a random player assigned that hero | Partially addressed by Spec B (removes general skill only). **Bounded by Oster (2019), never measured** — direct measurement was costed and declined (Section 5.6). This is the design's binding limitation. |
 | Post-treatment swapping | Losing teams swap, so play-time weights respond to the outcome | W1/W2/W3 attribution axis (5.1); duration strata bound the contamination |
 | Selection into sample | BFS crawl, rank-selected privacy | Documented (Section 4); rank-band refits as robustness |
 | Simultaneity of team-ups | Play-time totals do not prove co-presence | Team-ups built under W2 (5.5) |
@@ -437,17 +453,16 @@ Every item produces a table or figure in the output; nothing here is optional.
 5. **Temporal stability.** Split-half by date plus a Chow-type structural break
    test scanning candidate break dates, to detect a mid-sample balance patch.
 6. **Rank-band refits.** Re-estimate on high-elo matches only, given the
-   documented rank-selected sampling.
-7. **Forfeit floor sensitivity.** No floor, p1 floor, p5 floor.
+   documented rank-selected sampling. The sample is narrow — 77% of matches
+   have a mean pre-match score between 4,250 and 4,749 — so the cut is set at
+   **>= 4,750 (22.5% of matches, ~41,600)**, which retains roughly 240
+   observations per free parameter. A >= 5,000 cut is *not* used as a headline
+   robustness split: it leaves only ~5,200 matches against ~170 parameters, and
+   any coefficient movement there would be indistinguishable from noise.
+7. **Forfeit floor sensitivity.** 0s, 180s, 240s (default) and 300s, per
+   Section 4.
 8. **Ridge appendix.** Confirms rankings are not artifacts of near-collinearity.
 9. **Oster bounds.** Per Section 7.
-10. **Hero-experience validation subsample.** Headline specification refit with
-    measured hero-specific experience controls on the Section 5.6 subsample,
-    against the same specification without them on the identical matches, so the
-    comparison isolates the control rather than the sample. Quickplay hours are
-    the preferred control (not post-treatment); competitive hours are reported
-    separately and read as a lower bound, since they are contaminated in the
-    known direction.
 
 ## 10. Model evaluation
 
@@ -507,14 +522,8 @@ is a distinct subsystem with a different dependency footprint and lifecycle:
 - `apm/report.py` — result tables, DB persistence, formatted output.
 - `apm_main.py` — CLI, mirroring `main.py`'s argument style.
 
-**One upstream prerequisite.** The Section 5.6 validation subsample needs data
-the crawler does not currently store: a `player_hero_stats` table
-(`player_uid`, `hero_id`, `mode` in {ranked, unranked}, `matches`, `wins`,
-`play_time`, K/D/A, `session_hit_rate`, `snapshot_at`), populated by a
-subsample profile sweep. The profile endpoint is already called by
-`crawl_player`, so this is a new ingest path and a bounded sweep script rather
-than new fetching machinery. It is sequenced *after* the headline model works,
-so the model is never blocked on it.
+**No upstream data collection is required.** Every variable the model needs is
+already in `data/rivals.db`; the crawl continues only to grow the sample.
 
 Dependencies are limited to what is already installed: numpy, scipy, pandas,
 statsmodels, matplotlib. Sparse design matrices (`scipy.sparse`) and float32 keep
@@ -533,5 +542,7 @@ covariance transformation), sample filters, and the mirror-matchup invariant.
 - Match outcome prediction as a product.
 - Cross-season estimation (the sample is one season, and team-ups are reworked
   between seasons).
+- Collection of per-player hero playtime (Section 5.6), and therefore any claim
+  that hero-specific skill has been controlled for rather than bounded.
 - Causal claims beyond what Section 7 supports. The output is an *adjusted
   association* with quantified sensitivity to its central assumption.
