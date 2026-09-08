@@ -866,9 +866,10 @@ from apm.features import DesignMatrix
 
 
 def synthetic_design(n=40_000, seed=0):
-    """Matches with six heroes a side drawn at random and a KNOWN hero effect
-    vector. Recovering planted coefficients is the only honest test of an
-    estimator."""
+    """Matches with three heroes a side drawn at random and a KNOWN hero
+    effect vector. Three rather than six only to keep the fixture small; the
+    sum-to-zero structure is identical. Recovering planted coefficients is the
+    only honest test of an estimator."""
     rng = np.random.default_rng(seed)
     k = 8
     true_beta = np.array([0.5, 0.3, 0.1, 0.0, -0.1, -0.2, -0.3, -0.3])
