@@ -7,6 +7,8 @@ does not apply. The reported intervals come from resampling *players* and
 refitting, which mirrors the sampling process directly.
 """
 
+import warnings
+
 import numpy as np
 
 
@@ -64,6 +66,30 @@ def cluster_bootstrap(design, fit_fn, clusters, n_reps=1000, seed=0):
 
 
 def percentile_interval(draws, alpha=0.05):
-    lo = np.nanpercentile(draws, 100 * alpha / 2, axis=0)
-    hi = np.nanpercentile(draws, 100 * (1 - alpha / 2), axis=0)
+    """Percentile bootstrap interval, column-wise.
+
+    A hero absent from every resampled fit leaves an all-NaN column. That is
+    a real, reportable fact (the interval is genuinely undefined there), but
+    letting numpy's bare "All-NaN slice encountered" warning stand for it
+    would be indistinguishable from background noise at 3am. Detect it
+    explicitly, name the affected hero columns, and return NaN for exactly
+    those without ever handing an all-NaN column to nanpercentile.
+    """
+    draws = np.asarray(draws, dtype=float)
+    n_cols = draws.shape[1]
+    all_nan = np.all(np.isnan(draws), axis=0)
+    lo = np.full(n_cols, np.nan)
+    hi = np.full(n_cols, np.nan)
+    if all_nan.any():
+        bad = np.flatnonzero(all_nan)
+        warnings.warn(
+            f"percentile_interval: {bad.size} of {n_cols} column(s) have no "
+            f"non-NaN bootstrap draws (indices {bad.tolist()}); returning "
+            "NaN for those intervals.",
+            RuntimeWarning,
+        )
+    good = ~all_nan
+    if good.any():
+        lo[good] = np.nanpercentile(draws[:, good], 100 * alpha / 2, axis=0)
+        hi[good] = np.nanpercentile(draws[:, good], 100 * (1 - alpha / 2), axis=0)
     return lo, hi
