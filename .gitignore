@@ -8,3 +8,8 @@ logs/
 results/*.log
 results/*.err
 results/*.out
+results/*.aux
+results/*.fdb_latexmk
+results/*.fls
+results/*.log
+results/build.log
