@@ -38,13 +38,66 @@ def hero_contrast_frame(weights):
     )
 
 
-def _lineup_sets(conn, match_uids):
-    """Six dominant heroes per (match, camp). Team-ups and composition need a
-    definite set, so these always use W2 regardless of the hero rule."""
-    w2 = attribution.attribution_weights(conn, match_uids, "W2")
+def _dominant_hero_per_player(conn, match_uids):
+    """Each player's single most-played hero, one row per player.
+
+    This mirrors apm.attribution's W2 rule up to, but not including, its
+    final match/camp/hero aggregation (attribution.py's closing
+    `.groupby(["match_uid","camp","hero_id"])["weight"].sum()`).
+    attribution_weights needs that aggregation -- its own consumer, the hero
+    contrast columns, needs weights that sum to 6.0 per team regardless of
+    how many distinct heroes are on it, and that is correct for its purpose.
+    But it is exactly what destroys player identity when two teammates share
+    a dominant hero: two players' 1.0-weight rows for the same hero_id merge
+    into one row worth 2.0, and a team of six real player-slots reads back
+    as five (or fewer) distinct heroes. Composition shape and team-up
+    membership both need all six player-slots intact, so this stops one
+    step short of that collapse and returns one row per player instead. The
+    query and tie-break duplicate attribution.py's W2 branch deliberately,
+    to keep attribution_weights' own behaviour (pinned by its tests) alone.
+    """
+    if not match_uids:
+        return pd.DataFrame(columns=["match_uid", "camp", "player_uid", "hero_id"])
+
+    rows = conn.execute(
+        "SELECT h.match_uid, p.camp, h.player_uid, h.hero_id, h.play_time "
+        "FROM match_player_heroes h "
+        "JOIN match_players p ON p.match_uid=h.match_uid "
+        "                    AND p.player_uid=h.player_uid "
+        "WHERE h.play_time>0"
+    ).fetchall()
+    frame = pd.DataFrame(
+        rows, columns=["match_uid", "camp", "player_uid", "hero_id", "play_time"]
+    )
+    frame = frame[frame["match_uid"].isin(match_uids)]
+    if frame.empty:
+        return pd.DataFrame(columns=["match_uid", "camp", "player_uid", "hero_id"])
+
+    keys = ["match_uid", "player_uid"]
+    best = frame.groupby(keys)["play_time"].transform("max")
+    # Same tie-break as attribution.py's W2 branch: a play-time tie must
+    # still resolve to exactly one hero per player, or a roster could come
+    # back with more than six entries.
+    frame = frame[frame["play_time"] == best]
+    frame = frame.drop_duplicates(subset=keys, keep="first")
+    return frame[["match_uid", "camp", "player_uid", "hero_id"]]
+
+
+def _lineup_rosters(conn, match_uids):
+    """Six player-slot heroes per (match, camp), duplicates preserved.
+
+    Team-ups and composition need a definite lineup, so these always use W2
+    regardless of the hero rule. Two players sharing a dominant hero must
+    still occupy two slots here -- a set would silently drop one, so this
+    returns a list with one entry per player. Callers that only need
+    presence (team-up membership) build a set from the list; callers that
+    need counts (composition shape) iterate the list directly so a
+    duplicated hero counts twice.
+    """
+    per_player = _dominant_hero_per_player(conn, match_uids)
     return {
-        key: set(group["hero_id"])
-        for key, group in w2.groupby(["match_uid", "camp"])
+        key: list(group["hero_id"])
+        for key, group in per_player.groupby(["match_uid", "camp"])
     }
 
 
@@ -64,7 +117,8 @@ def build_design(conn, sample, attribution_rule="W1", min_shape_count=500):
     hero_basis = contrasts.sum_to_zero_basis(len(hero_ids))
     hero_block = contrasts.reduce_design(hero_raw, hero_basis)
 
-    lineups = _lineup_sets(conn, match_uids)
+    rosters = _lineup_rosters(conn, match_uids)
+    lineup_sets = {key: set(heroes) for key, heroes in rosters.items()}
     roles = dict(conn.execute("SELECT hero_id, role FROM hero_info"))
 
     teamups = {}
@@ -75,12 +129,14 @@ def build_design(conn, sample, attribution_rule="W1", min_shape_count=500):
     for j, tid in enumerate(teamup_ids):
         members = teamups[tid]
         for row, uid in enumerate(order):
-            in0 = members <= lineups.get((uid, 0), set())
-            in1 = members <= lineups.get((uid, 1), set())
+            in0 = members <= lineup_sets.get((uid, 0), set())
+            in1 = members <= lineup_sets.get((uid, 1), set())
             teamup_block[row, j] = float(in0) - float(in1)
 
     def shape_of(uid, camp):
-        heroes = lineups.get((uid, camp), set())
+        # A list, not a set: two player-slots sharing a hero must both count
+        # toward the role total, or a true 2-2-2 misreads as e.g. 1-2-2.
+        heroes = rosters.get((uid, camp), [])
         counts = [0, 0, 0]
         for hero in heroes:
             role = roles.get(hero)

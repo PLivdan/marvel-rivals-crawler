@@ -118,6 +118,66 @@ def test_composition_shape_block_is_reduced_when_two_shapes_are_common():
     assert not np.allclose(shape_block, 0.0)
 
 
+def test_lineup_rosters_keep_all_six_slots_when_two_players_share_a_hero():
+    # Two players on camp0 both have hero 1011 as their sole (hence
+    # dominant) hero -- a real two-Tank team, not a data error. The old
+    # set-based lineup would merge their two W2 rows for hero_id 1011 into
+    # one during attribution_weights' per-team aggregation, so
+    # _lineup_rosters must not rely on that aggregated output.
+    conn = make_conn()
+    camp0 = [1011, 1011, 1033, 1044, 1055, 1066]
+    add_match(conn, "m1", camp0, SIX_B)
+    rosters = features._lineup_rosters(conn, {"m1"})
+    assert sorted(rosters[("m1", 0)]) == sorted(camp0)
+    assert len(rosters[("m1", 0)]) == 6
+
+
+def test_composition_shape_counts_six_role_slots_when_two_players_share_a_hero():
+    # camp0 fields two players on hero 1011 (Tank) plus one each of 1033/1044
+    # (Damage) and 1055/1066 (Support): a genuine 2-2-2, six real
+    # player-slots. camp1 (SIX_B) is also a genuine, distinct-hero 2-2-2. If
+    # the duplicate hero on camp0 collapsed its lineup to five distinct
+    # heroes, shape_of would miscount it as 1-2-2 -- a second, spurious
+    # shape alongside camp1's 2-2-2 -- and two composition shapes would
+    # clear min_shape_count=1 instead of one.
+    conn = make_conn()
+    camp0 = [1011, 1011, 1033, 1044, 1055, 1066]
+    add_match(conn, "m1", camp0, SIX_B)
+    from apm import sample as sample_mod
+    frame, _ = sample_mod.build_sample(conn)
+    design = features.build_design(conn, frame, min_shape_count=1)
+
+    shape_cols = [c for c in design.column_names if c.startswith("shape_free_")]
+    assert shape_cols == ["shape_free_0"]
+
+
+def test_team_up_still_detected_when_a_teammate_shares_the_partners_hero():
+    # Regression guard for the fix: converting the internal lineup from a
+    # set to a per-player list must not break the team-up subset check,
+    # which still needs a set built from that list.
+    conn = make_conn()
+    conn.execute(
+        "INSERT INTO teamups (teamup_id, name, anchor_hero_id) VALUES (1,'Duo',1011)")
+    conn.execute(
+        "INSERT INTO teamup_heroes (teamup_id, hero_id, is_anchor) VALUES (1,1011,1)")
+    conn.execute(
+        "INSERT INTO teamup_heroes (teamup_id, hero_id, is_anchor) VALUES (1,1033,0)")
+    conn.commit()
+
+    camp0 = [1011, 1011, 1033, 1044, 1055, 1066]
+    # camp1 must exclude both team-up members (1011 and 1033), or the pair
+    # would also read as present on camp1 and the plus-one/minus-one signal
+    # would cancel to zero regardless of whether camp0 is handled correctly.
+    camp1 = [1022, 1022, 1044, 1044, 1055, 1066]
+    add_match(conn, "m1", camp0, camp1)
+    from apm import sample as sample_mod
+    frame, _ = sample_mod.build_sample(conn)
+    design = features.build_design(conn, frame)
+
+    idx = design.column_names.index("teamup_1")
+    assert design.X[0, idx] == pytest.approx(1.0)
+
+
 def test_team_up_membership_is_plus_one_minus_one_or_zero():
     # A team-up needs both its heroes fielded by the same camp. Cover all
     # three outcomes: the pair together on camp0, together on camp1, and
