@@ -39,7 +39,11 @@ def _hero_pieces(design, params, cov):
 
 def fit_logit(design):
     model = sm.Logit(design.y, design.X)
-    res = model.fit(disp=0, method="newton", maxiter=200)
+    # HC1: spec section 8 calls for heteroskedasticity-robust match-level
+    # standard errors. These analytic errors are the reported intervals
+    # whenever the bootstrap is off (its default -- see apm_main), so they
+    # must not be the classical non-robust MLE covariance.
+    res = model.fit(disp=0, method="newton", maxiter=200, cov_type="HC1")
     effects, hero_cov = _hero_pieces(design, res.params, res.cov_params())
     return FitResult(
         params=res.params,

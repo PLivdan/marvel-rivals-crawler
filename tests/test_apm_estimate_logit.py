@@ -69,6 +69,25 @@ def test_log_loss_beats_a_coin_flip_on_the_training_data():
     assert estimate.log_loss(design.y, p) < np.log(2)
 
 
+def test_fit_logit_uses_heteroskedasticity_robust_hc1_standard_errors():
+    # Spec section 8 calls for heteroskedasticity-robust match-level standard
+    # errors; these become the reported intervals whenever the bootstrap is
+    # off (its default). Confirm fit_logit's covariance matches an explicit
+    # HC1 fit and differs from the classical (non-robust) MLE covariance --
+    # a regression guard against cov_type silently getting dropped.
+    import statsmodels.api as sm
+
+    design, _ = synthetic_design(n=5_000)
+    fit = estimate.fit_logit(design)
+
+    model = sm.Logit(design.y, design.X)
+    classical = model.fit(disp=0, method="newton", maxiter=200)
+    robust = model.fit(disp=0, method="newton", maxiter=200, cov_type="HC1")
+
+    np.testing.assert_allclose(fit.cov, robust.cov_params())
+    assert not np.allclose(fit.cov, classical.cov_params())
+
+
 def test_predict_proba_stays_finite_for_extreme_eta():
     """The real design carries an unbounded skill_diff column, so eta can be
     large in magnitude; predict_proba must not overflow or warn."""
