@@ -7,6 +7,7 @@ The collinearity here is structural, not incidental, and is removed exactly by
 the sum-to-zero reparameterisation in apm.contrasts.
 """
 
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
@@ -92,7 +93,17 @@ def fit_absorbed_lpm(X, y, groups, hero_ids, hero_basis, hero_slice,
     Xw, yw = within_transform(X, y, groups)
     n, k = Xw.shape
     n_groups = len(np.unique(groups))
-    xtx_inv = np.linalg.pinv(Xw.T @ Xw)
+    xtx = Xw.T @ Xw
+    rank = np.linalg.matrix_rank(xtx)
+    if rank < k:
+        warnings.warn(
+            f"within-transformed design is rank-deficient: rank {rank} of {k} "
+            f"parameters ({k - rank} unidentified dimension(s)). pinv returns a "
+            "minimum-norm solution; coefficients and standard errors along the "
+            "unidentified directions are not meaningful.",
+            RuntimeWarning,
+        )
+    xtx_inv = np.linalg.pinv(xtx)
     params = xtx_inv @ (Xw.T @ yw)
     resid = yw - Xw @ params
     dof = max(n - k - n_groups, 1)
