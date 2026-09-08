@@ -3,6 +3,8 @@ import pytest
 
 import apm_main
 import db
+from apm import contrasts
+from apm.features import DesignMatrix
 
 
 def build_fixture(path, n_matches=400, n_short_matches=0):
@@ -98,6 +100,129 @@ def test_cli_scopes_n_players_to_the_sample_not_the_whole_table(tmp_path):
     assert total_players == 400 * 12 + 10 * 12
     assert recorded == 400 * 12
     assert recorded < total_players
+
+
+def _design_with_extra_columns(extra, n=20, n_hero=3):
+    """A minimal design (intercept + hero block + named extra columns) for
+    exercising _drop_zero_variance_extra_columns without a database.
+
+    `extra` is a list of (column_name, values) pairs appended after the
+    hero block, exactly where team-up and shape_free columns sit in a real
+    design (see apm/features.py's column layout).
+    """
+    basis = contrasts.sum_to_zero_basis(n_hero)
+    rng = np.random.default_rng(0)
+    raw = rng.choice([-1.0, 0.0, 1.0], size=(n, n_hero))
+    hero_block = contrasts.reduce_design(raw, basis)
+    intercept = np.ones((n, 1))
+    extra_cols = (np.column_stack([v for _, v in extra]) if extra
+                  else np.zeros((n, 0)))
+    X = np.hstack([intercept, hero_block, extra_cols])
+    names = (["intercept"] + [f"hero_free_{i}" for i in range(hero_block.shape[1])]
+             + [name for name, _ in extra])
+    hero_slice = slice(1, 1 + hero_block.shape[1])
+    teamup_ids = [int(name[len("teamup_"):]) for name, _ in extra
+                  if name.startswith("teamup_")]
+    return DesignMatrix(X, np.zeros(n, dtype=int), names, list(range(n_hero)),
+                        basis, hero_slice, teamup_ids, [f"m{i}" for i in range(n)])
+
+
+def test_drop_zero_variance_extra_columns_drops_and_reports(capsys):
+    zeros = np.zeros(20)
+    varying = np.array([1.0, -1.0] * 10)
+    design = _design_with_extra_columns(
+        [("teamup_1", zeros), ("shape_free_0", varying)])
+
+    new_design = apm_main._drop_zero_variance_extra_columns(design)
+
+    assert "teamup_1" not in new_design.column_names
+    assert "shape_free_0" in new_design.column_names
+    assert new_design.teamup_ids == []
+    assert new_design.hero_slice == design.hero_slice
+    assert new_design.X.shape[1] == design.X.shape[1] - 1
+
+    err = capsys.readouterr().err
+    assert "teamup_1" in err
+    assert "dropping zero-variance" in err
+
+
+def test_drop_zero_variance_extra_columns_is_a_no_op_when_nothing_is_degenerate():
+    design = _design_with_extra_columns([("teamup_1", np.array([1.0, -1.0] * 10))])
+    new_design = apm_main._drop_zero_variance_extra_columns(design)
+    assert new_design is design
+
+
+def test_drop_zero_variance_extra_columns_raises_on_a_degenerate_hero_column():
+    # The hero block is the estimand and must never be silently dropped:
+    # a degenerate hero column has to surface loudly instead.
+    n = 20
+    hero_block = np.zeros((n, 2))
+    intercept = np.ones((n, 1))
+    X = np.hstack([intercept, hero_block])
+    names = ["intercept", "hero_free_0", "hero_free_1"]
+    design = DesignMatrix(X, np.zeros(n, dtype=int), names, [10, 20, 30],
+                          contrasts.sum_to_zero_basis(3), slice(1, 3), [],
+                          [f"m{i}" for i in range(n)])
+    with pytest.raises(RuntimeError, match="hero_free_0"):
+        apm_main._drop_zero_variance_extra_columns(design)
+
+
+def test_cli_drops_a_structurally_zero_teamup_column_and_still_fits(tmp_path, capsys):
+    # Reproduces the real hero_id 1057 "Deadpool" bug: a team-up references
+    # a hero that is defined but never actually played (all its plays are
+    # recorded under role-variant hero ids instead), so the team-up column
+    # can never be non-zero and would otherwise singularize the Newton fit.
+    path = str(tmp_path / "t.db")
+    build_fixture(path)
+    conn = db.connect(path)
+    conn.execute(
+        "INSERT INTO teamups (teamup_id, name, anchor_hero_id) "
+        "VALUES (99,'Ghost',1011)")
+    conn.execute(
+        "INSERT INTO teamup_heroes (teamup_id, hero_id, is_anchor) "
+        "VALUES (99,1011,1)")
+    conn.execute(
+        "INSERT INTO teamup_heroes (teamup_id, hero_id, is_anchor) "
+        "VALUES (99,9999,0)")  # hero_id 9999 never appears in any match
+    conn.commit()
+    conn.close()
+
+    assert apm_main.main(["--db-path", path, "--bootstrap-reps", "0"]) == 0
+
+    err = capsys.readouterr().err
+    assert "teamup_99" in err
+    assert "dropping zero-variance" in err
+
+    conn = db.connect(path)
+    effects = conn.execute(
+        "SELECT effect_logodds FROM apm_hero_effects").fetchall()
+    assert len(effects) == 8
+    assert sum(e[0] for e in effects) == pytest.approx(0.0, abs=1e-6)
+
+
+def test_bootstrap_reps_defaults_to_zero(tmp_path, monkeypatch):
+    path = str(tmp_path / "t.db")
+    build_fixture(path)
+    captured = {}
+    real = apm_main.run_specification_a
+
+    def spy(conn, args):
+        captured["bootstrap_reps"] = args.bootstrap_reps
+        return real(conn, args)
+
+    monkeypatch.setattr(apm_main, "run_specification_a", spy)
+    assert apm_main.main(["--db-path", path]) == 0
+    assert captured["bootstrap_reps"] == 0
+
+
+def test_nonzero_bootstrap_reps_prints_a_cost_warning(tmp_path, capsys):
+    path = str(tmp_path / "t.db")
+    build_fixture(path)
+    assert apm_main.main(["--db-path", path, "--bootstrap-reps", "1"]) == 0
+    err = capsys.readouterr().err
+    assert "bootstrap-reps=1" in err
+    assert "65s" in err
+    assert "hours" in err
 
 
 def test_hero_adjusted_p_values_quarantines_a_degenerate_standard_error():

@@ -62,6 +62,96 @@ def _hero_adjusted_p_values(hero_ids, hero_effects, hero_cov):
     return adjusted_p
 
 
+def _drop_zero_variance_extra_columns(design):
+    """Drop team-up/composition columns that are identically zero.
+
+    A team-up or composition-shape column can be structurally all-zero in a
+    given sample -- e.g. a team-up defined between two heroes where one of
+    them is never actually played (a "base" hero id that only ever appears
+    in its role-variant forms; see the four all-zero team-up columns hung
+    off hero_id 1057 "Deadpool", whose plays are all recorded under 10571/
+    10572/10573 instead). Such a column makes the design matrix rank-
+    deficient and sm.Logit(method="newton") raises LinAlgError.
+
+    The drop is dynamic (whatever is zero-variance at fit time, not a
+    hardcoded id list) and is restricted to the team-up and composition
+    blocks. The hero block is the estimand and is never dropped this way --
+    a degenerate hero column is a signal to investigate, not to discard, so
+    that raises instead.
+    """
+    X = design.X
+    names = design.column_names
+
+    hero_idx = range(design.hero_slice.start, design.hero_slice.stop)
+    degenerate_hero = [names[j] for j in hero_idx if np.ptp(X[:, j]) == 0]
+    if degenerate_hero:
+        raise RuntimeError(
+            "hero free-parameter column(s) are degenerate (zero variance) "
+            f"in this sample: {degenerate_hero}. The hero block is the "
+            "estimand and is never silently dropped -- investigate the "
+            "sample (e.g. a hero with no recorded plays) before proceeding."
+        )
+
+    # Restricted to team-up/composition columns by name, which never
+    # overlaps the hero block checked (and raised on) above -- the hero
+    # free-parameter columns are always named "hero_free_*".
+    drop_idx = [
+        j for j, name in enumerate(names)
+        if name.startswith(("teamup_", "shape_free_")) and np.ptp(X[:, j]) == 0
+    ]
+    if not drop_idx:
+        return design
+
+    dropped_names = [names[j] for j in drop_idx]
+    print(
+        "apm_main: dropping zero-variance column(s) before fitting -- these "
+        "never activate in this sample and would otherwise singularize the "
+        f"design: {dropped_names}",
+        file=sys.stderr,
+    )
+
+    keep_idx = [j for j in range(X.shape[1]) if j not in drop_idx]
+    new_X = X[:, keep_idx]
+    new_names = [names[j] for j in keep_idx]
+    dropped_teamup_ids = {
+        int(name[len("teamup_"):]) for name in dropped_names
+        if name.startswith("teamup_")
+    }
+    new_teamup_ids = [t for t in design.teamup_ids if t not in dropped_teamup_ids]
+
+    return dataclasses.replace(
+        design, X=new_X, column_names=new_names, teamup_ids=new_teamup_ids)
+
+
+def _warn_about_bootstrap_cost(n_reps):
+    """Print the measured/extrapolated cost of a non-zero bootstrap request.
+
+    Measured against the live database: build_design calls
+    attribution_weights twice per build, and that function has no
+    match_uid predicate -- it pulls the whole match_player_heroes join
+    into pandas before filtering, at ~65s per call. That alone is a lower
+    bound; it excludes the Newton fit, the per-build team-up loop and the
+    unfiltered score aggregation that also run on every replication.
+    """
+    measured_seconds_per_call = 65
+    calls_per_build = 2
+    per_rep_lower_bound = measured_seconds_per_call * calls_per_build
+    total_hours_lower_bound = (n_reps * per_rep_lower_bound) / 3600.0
+    print(
+        f"apm_main: --bootstrap-reps={n_reps} requested. Each replication "
+        "refits by rebuilding the full feature pipeline from SQL: "
+        "build_design calls attribution_weights twice, and that function "
+        f"has no match_uid predicate -- measured at ~{measured_seconds_per_call}s "
+        "per call against the unfiltered match_player_heroes/match_players "
+        f"join. That alone is ~{per_rep_lower_bound}s of pure I/O per "
+        "replication, before the Newton fit, the per-build team-up loop "
+        f"and the score aggregation. At {n_reps} replications that is at "
+        f"least ~{total_hours_lower_bound:.1f} hours. Proceeding anyway -- "
+        "interrupt now if this was not intended.",
+        file=sys.stderr,
+    )
+
+
 def _count_sample_players(conn, match_uids):
     """Count match_players rows scoped to exactly the sample's matches.
 
@@ -100,6 +190,7 @@ def run_specification_a(conn, args):
     if frame.empty:
         raise SystemExit("no matches survived the sample filters")
     design = features.build_design(conn, frame, args.attribution)
+    design = _drop_zero_variance_extra_columns(design)
     fit = estimate.fit_logit(design)
 
     errors = np.sqrt(np.diag(fit.hero_cov))
@@ -108,6 +199,7 @@ def run_specification_a(conn, args):
 
     intervals = {}
     if args.bootstrap_reps > 0:
+        _warn_about_bootstrap_cost(args.bootstrap_reps)
         clusters = inference.player_clusters(conn, design.match_uids)
 
         def refit(match_uids):
@@ -120,6 +212,7 @@ def run_specification_a(conn, args):
                 subset.index.repeat(subset["match_uid"].map(counts))
             ].reset_index(drop=True)
             sub_design = features.build_design(conn, subset, args.attribution)
+            sub_design = _drop_zero_variance_extra_columns(sub_design)
             return estimate.fit_logit(sub_design).hero_effects
 
         draws = inference.cluster_bootstrap(
@@ -151,7 +244,19 @@ def main(argv=None):
                         choices=list(attribution.RULES))
     parser.add_argument("--forfeit-floor", type=int,
                         default=sample.DEFAULT_FORFEIT_FLOOR_SECONDS)
-    parser.add_argument("--bootstrap-reps", type=int, default=1000)
+    parser.add_argument(
+        "--bootstrap-reps", type=int, default=0,
+        help="Cluster-bootstrap replications for the reported hero-effect "
+             "intervals (default: 0, meaning skip the bootstrap and report "
+             "analytic HC1-robust standard-error intervals instead). "
+             "WARNING: each replication refits by rebuilding the entire "
+             "feature pipeline from SQL -- attribution_weights has no "
+             "match_uid predicate and pulls the whole match_player_heroes "
+             "join before filtering, measured at ~65s per call, twice per "
+             "build. On the full database that is 36+ hours at the old "
+             "default of 1000, before the Newton fit and team-up loop. A "
+             "non-zero value prints a cost estimate to stderr before "
+             "running.")
     args = parser.parse_args(argv)
 
     conn = db.connect(args.db_path)
