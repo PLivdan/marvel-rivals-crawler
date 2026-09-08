@@ -1,0 +1,21 @@
+{
+  "attribution_rule": "W2",
+  "forfeit_floor": 240,
+  "n_matches": 329572,
+  "exclusions": {
+    "starting": 333367,
+    "dropped_roster": 0,
+    "dropped_draw": 1468,
+    "dropped_missing_score": 0,
+    "dropped_missing_playtime": 11,
+    "dropped_short": 2316,
+    "remaining": 329572
+  },
+  "zero_variance_columns_dropped": 4,
+  "n_heroes": 55,
+  "n_teamups": 100,
+  "loglike": -211184.89497843126,
+  "intercept_logodds": 0.01635765573896314,
+  "git_commit": "87423d6",
+  "interval_method": "analytic 1.96*HC1 SE (bootstrap infeasible at this scale)"
+}
