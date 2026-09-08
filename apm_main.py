@@ -8,6 +8,7 @@ import dataclasses
 import json
 import subprocess
 import sys
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -26,6 +27,74 @@ def _git_commit():
         return "unknown"
 
 
+def _hero_adjusted_p_values(hero_ids, hero_effects, hero_cov):
+    """BH-adjusted p-values per hero, quarantining degenerate heroes first.
+
+    benjamini_hochberg's step-up procedure runs a cumulative minimum over the
+    sorted p-values (apm/inference.py), so a single NaN — from a hero whose
+    standard error is exactly zero, giving z = NaN via the errors>0 guard
+    below — propagates through np.minimum.accumulate and silently blanks
+    every OTHER hero's adjusted p-value too, not just its own. Excluding such
+    heroes from the input entirely (and reporting NaN only for them) keeps
+    one degenerate hero from poisoning the whole family-wise result.
+    """
+    errors = np.sqrt(np.diag(hero_cov))
+    z = np.array([hero_effects[h] for h in hero_ids]) / np.where(
+        errors > 0, errors, np.nan)
+    raw_p = 2 * (1 - stats.norm.cdf(np.abs(z)))
+    finite = np.isfinite(raw_p)
+
+    adjusted_p = {h: float("nan") for h in hero_ids}
+    if not finite.all():
+        excluded = [h for h, ok in zip(hero_ids, finite) if not ok]
+        warnings.warn(
+            f"_hero_adjusted_p_values: excluding {len(excluded)} hero(es) "
+            f"with a non-finite p-value from the BH adjustment (hero_id(s) "
+            f"{excluded}); their standard error was zero or otherwise "
+            "degenerate. Reporting p_adjusted=NaN for those heroes rather "
+            "than letting them blank every other hero's result.",
+            RuntimeWarning,
+        )
+    if finite.any():
+        adjusted_finite, _ = inference.benjamini_hochberg(raw_p[finite])
+        for h, p in zip(np.asarray(hero_ids)[finite], adjusted_finite):
+            adjusted_p[h] = float(p)
+    return adjusted_p
+
+
+def _count_sample_players(conn, match_uids):
+    """Count match_players rows scoped to exactly the sample's matches.
+
+    apm_runs exists so a coefficient can be traced back to the exact sample
+    that produced it, and n_matches already varies per run with the sample
+    filters (--forfeit-floor and the roster/draw/score/playtime exclusions in
+    apm.sample). n_players must vary the same way or it is false precision:
+    a static whole-database count sitting next to a real per-run n_matches.
+
+    At the ~200,000-match scale this runs at, a single parameterized
+    `WHERE match_uid IN (...)` would either blow past SQLite's bound
+    parameter limit or need manual chunking. Loading the sample's match ids
+    into a temp table and joining does it as one query with no such limit;
+    the join is indexed on both sides (match_uid is the temp table's primary
+    key and leads match_players' composite primary key).
+    """
+    conn.execute(
+        "CREATE TEMP TABLE IF NOT EXISTS _apm_sample_matches "
+        "(match_uid TEXT PRIMARY KEY)"
+    )
+    conn.execute("DELETE FROM _apm_sample_matches")
+    conn.executemany(
+        "INSERT INTO _apm_sample_matches (match_uid) VALUES (?)",
+        [(uid,) for uid in match_uids],
+    )
+    count = conn.execute(
+        "SELECT COUNT(*) FROM match_players p "
+        "JOIN _apm_sample_matches s ON s.match_uid = p.match_uid"
+    ).fetchone()[0]
+    conn.execute("DROP TABLE _apm_sample_matches")
+    return count
+
+
 def run_specification_a(conn, args):
     frame, exclusions = sample.build_sample(conn, args.forfeit_floor)
     if frame.empty:
@@ -34,11 +103,8 @@ def run_specification_a(conn, args):
     fit = estimate.fit_logit(design)
 
     errors = np.sqrt(np.diag(fit.hero_cov))
-    z = np.array([fit.hero_effects[h] for h in fit.hero_ids]) / np.where(
-        errors > 0, errors, np.nan)
-    raw_p = 2 * (1 - stats.norm.cdf(np.abs(z)))
-    adjusted, _ = inference.benjamini_hochberg(raw_p)
-    adjusted_p = dict(zip(fit.hero_ids, adjusted))
+    adjusted_p = _hero_adjusted_p_values(
+        fit.hero_ids, fit.hero_effects, fit.hero_cov)
 
     intervals = {}
     if args.bootstrap_reps > 0:
@@ -67,8 +133,7 @@ def run_specification_a(conn, args):
             intervals[hero] = (fit.hero_effects[hero] - half,
                                fit.hero_effects[hero] + half)
 
-    n_players = conn.execute(
-        "SELECT COUNT(*) FROM match_players").fetchone()[0]
+    n_players = _count_sample_players(conn, frame["match_uid"])
     run_id = report.record_run(
         conn, spec="A", attribution_rule=args.attribution,
         forfeit_floor=args.forfeit_floor, n_matches=len(frame),
