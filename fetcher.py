@@ -129,6 +129,7 @@ class RivalsMetaClient:
         self.session = session
         self.limiter = limiter or AdaptiveRateLimiter()
         self._consecutive_failures = 0
+        self._consecutive_bad_json = 0
         self._circuit_open_until = 0.0
         self._state_lock = threading.Lock()
 
@@ -141,23 +142,33 @@ class RivalsMetaClient:
         # escape as an "unexpected exception" and crash the whole run —
         # observed live, not hypothetical.
         #
-        # This does NOT also feed the circuit breaker: _request()'s success
-        # path already calls _reset_failures() on every 2xx before handing
-        # the response back here, so a _register_failure() call made after
-        # the fact would just be undone by the next attempt's own 2xx —
-        # accumulating nothing. Fixing that needs _request() itself to know
-        # in advance that its caller may still reject a "successful"
-        # response, which is a bigger change than this fix calls for. The
-        # rate limiter backoff below is unaffected by that reset and still
-        # applies correctly.
+        # A sustained run of these is tracked on its own
+        # `_consecutive_bad_json` counter rather than folded into
+        # `_request()`'s `_consecutive_failures`: every attempt below got a
+        # 2xx, so _request() already calls _reset_failures() on each one
+        # before handing the response back here — reusing that counter would
+        # make it oscillate 0->1->0 every call and never reach the circuit
+        # threshold no matter how many calls in a row fail this way. That gap
+        # was observed live: dozens of consecutive players all came back
+        # non-JSON while the circuit stayed shut the whole time and workers
+        # just kept grinding the queue into 'error'. A dedicated counter,
+        # touched only here and reset only on a genuine parse success,
+        # accumulates across calls the way the network-failure counter
+        # accumulates across _request() calls, and shares the same
+        # `_circuit_open_until` gate so either failure mode pauses every
+        # worker the same way.
         last_exc = None
         for _ in range(self.MAX_RETRIES):
             resp = self._request(path, params)
             try:
-                return resp.json()
+                result = resp.json()
             except ValueError as exc:
                 last_exc = exc
                 self.limiter.record_failure()
+                continue
+            self._reset_bad_json()
+            return result
+        self._register_bad_json()
         raise FetchError(f"non-JSON response after {self.MAX_RETRIES} attempts: {path}") from last_exc
 
     def get_text(self, path, params=None):
@@ -219,4 +230,14 @@ class RivalsMetaClient:
         with self._state_lock:
             self._consecutive_failures += 1
             if self._consecutive_failures >= self.CIRCUIT_FAILURE_THRESHOLD:
+                self._circuit_open_until = time.time() + self.CIRCUIT_COOLDOWN_SECONDS
+
+    def _reset_bad_json(self):
+        with self._state_lock:
+            self._consecutive_bad_json = 0
+
+    def _register_bad_json(self):
+        with self._state_lock:
+            self._consecutive_bad_json += 1
+            if self._consecutive_bad_json >= self.CIRCUIT_FAILURE_THRESHOLD:
                 self._circuit_open_until = time.time() + self.CIRCUIT_COOLDOWN_SECONDS

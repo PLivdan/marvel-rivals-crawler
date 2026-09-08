@@ -119,9 +119,9 @@ def test_get_json_exhausts_retries_on_persistent_bad_json_and_raises_fetch_error
 
 
 def test_get_json_bad_json_still_backs_off_the_shared_rate_limiter():
-    # It doesn't trip the circuit breaker (see the comment in get_json for
-    # why), but it must still slow the shared pacing down like any other
-    # failure — that part doesn't depend on _request()'s success bookkeeping.
+    # One call's worth of bad JSON (MAX_RETRIES attempts) is nowhere near the
+    # circuit threshold (CIRCUIT_FAILURE_THRESHOLD separate calls) on its own,
+    # but it must still slow the shared pacing down like any other failure.
     bad = ValueError("Expecting value: line 1 column 1 (char 0)")
     session = FakeSession([FakeResponse(200, payload=bad)] * 3)
     limiter = NoSleepLimiter()
@@ -130,6 +130,44 @@ def test_get_json_bad_json_still_backs_off_the_shared_rate_limiter():
     with pytest.raises(FetchError):
         client.get_json("/api/player/1")
     assert limiter.current_delay > before
+
+
+def test_sustained_bad_json_across_many_calls_opens_the_circuit_breaker():
+    # Observed live: dozens of consecutive players in a row all came back
+    # 200-with-unparseable-body (a site-side block/challenge page served as a
+    # 200). Each get_json call only registers one unit after exhausting its
+    # own MAX_RETRIES attempts, so it takes CIRCUIT_FAILURE_THRESHOLD separate
+    # calls — not just one call's retries — to open the circuit.
+    bad = ValueError("Expecting value: line 1 column 1 (char 0)")
+    calls_needed = RivalsMetaClient.CIRCUIT_FAILURE_THRESHOLD
+    responses = [FakeResponse(200, payload=bad) for _ in range(calls_needed * RivalsMetaClient.MAX_RETRIES)]
+    session = FakeSession(responses)
+    client = RivalsMetaClient(session=session, limiter=NoSleepLimiter())
+
+    for _ in range(calls_needed):
+        with pytest.raises(FetchError):
+            client.get_json("/api/player/1")
+
+    with pytest.raises(CircuitOpenError):
+        client.get_json("/api/player/2")
+
+
+def test_a_successful_parse_resets_the_bad_json_streak():
+    # Occasional blips must not quietly accumulate toward the circuit
+    # threshold across unrelated, otherwise-healthy calls.
+    bad = ValueError("Expecting value: line 1 column 1 (char 0)")
+    exhausted_call = [FakeResponse(200, payload=bad)] * RivalsMetaClient.MAX_RETRIES
+    session = FakeSession(exhausted_call + exhausted_call + [FakeResponse(200, payload={"ok": True})])
+    client = RivalsMetaClient(session=session, limiter=NoSleepLimiter())
+
+    with pytest.raises(FetchError):
+        client.get_json("/api/player/1")
+    with pytest.raises(FetchError):
+        client.get_json("/api/player/2")
+    assert client._consecutive_bad_json == 2
+
+    assert client.get_json("/api/player/3") == {"ok": True}
+    assert client._consecutive_bad_json == 0
 
 
 def test_sustained_429_raises_rate_limited_error_not_fetch_error():
