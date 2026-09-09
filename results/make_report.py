@@ -152,27 +152,35 @@ def xy_rows(d):
 def label_nodes(d, lo, hi, keys=None, obstacles=(), reserved=()):
     """One \\node per labelled point. Near candidates sit diagonally next to the point
     (default: the empty side of the 45-degree line). If every near candidate would
-    overlap another point or label, the label moves out along one of eight directions
-    and a thin leader line connects it to its point. Distances are axis-normalised and
-    stretched to the label's aspect ratio (a label is ~0.14 wide and ~0.05 tall)."""
+    overlap another point, another label, a reserved region (legend, annotation) or the
+    axis frame, the label moves out along one of eight directions and a thin leader line
+    connects it to its point. Distances are axis-normalised and stretched to each label's
+    own width (about 0.0065 axis-widths per character at \\tiny) and height (0.05)."""
     span = hi - lo
     norm = lambda x, y: ((x - lo) / span, (y - lo) / span)
     back = lambda nx, ny: (lo + nx * span, lo + ny * span)
     points = [norm(x, y) for x, y in obstacles] + [norm(r.mean_predicted, r.mean_realised) for r in d.itertuples()]
     ANCHOR = {(-1, 1): "south east", (1, 1): "south west", (-1, -1): "north east", (1, -1): "north west",
               (0, 1): "south", (0, -1): "north", (-1, 0): "east", (1, 0): "west"}
-    def centre(px, py, sx, sy):                      # approximate label centre given its anchor point
-        return px + sx * 0.07, py + sy * 0.025
-    def score(cx, cy, own):
-        # reserved rectangles (legend, corner annotation) in normalised axis units: (x0, x1, y0, y1)
-        if any(x0 - 0.07 <= cx <= x1 + 0.07 and y0 - 0.03 <= cy <= y1 + 0.03 for x0, x1, y0, y1 in reserved):
-            return 0.0
-        obs = [q for q in points if q != own] + placed
-        return min((((cx - qx) / 0.14) ** 2 + ((cy - qy) / 0.05) ** 2) ** 0.5 for qx, qy in obs) if obs else 9.0
-    placed, out = [], []
+    placed, out = [], []            # placed: (cx, cy, hw) of labels already set
     for r in d.sort_values("mean_predicted").itertuples():
         if keys is not None and r.key not in keys:
             continue
+        hw = max(0.04, 0.0072 * len(str(r.key)))          # half-width of this label
+        def centre(px, py, sx, sy):
+            return px + sx * hw, py + sy * 0.025
+        def score(cx, cy, own):
+            if not (0.0 <= cx - hw and cx + hw <= 1.0 and 0.0 <= cy - 0.025 and cy + 0.025 <= 1.0):
+                return -1.0
+            if any(x0 - hw <= cx <= x1 + hw and y0 - 0.03 <= cy <= y1 + 0.03 for x0, x1, y0, y1 in reserved):
+                return 0.0
+            best = 9.0
+            for qx, qy in points:
+                if (qx, qy) != own:
+                    best = min(best, (((cx - qx) / (hw + 0.02)) ** 2 + ((cy - qy) / 0.06) ** 2) ** 0.5)
+            for qx, qy, qw in placed:
+                best = min(best, (((cx - qx) / (hw + qw + 0.03)) ** 2 + ((cy - qy) / 0.06) ** 2) ** 0.5)
+            return best
         nx, ny = norm(r.mean_predicted, r.mean_realised)
         own = (nx, ny)
         cands = []                                    # (score, is_far, sx, sy, label anchor point)
@@ -183,15 +191,16 @@ def label_nodes(d, lo, hi, keys=None, obstacles=(), reserved=()):
         if default[0] >= 1.0:
             best = default
         else:
-            for radius in (0.10, 0.15):
+            for radius in (0.10, 0.15, 0.20):
                 for sx, sy in ANCHOR:
                     px, py = nx + sx * radius, ny + sy * radius
-                    if not (0.02 < px < 0.98 and 0.02 < py < 0.98):
-                        continue
                     cands.append((score(*centre(px, py, sx, sy), own), True, sx, sy, (px, py)))
-            best = max(cands, key=lambda c: (min(c[0], 1.3), not c[1]))   # good enough near beats far
+            # good enough near beats far; among equals prefer leftward, then horizontal placements,
+            # which stacks leader-line labels in the empty upper-left of a 45-degree plot
+            best = max(cands, key=lambda c: (min(c[0], 1.3), not c[1], c[2] == -1, c[3] == 0))
         sc, far, sx, sy, (px, py) = best
-        placed.append(centre(px, py, sx, sy))
+        cx, cy = centre(px, py, sx, sy)
+        placed.append((cx, cy, hw))
         lx, ly = back(px, py)
         if far:
             out.append(rf"\draw[very thin] (axis cs:{r.mean_predicted:.4f},{r.mean_realised:.4f}) -- (axis cs:{lx:.4f},{ly:.4f});")
@@ -264,7 +273,7 @@ TU_HDR = " & ".join([_tu_hdr] * 3) + r" \\"
 TEX = r"""\documentclass[11pt]{article}
 \usepackage[margin=0.85in]{geometry}
 \usepackage{booktabs,siunitx,threeparttable,caption,amsmath,microtype}
-\usepackage{pdflscape,makecell,tikz,pgfplots,titlesec,fancyhdr}
+\usepackage{pdflscape,makecell,tikz,pgfplots,titlesec,fancyhdr,float,placeins}
 \titleformat{\section}{\large\bfseries}{}{0pt}{}
 \titlespacing*{\section}{0pt}{16pt plus 4pt minus 2pt}{6pt}
 \pagestyle{fancy}\fancyhf{}\renewcommand{\headrulewidth}{0pt}
@@ -304,75 +313,56 @@ particular hero and winning after holding fixed the observable features of the m
 reasonably be separated from hero identity. The resulting number is an adjusted plus--minus,
 or APM. It answers the question: if an average hero of the same role is replaced by this hero
 at the start of an otherwise comparable match, how much does the predicted probability of
-winning change? That is not the same question as raw win rate, and pretending that it is would
-defeat most of the purpose of having <<N_MATCHES>> matches in the first place.
+winning change? Raw win rate answers a different question, and the size of the sample is what
+makes it possible to answer the narrower one with some precision.
 
 The first nuisance is team composition. \emph{Marvel Rivals} does not force every team into
 the same role structure, and those structures have very different outcomes before anyone asks
 which specific heroes occupy them. The standard composition of two Tanks, two Damage heroes,
 and two Supports accounts for <<SHARE222>> of teams in the sample and wins <<WR222>> of its
-matches. A 1--3--2 team is not the same object. Neither is 2--1--3, 0--4--2, or any of the
-more exotic things ranked players occasionally decide are a good idea. In the data, one Tank
-with three Damage heroes wins <<WR132>> of its matches, and two Tanks with three Supports wins
-<<WR213>>. If composition were ignored, the regression would happily blame individual heroes
-for losses partly caused by the structure around them. That would be convenient. It would also
-be wrong.
+matches. A 1--3--2 team is a different object, as are 2--1--3, 0--4--2, and the more exotic
+structures ranked players occasionally decide are a good idea. In the data, one Tank with three
+Damage heroes wins <<WR132>> of its matches, and two Tanks with three Supports wins <<WR213>>.
+If composition were ignored, the regression would attribute part of the penalty from bad role
+structures to the heroes who happen to appear in them, which is exactly the sort of confounding
+the model is supposed to remove.
 
 I therefore control for composition directly. Every Tank--Damage--Support combination that
 appears at least <<MIN_SHAPE>> times receives its own indicator, entered as the difference
-between the two teams<<POOLED_CLAUSE>>. The point is simple. The composition block gets to
-explain whether a strange role structure is good or bad. The hero block gets to explain which
-heroes are relatively good or bad within their roles. Those are different questions, so the
-model should not force one coefficient to answer both.
+between the two teams<<POOLED_CLAUSE>>. The composition block then explains whether a given
+role structure is good or bad, while the hero block explains which heroes are relatively good or
+bad within their roles, and the two questions are answered by different coefficients rather than
+forced onto one.
 
 Each match is one observation, and the outcome is whether side~0 wins. A hero enters as a
 signed contrast between the two teams. If Hela starts on side~0, that adds one to the Hela
 regressor. If she starts on side~1, it subtracts one. The hero coefficients are constrained to
 sum to zero separately within Tanks, Damage heroes, and Supports, so <<T1>> is compared with
 the average Tank, <<D1>> with the average Damage hero, and <<S1>> with the average Support.
-Cross-role comparisons are deliberately not the object being estimated. The rest of the
+Cross-role comparisons are deliberately left outside what is being estimated, for reasons
+given below. The rest of the
 specification absorbs the obvious sources of variation. Each of the <<N_MAPS>> maps receives
 its own intercept, the pre-match rank-score difference between the teams enters directly, and
 <<N_TEAMUPS>> designated team-up contrasts sit alongside the composition contrasts just
 described. The model is an unpenalised logistic regression with HC1
 heteroskedasticity-robust standard errors.
 
+\FloatBarrier
 \section*{The annoying question: who gets credit when someone swaps?}
 
-Hero attribution is where an apparently innocent modelling decision becomes much less
-innocent. Suppose a player starts Hela, plays her for two minutes, swaps to Punisher, and
+Hero attribution is where an apparently minor coding decision starts to matter for
+identification. Suppose a player starts Hela, plays her for two minutes, swaps to Punisher, and
 spends the remaining eight minutes there. There are at least three obvious ways to encode that
 player. Under starting-hero attribution (W0), the match counts as 100\% Hela, and the question
 being asked is simply which hero the player started on. Under most-played-hero attribution
 (W2), the same match counts as 100\% Punisher, because Punisher received most of the player's
 minutes. Under play-time weighting (W1), the observation becomes 20\% Hela and 80\% Punisher.
+Figure~\ref{fig:swap} lays the three side by side.
 
-Play-time weighting initially sounds like the sophisticated choice. The data record the exact
-time spent on each hero, so why throw information away? Unfortunately, the extra information
-is produced during the match. Players do not swap at random. They swap because they are losing
-a matchup, because the enemy composition changed, because a hero is not working, or because
-the match itself has revealed something that was unavailable at the start. Weighting by
-realised play time therefore lets the outcome-generating process help construct the
-explanatory variable. The model starts using the match to explain the match. This produces
-wonderfully impressive coefficients, which is precisely the problem.
-
-Figure~\ref{fig:attrib} makes the distinction concrete and then shows what it does to the
-estimates. Moving from the least outcome-dependent rule to the most outcome-dependent one, the
-cross-hero standard deviation of the 55 APM estimates rises from <<SD0>> percentage points
-under starting-hero attribution to <<SD2>> under most-played-hero attribution and <<SD1>>
-under play-time weighting. <<EX_HERO>> is the extreme case, moving from <<EX0>> points to
-<<EX2>> and then <<EX1>> across the three rules. The interesting part is that the rankings do
-not collapse. Their rank correlations with the starting-hero ranking are still <<RHO2>> for
-the most-played rule and <<RHO1>> for play-time weighting. What changes is the magnitude. The
-more information from after the opening seconds is fed into attribution, the larger the hero
-effects become, and that is exactly the pattern to worry about if the additional accuracy is
-partly post-treatment information leaking into the regressors.
-
-\begin{figure}[t!]\centering
-\caption{Who gets credit when a player swaps heroes, and what that choice does to the estimates}
-\label{fig:attrib}
-\vspace{2pt}
-{\small\emph{Panel A: one player, one swap (illustrative match)}}\\[6pt]
+\begin{figure}[H]\centering
+\caption{Three ways to credit one player who swaps heroes (illustrative match)}
+\label{fig:swap}
+\vspace{4pt}
 \begin{tikzpicture}[font=\small, x=1.2cm, y=1cm]
   \fill[black!22] (0,0.08) rectangle (2,0.62);
   \fill[black!58] (2,0.08) rectangle (10,0.62);
@@ -390,8 +380,41 @@ partly post-treatment information leaking into the regressors.
     {\textbf{Most-played hero}\\(W2)\\[3pt] 100\% Punisher\\[3pt] {\footnotesize\itshape ``What did you mostly play?''}};
   \node[rule] at (8.45,-0.85)
     {\textbf{Play-time weighted}\\(W1)\\[3pt] 20\% Hela, 80\% Punisher\\[3pt] {\footnotesize\itshape ``How was your time divided?''}};
-\end{tikzpicture}\\[10pt]
-{\small\emph{Panel B: the estimates expand as the rule uses more post-start information}}\\[2pt]
+\end{tikzpicture}
+
+\begin{minipage}{0.92\linewidth}\footnotesize\vspace{4pt}
+\emph{Notes.} A stylised match. The three rules agree about any player who never swaps and
+disagree only about players who do, which is exactly where the outcome of the match can leak
+into the regressors. From left to right, each rule uses more information revealed after the
+match begins.
+\end{minipage}
+\end{figure}
+
+Play-time weighting initially sounds like the sophisticated choice. The data record the exact
+time spent on each hero, so why throw information away? Unfortunately, the extra information
+is produced during the match. Players do not swap at random. They swap because they are losing
+a matchup, because the enemy composition changed, because a hero is not working, or because
+the match itself has revealed something that was unavailable at the start. Weighting by
+realised play time therefore lets the outcome-generating process help construct the
+explanatory variable, so that the match is partly being used to explain itself, and the
+wonderfully impressive coefficients this produces are the symptom rather than the achievement.
+
+Figure~\ref{fig:ladder} shows what the choice does to the estimates. Moving from the least
+outcome-dependent rule to the most outcome-dependent one, the
+cross-hero standard deviation of the 55 APM estimates rises from <<SD0>> percentage points
+under starting-hero attribution to <<SD2>> under most-played-hero attribution and <<SD1>>
+under play-time weighting. <<EX_HERO>> is the extreme case, moving from <<EX0>> points to
+<<EX2>> and then <<EX1>> across the three rules. The rankings survive this reasonably well,
+with rank correlations against the starting-hero ranking of <<RHO2>> for the most-played rule
+and <<RHO1>> for play-time weighting, so what the rules mainly disagree about is magnitude. The
+more information from after the opening seconds is fed into attribution, the larger the hero
+effects become, which is exactly the pattern to expect if the additional accuracy is partly
+post-treatment information leaking into the regressors.
+
+\begin{figure}[!htb]\centering
+\caption{The estimates expand as the attribution rule uses more post-start information}
+\label{fig:ladder}
+\vspace{2pt}
 \begin{tikzpicture}
 \begin{axis}[
   width=12.5cm, height=6.4cm, axis lines=left, tick style={draw=none},
@@ -416,26 +439,24 @@ partly post-treatment information leaking into the regressors.
 \end{tikzpicture}
 
 \begin{minipage}{0.92\linewidth}\footnotesize\vspace{4pt}
-\emph{Notes.} Panel~A is a stylised match. The three rules agree about any player who never
-swaps and disagree only about players who do, which is where the outcome of the match can leak
-into the regressors. Panel~B plots, for each rule, the cross-hero standard deviation of the 55
-within-role estimates (filled circles), all fitted on the same <<N_MATCHES_CMP>> matches, and
-the estimate for <<EX_HERO>> (open circles), the hero whose estimate moves most between the
-starting-hero and play-time-weighted rules. Appendix Table~\ref{tab:attribcmp} lists every
-hero under every rule.
+\emph{Notes.} For each rule, filled circles show the cross-hero standard deviation of the 55
+within-role estimates, all fitted on the same <<N_MATCHES_CMP>> matches. Open circles trace
+<<EX_HERO>>, the hero whose estimate moves most between the starting-hero and
+play-time-weighted rules. Appendix Table~\ref{tab:attribcmp} lists every hero under every rule.
 \end{minipage}
 \end{figure}
 
 For the headline results I therefore use starting-hero attribution. The API records heroes
 chronologically by first appearance, so the first hero gives an assignment fixed before the
 rest of the match is known. If someone starts a hero and abandons it thirty seconds later,
-that hero still receives the match. This unquestionably attenuates some effects. A hero that
-players frequently abandon will look less extreme than it does under play-time weighting. But
-that behaviour is not irrelevant to the hero's practical value, and the rule buys a much
-cleaner interpretation: what happens after a player begins the match on this hero? That is an
-intention-to-treat object rather than an attempt to reconstruct, after the fact, which hero
-deserves the result.
+that hero still receives the match. This attenuates the estimates for heroes that players
+frequently abandon, which look less extreme than they do under play-time weighting, but
+abandonment is itself part of how a hero performs in practice, and the rule buys a cleaner
+interpretation of what happens after a player begins the match on the hero. That is an
+intention-to-treat object rather than a reconstruction, after the fact, of which hero deserves
+the result.
 
+\FloatBarrier
 \section*{Why the comparison is within role}
 
 There is a second identification issue that is easy to miss, because the regression returns
@@ -453,9 +474,10 @@ Composition effects are then left to the composition controls, and hero effects 
 variation among heroes filling the same strategic slot. Re-estimating the model under this
 parameterisation barely changes the substantive ordering. The rank correlation with the
 earlier estimates is <<REPARAM_RHO>> and the mean absolute change in a coefficient is
-<<REPARAM_MAD>> percentage points. Fixing the identification problem does not manufacture the
-result. It makes the interpretation defensible.
+<<REPARAM_MAD>> percentage points, so the correction changes what the coefficients mean without
+materially changing the ranking.
 
+\FloatBarrier
 \section*{What the model finds}
 
 There is substantial dispersion within all three roles (Table~\ref{tab:main}). Among Tanks,
@@ -464,11 +486,10 @@ average Tank, followed by <<TREST>>. Among Damage heroes, <<D1>> leads at <<D1V>
 followed by <<DREST>>. Among Supports, <<S1>> is the clear outlier at <<S1V>> points, followed
 by <<SREST>>.
 
-These numbers are marginal effects evaluated at a balanced match. <<T1>>'s <<T1V>> does not
-mean that every team picking <<T1>> raises its observed win rate by <<T1V>> points. It means
-that, at the evaluation point, replacing an average Tank with <<T1>> is associated with about
-a <<T1V>> percentage-point increase in predicted win probability after conditioning on the
-controls in the model. <<N_NS>> of the 55 heroes cannot be statistically distinguished from
+These numbers are marginal effects evaluated at a balanced match. <<T1>>'s <<T1V>> is the
+change in predicted win probability, at that evaluation point, from replacing an average Tank
+with <<T1>> while holding the model's controls fixed, rather than a promise that every team
+picking <<T1>> raises its observed win rate by that amount. <<N_NS>> of the 55 heroes cannot be statistically distinguished from
 their role average after Benjamini--Hochberg false-discovery-rate correction.
 
 Table~\ref{tab:main} also shows why raw win rate and adjusted value should not be treated as
@@ -476,14 +497,16 @@ synonyms. Alongside the APM and its uncertainty it reports starts, pick share wi
 the raw play-time-weighted win rate, and the change produced by replacing starting-hero
 attribution with play-time weighting. Some heroes move substantially once the surrounding match
 is controlled for. Others move substantially when swaps are allowed to influence attribution.
-Those are different sources of distortion, and the table exposes both rather than pretending
-that one number is the hero's true strength.
+Those are different sources of distortion, and reporting both beside the APM lets a reader see
+which heroes' raw win rates are misleading and which heroes' estimates are sensitive to the
+attribution rule.
 
+\FloatBarrier
 \section*{Does any of this survive outside the sample?}
 
-A large regression can always become very good at describing the data used to fit it, which is
-not especially interesting. The more useful test is whether it predicts matches it has not
-seen. I therefore fit the model on the <<N_TRAIN>> matches played before the final
+In-sample fit is a weak test here, particularly with <<K_PARAMS>> parameters and nearly half a
+million matches. The more informative question is whether the estimated structure survives a
+later week of data. I therefore fit the model on the <<N_TRAIN>> matches played before the final
 <<HOLD_DAYS>> days of the sample and evaluate it on the remaining <<N_HOLD>>. The split is
 chronological rather than random, so the holdout is genuinely later data and the meta drift
 that a random split would smuggle across the boundary stays on the test side.
@@ -491,22 +514,21 @@ that a random split would smuggle across the boundary stays on the test side.
 Figure~\ref{fig:oos} evaluates the model in two ways. Panel~A groups holdout team-sides by the
 hero they started and compares each group's realised win rate with the model's average
 predicted win probability. If the model says that teams starting a given hero should win 53\%
-of the time, those teams should win approximately 53\% of the time in data the model never
-saw. They largely do. Across the 55 heroes, predicted and realised holdout win rates have a
-correlation of <<HG_CORR>> and a mean absolute gap of <<HG_GAP>> percentage points. More
-revealingly, if the hero terms are removed while map, rank score, composition, and team-ups
-are retained, the correlation falls to <<HG_CORR0>>. The remaining controls know something
-about the environments different heroes appear in, but they do not reproduce the cross-hero
-outcome pattern on their own. Panel~B repeats the exercise for composition shapes and produces
+of the time, then in data it never saw those teams should win at roughly that rate, and across
+the 55 heroes they do: predicted and realised holdout win rates have a correlation of
+<<HG_CORR>> and a mean absolute gap of <<HG_GAP>> percentage points. Although map, rank score,
+composition, and team-ups explain some of the environments in which particular heroes appear,
+they do very little to reproduce the cross-hero pattern in the holdout week once the hero terms
+themselves are removed, and the correlation falls to <<HG_CORR0>>. Panel~B repeats the exercise for composition shapes and produces
 a correlation of <<SG_CORR>> with a mean absolute gap of <<SG_GAP>> points.
 
-\begin{figure}[t!]\centering
+\begin{figure}[!htb]\centering
 \caption{Does the model predict outcomes it has not seen? Holdout week, by hero and by composition}
 \label{fig:oos}
 \vspace{2pt}
 \begin{tikzpicture}
 \begin{axis}[
-  width=7.9cm, height=7.9cm, axis lines=left, tick style={draw=none}, clip=false,
+  width=7.4cm, height=7.4cm, axis lines=left, tick style={draw=none}, clip=false,
   xmin=<<HG_LO>>, xmax=<<HG_HI>>, ymin=<<HG_LO>>, ymax=<<HG_HI>>,
   title={\small Panel A: by starting hero (55 heroes)}, title style={yshift=-3pt},
   xlabel={Predicted win rate of teams starting the hero}, ylabel={Realised win rate in the holdout week},
@@ -530,7 +552,7 @@ p a
 \end{tikzpicture}\hfill
 \begin{tikzpicture}
 \begin{axis}[
-  width=7.9cm, height=7.9cm, axis lines=left, tick style={draw=none}, clip=false,
+  width=7.4cm, height=7.4cm, axis lines=left, tick style={draw=none}, clip=false,
   xmin=<<SG_LO>>, xmax=<<SG_HI>>, ymin=<<SG_LO>>, ymax=<<SG_HI>>,
   title={\small Panel B: by team composition (<<SG_N>> shapes)}, title style={yshift=-3pt},
   xlabel={Predicted win rate of teams with the composition}, ylabel={Realised win rate in the holdout week},
@@ -550,16 +572,15 @@ p a
 \end{tikzpicture}
 
 \begin{minipage}{0.95\linewidth}\footnotesize\vspace{4pt}
-\emph{Notes.} The model is fitted on the <<N_TRAIN>> matches before the final <<HOLD_DAYS>>
-days and evaluated on the <<N_HOLD>> matches of that week. Each holdout match contributes
-two team-sides. Panel~A groups team-sides by each hero they started: the horizontal axis is
-the model's mean predicted win probability for those team-sides, the vertical axis the share
-that actually won. Filled circles use the full model. Open circles use the same model with
-the hero contrasts removed, so their horizontal spread is only what map, rank score,
-composition, and team-ups can explain about a hero's teams. Labels mark the two heroes farthest
-from the line and the two extremes. Panel~B groups team-sides by composition shape
-(Tanks--Damage--Supports), showing every shape with at least 100 holdout team-sides.
-Appendix Figure~\ref{fig:calib} gives the match-level calibration.
+\emph{Notes.} Fitted on the <<N_TRAIN>> matches before the final <<HOLD_DAYS>> days, evaluated
+on the <<N_HOLD>> matches of that week. Each holdout match contributes two team-sides. Panel~A
+groups them by each hero they started: the horizontal axis is the model's mean predicted win
+probability for those team-sides, the vertical axis the share that actually won. Filled circles
+use the full model. Open circles use the same model with the hero contrasts removed, so their
+horizontal spread is only what map, rank score, composition, and team-ups can explain about a
+hero's teams. Labels mark the two heroes farthest from the line and the two extremes. Panel~B
+groups team-sides by composition shape (Tanks--Damage--Supports) with at least 100 holdout
+team-sides. Appendix Figure~\ref{fig:calib} gives the match-level calibration.
 \end{minipage}
 \end{figure}
 
@@ -569,9 +590,9 @@ of one would be ideal, and this one is <<SLOPE_VERDICT>>. Holdout log loss is <<
 against <<LL_CONST>> for a constant prediction, and the area under the ROC curve is <<AUC>>.
 Adding the hero block to a specification that already includes map, rank score, and
 composition reduces holdout log loss from <<LL_PRE_HERO>> to <<LL_POST_HERO>>, and adding
-team-ups takes it to <<LL_HOLD>> (Appendix Table~\ref{tab:ladder}). The hero terms are
-therefore not merely producing attractive retrospective rankings. They improve prediction on
-matches played later.
+team-ups takes it to <<LL_HOLD>> (Appendix Table~\ref{tab:ladder}). The hero terms therefore
+carry predictive content for matches played later, beyond producing a ranking that fits the
+estimation sample.
 
 Several specification checks point the same way (Appendix Table~\ref{tab:checks}). Permuting
 hero assignments against outcomes destroys <<PLACEBO>> of the measured signal. The within-role
@@ -579,55 +600,59 @@ restrictions hold to machine precision. Correcting the role-composition identifi
 raises the rank correlation between APM and raw hero win rate from <<RAWWR_BEFORE>> to
 <<RAWWR_AFTER>>, while the within-role reparameterisation itself barely moves the estimates.
 Map-specific intercepts are retained because side-0 win rates vary from <<CAMP_LO>> to
-<<CAMP_HI>> across the <<N_MAPS>> maps. None of these checks proves that the coefficients are
-causal. They do make the simpler story, that the regression generates hero rankings by
-accident, increasingly difficult to maintain.
+<<CAMP_HI>> across the <<N_MAPS>> maps. None of these checks establishes that the coefficients
+are causal, but together they make it difficult to maintain that the regression generates its
+hero rankings mechanically or by accident.
 
+\FloatBarrier
 \section*{Team-ups are an extra effect, not the whole pair}
 
 The team-up coefficients (Appendix Table~\ref{tab:teamups}) estimate a different object from
 the hero coefficients. They ask whether a designated pair performs better or worse than the two
 heroes' individual effects would predict. <<TU1A>> with <<TU1B>> carries an estimated <<TU1V>>
 percentage-point premium, <<TU2A>> with <<TU2B>> <<TU2V>>, <<TU3A>> with <<TU3B>> <<TU3V>>, and
-<<TU4A>> with <<TU4B>> <<TU4V>>. These values are not the total strength of the pairs. If two
-individually excellent heroes also have a positive team-up coefficient, their combined
-contribution is both hero terms plus the premium. Reading <<TU1V>> as the gain from fielding
-<<TU1A>> and <<TU1B>> together counts the wrong object. The coefficient measures what the pair
-adds beyond what the two heroes already explain separately.
+<<TU4A>> with <<TU4B>> <<TU4V>>. A premium is the increment beyond the two heroes' individual
+effects rather than the total value of the pair. A team fielding two individually strong heroes
+with a positive team-up coefficient gains both hero terms plus the premium, so <<TU1V>> is what
+<<TU1A>> and <<TU1B>> add together over and above what each already contributes alone, and
+reading it as the whole gain from fielding the pair would mislabel the object being measured.
 
+\FloatBarrier
 \section*{What this model does not prove}
 
-There are several reasons not to turn the coefficient table into scripture. First, the exact
+There are several reasons to be more confident in the ordering of heroes than in the literal
+size of every coefficient. First, the exact
 magnitudes depend noticeably on how swaps are attributed. Under starting-hero attribution the
 cross-hero standard deviation is <<SD0>> points. It rises to <<SD2>> under most-played-hero
 attribution and <<SD1>> under play-time weighting, while the rankings retain correlations of
 <<RHO2>> and <<RHO1>> with the starting-hero ranking. The ordering is therefore considerably
-more robust than the size of the gaps. If the question is which heroes consistently look strong
-or weak, the model has a stable answer. If the question is whether a hero is worth exactly
-<<EX0>> percentage points, much more caution is warranted.
+more robust than the size of the gaps, and the model gives a stable answer to which heroes
+consistently look strong or weak within their roles while giving a much less stable one to
+whether a particular hero is worth exactly <<EX0>> percentage points.
 
 Second, these are adjusted associations, not randomised treatment effects. Hero selection is
 endogenous. Rank score controls for general differences in player strength, but it does not
 say whether a player has five hundred hours on <<EX_HERO>> or picked the hero because someone
 in chat said it was S-tier. Hero-specific proficiency can therefore remain correlated with both
 hero selection and outcomes. Player-by-hero experience would be the obvious control, and it is
-not in the current specification. The regression reduces several major sources of confounding.
-It does not abolish selection by decree.
+not available in the current specification. The regression therefore removes several important
+sources of confounding while leaving hero-specific selection unresolved.
 
 Third, the confidence intervals are probably too narrow. HC1 treats matches as the primary
 observations, but players recur across matches and each match contains twelve of them, so the
 true dependence structure is overlapping and cross-classified. A player-cluster bootstrap
 would address this properly, but the implementation as specified would need roughly
-<<BOOT_HOURS>> hours of computation at the current sample size. This does not change the point
-estimates. It does mean the uncertainty around them should be read more conservatively than
-the HC1 intervals suggest.
+<<BOOT_HOURS>> hours of computation at the current sample size. The point estimates are
+unaffected, but the uncertainty around them should be read more conservatively than the HC1
+intervals suggest.
 
-Finally, the tails of the data are imperfect. <<POOLED_SENTENCE>> The crawl is also not a
-random sample of the ranked population. Profile privacy rises sharply at high rank scores and
-reaches roughly <<PRIV_HI>> above 5{,}000, and because the crawl expands only through public
-profiles, the very highest-ranked players are structurally under-sampled. The sample is
-enormous. It is not omniscient.
+Finally, the tails of the data are thin in two ways. <<POOLED_SENTENCE>> The crawl also expands
+only through public profiles, and profile privacy rises sharply with rank score, reaching roughly
+<<PRIV_HI>> above 5{,}000. The sample is large enough that sampling noise is rarely the main
+concern, but it is systematically thinner at the very top of the ranked distribution because
+those players cannot be reached.
 
+\FloatBarrier
 \section*{What I would take from it}
 
 The safest interpretation is also the useful one. These estimates measure how starting a hero
@@ -637,11 +662,12 @@ are substantially more robust than the exact coefficient magnitudes, and startin
 attribution gives the headline estimates a cleaner intention-to-treat interpretation than any
 rule that uses information revealed after the match has begun.
 
-So this is not an oracle for the causal effect of pressing the hero-select button. It is a much
-better answer than raw win rate to a more carefully specified question: given two otherwise
-comparable match environments, what tends to happen when one team starts this hero rather than
-an average hero filling the same role? On <<N_MATCHES>> matches, the answer is not remotely
-the same for every hero.
+The model should therefore be read as an answer to a narrower question than causal hero
+strength. Among otherwise comparable observed match environments, how does winning change when
+a team starts this hero rather than an average hero from the same role? Raw win rate mixes that
+effect together with who picks the hero, what composition surrounds it, which map is being
+played, and several other things that can be partially separated here. Across <<N_MATCHES>>
+matches, the answers differ across heroes by far more than their standard errors.
 
 \begin{landscape}
 \begin{center}
@@ -684,6 +710,7 @@ attribution rules.
 
 \clearpage
 \appendix
+\FloatBarrier
 \section*{Appendix}
 \renewcommand{\thetable}{A\arabic{table}}
 \setcounter{table}{0}
@@ -862,7 +889,7 @@ subs = {
     "SHARE222": pct(AUX["share_2_2_2"], 0),
     "WR222": pct(CS.loc["2-2-2", "winrate"]), "WR132": pct(CS.loc["1-3-2", "winrate"]), "WR213": pct(CS.loc["2-1-3", "winrate"]),
     "MIN_SHAPE": str(MIN_SHAPE), "POOLED_SENTENCE": POOLED_SENTENCE, "POOLED_CLAUSE": POOLED_CLAUSE,
-    "SD_RATIO": f"{SD['W1'] / SD['W0']:.1f}",
+    "SD_RATIO": f"{SD['W1'] / SD['W0']:.1f}", "K_PARAMS": str(LAD[-1]["k"]),
     "TU1A": esc(TOP_TU.iloc[0].anchor), "TU1B": esc(TOP_TU.iloc[0].partner), "TU2A": esc(TOP_TU.iloc[1].anchor), "TU2B": esc(TOP_TU.iloc[1].partner),
     "TU3A": esc(TOP_TU.iloc[2].anchor), "TU3B": esc(TOP_TU.iloc[2].partner), "TU4A": esc(TOP_TU.iloc[3].anchor), "TU4B": esc(TOP_TU.iloc[3].partner),
     "SD0": f"{SD['W0']:.2f}", "SD2": f"{SD['W2']:.2f}", "SD1": f"{SD['W1']:.2f}",
@@ -902,8 +929,8 @@ subs = {
     "HG_LO": f"{HG_LO:.2f}", "HG_HI": f"{HG_HI:.2f}", "SG_LO": f"{SG_LO:.2f}", "SG_HI": f"{SG_HI:.2f}",
     "HG_FULL_ROWS": xy_rows(hg_full), "HG_NOHERO_ROWS": xy_rows(hg_none), "SG_ROWS": xy_rows(sg_full),
     "HG_LABEL_NODES": label_nodes(hg_full, HG_LO, HG_HI, HG_LABELS, obstacles=list(zip(hg_none.mean_predicted, hg_none.mean_realised)),
-                                  reserved=[(0.0, 0.58, 0.80, 1.0), (0.40, 1.0, 0.0, 0.13)]),
-    "SG_LABEL_NODES": label_nodes(sg_full, SG_LO, SG_HI, reserved=[(0.0, 0.40, 0.86, 1.0), (0.45, 1.0, 0.0, 0.08)]),
+                                  reserved=[(0.0, 0.60, 0.78, 1.0), (0.22, 1.0, 0.0, 0.18)]),
+    "SG_LABEL_NODES": label_nodes(sg_full, SG_LO, SG_HI, reserved=[(0.0, 0.42, 0.84, 1.0), (0.30, 1.0, 0.0, 0.11)]),
     "HG_CORR": f"{G['hero_full']['corr']:.3f}", "HG_CORR0": f"{G['hero_no_hero']['corr']:.3f}",
     "HG_GAP": f"{G['hero_full']['mean_abs_gap_pp']:.2f}",
     "HG_SD0": f"{G['hero_no_hero']['sd_predicted_pp']:.2f}", "HG_SD1": f"{G['hero_full']['sd_predicted_pp']:.2f}",
