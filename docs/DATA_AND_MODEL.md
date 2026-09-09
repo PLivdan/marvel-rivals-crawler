@@ -15,7 +15,7 @@ Last updated 8 September 2026. Database snapshot: 482,997 matches.
 |---|---|
 | Source | `rivalsmeta.com` first-party JSON endpoints |
 | Auth | None. Unauthenticated, plain JSON over HTTPS, Cloudflare-fronted |
-| Scope | Season 19, PC (`device=1`), **competitive only** (`game_mode_id=2`) |
+| Scope | Season code 19 (Season 9.5), PC (`device=1`), **competitive only** (`game_mode_id=2`) |
 | Method | Breadth-first crawl of the player graph, seeded from the global top-500 leaderboard plus one per-hero leaderboard for each hero |
 | Collector | `main.py` (see `docs/superpowers/specs/2026-09-07-rivalsmeta-crawler-design.md`) |
 
@@ -37,10 +37,12 @@ rates in this sample are not population pick rates.**
 | `apm_runs` / `apm_hero_effects` | 2 / 110 | Model results with full run metadata |
 
 Database is ~3.4 GB. Matches span **2026-08-07 to 2026-09-08 (32 days)**, all
-season 19. 16 distinct maps. Every match has exactly 12 player rows.
+season code 19 (Season 9.5). 16 distinct maps. Every match has exactly 12
+player rows.
 
 Crawl state: 10,189 players fully crawled, 866,662 pending, 4,323 below the
-Diamond floor, 2,324 private, 14 errored.
+Diamond floor, 2,324 private, 14 errored. The crawler has since been stopped
+at 482,997 matches; these are a snapshot, not a moving target.
 
 ### 1.3 What each match gives us
 
@@ -90,10 +92,15 @@ pushes every hero above 54%.
 
 `SUM(play_time * is_win) / SUM(play_time)` per hero. Produces a sane
 distribution: median exactly 50.0%, range 42.6% (Squirrel Girl) to 56.9%
-(Mantis). This is the default attribution rule (**W1**).
+(Mantis). This is play-time weighting (**W1**): the match is split across the
+heroes a player used, in proportion to time played.
 
-It is still not clean: it does not *condition* on swapping but it does *weight*
-by it, and a losing player abandoning a hero cuts that hero's weight. See §4.4.
+It is still not clean: it does not *condition* on swapping but it does
+*weight* by it, and a losing player abandoning a hero cuts that hero's weight.
+That is precisely why play-time weighting is **not** the headline attribution
+rule: the headline instead uses starting-hero attribution (W0, §3.1), fixed
+before the outcome is known, and play-time weighting is reported only as a
+comparison (§4.2). See also §4.4.
 
 ### 2.5 There is no draft/pick data
 
@@ -172,28 +179,35 @@ twelve highest-ranked heroes come out all Tanks. See §4.2.
 
 | tanks | teams | win rate |
 |---:|---:|---:|
-| 0 | 1,990 | 18.49% |
-| 1 | 89,534 | 39.44% |
-| **2** | **533,702** | **52.30%** |
-| 3 | 24,456 | 41.28% |
-| 4 | 288 | 34.72% |
+| 0 | 2,992 | 19.25% |
+| 1 | 133,441 | 39.68% |
+| **2** | **789,192** | **52.29%** |
+| 3 | 35,649 | 40.67% |
+| 4 | 409 | 35.21% |
+| 5 | 14 | 50.00% |
+
+(Over 961,697 team-instances in the full crawl; `results/tank_winrate.csv`, from
+`results/compute_aux_stats.py`. The five-Tank row is 14 teams and means nothing.)
 
 More tanks is **not** better; two is optimal. A term linear in tank counts
 cannot represent this, and since too-few-tank teams outnumber too-many by ~4:1,
 a fitted linear slope is dragged positive — a straight line through the left arm
 of a hill.
 
-### 2.12 Two players on one team can share a "dominant" hero
+### 2.12 Two players on one team can share a most-played hero ("dominant" hero)
 
 Hero uniqueness binds only at a moment in time. With sequential non-overlapping
-swaps, two teammates can each spend most of their match on the same hero.
-Naively de-duplicating a lineup into a `set` collapses it to five heroes for
-**2.06%** of team-instances (11,388 to five, 128 to four, 2 to three).
+swaps, two teammates can each spend most of their match on the same hero, i.e.
+share a most-played-hero attribution (W2). Naively de-duplicating a lineup
+into a `set` collapses it to five heroes for **2.06%** of team-instances
+(11,388 to five, 128 to four, 2 to three).
 
 This matters more than the rate suggests: the collision is driven by swap
 chatter, which §2.3 shows is correlated with losing. It is therefore
-**outcome-correlated measurement error**, not noise. Fixed by preserving player
-identity through the W2 aggregation.
+**outcome-correlated measurement error**, not noise. Fixed by preserving
+player identity in the lineup-roster construction (`_lineup_rosters`), which
+builds rosters under whichever attribution rule is active, not only
+most-played-hero.
 
 ### 2.13 Writing results while the crawler runs
 
@@ -211,36 +225,56 @@ it to this.
 
 ## 3. Current model
 
-### 3.1 Specification A (the one being estimated)
+### 3.1 Specification A+ (the headline: starting-hero attribution)
 
 Match-level differential logit. One observation per match; outcome is victory
-for camp 0.
+for camp 0. The headline specification ("Spec A+") uses starting-hero
+attribution (W0): the whole match is attributed to the hero the player picked
+first (first entry by `MIN(rowid)` in `match_player_heroes`, chronological by
+first appearance; no `play_time>0` filter). This is fixed before the outcome
+is known — intention-to-treat — unlike the play-time (W1) and most-played-hero
+(W2) rules reported for comparison in §4.2.
 
 ```
-logit P(camp0 wins) = alpha                       side advantage
-                    + sum_h  beta_h  * x_h        hero contrasts (sum-to-zero)
-                    + sum_t  tau_t   * z_t        104 team-up contrasts
+logit P(camp0 wins) = alpha_m                     per-map intercept (16 maps)
+                    + sum_h  beta_h  * x_h        hero contrasts (within-role sum-to-zero)
+                    + sum_t  tau_t   * z_t        100 team-up contrasts (104 defined)
                     + sum_s  delta_s * c_s        composition shape (sum-to-zero)
                     + theta' * skill_diff         pre-match rank differential
 ```
 
-- `x_h` = own-side weight of hero *h* minus opposing-side weight.
+- `alpha_m` = one intercept per map (16 maps), replacing a single pooled
+  side-advantage intercept; camp-0 win rate varies 49.42%–52.52% across maps.
+  Disable with the runner's `--no-map-intercepts` flag.
+- `x_h` = own-side weight of hero *h* minus opposing-side weight. The hero
+  block carries **three** within-role sum-to-zero constraints (Tank, Damage,
+  Support), not one global constraint — see §3.2.
 - `z_t` = +1 if both team-up members are on camp 0's lineup, −1 if on camp 1.
+  Team-composition shapes and team-up contrasts are built from the *same
+  rule's* lineup rosters as the hero block, so under the headline (W0) they
+  use the STARTING lineups, not dominant heroes.
 - `c_s` = composition-shape indicator, contrasted across sides.
 - `skill_diff` = mean `(new_score - add_score)` differential.
+
+The headline fit has log-likelihood **−320,067.7** over the 477,483-match
+sample (§3.3), with HC1 standard errors and Benjamini–Hochberg FDR control
+(q = 0.05) across the 55 hero tests. Of the 104 defined team-up contrasts,
+100 enter the fit; the other 4, defined against the never-played hero id 1057
+(base "Deadpool", §2.8), are structurally empty and are dropped dynamically.
 
 ### 3.2 Estimation choices
 
 | Choice | Value | Why |
 |---|---|---|
 | Penalty | **None** | Ridge coefficients are biased and carry no valid standard errors, which is fatal when the output is a ranked table with intervals |
-| Collinearity | Sum-to-zero contrast basis | The rank deficiency is *structural* (every team fields six heroes), so it is removed by a constraint, not a penalty. Every hero gets a coefficient **and** a standard error |
-| Normalisation | `sum(beta) = 0` | Effects are relative to an average hero; verified at machine precision |
+| Collinearity | **Within-role** sum-to-zero contrast basis (three constraints: Tank, Damage, Support), `contrasts.within_role_basis(roles)` | Under one global constraint the composition-shape block reproduces the role-count differential exactly (δ_s = tankcount(s) ⇒ Σ δ_s c_s = θ′x), so hero and shape blocks are collinear except through the tiny pooled "other" shape. Constraining within role removes the role-count direction from the hero block entirely, so composition effects are estimated by the shape controls instead. See §3.4 |
+| Normalisation | `sum(beta_role) = 0` for each of Tank/Damage/Support | Effects are relative to an average hero of the same role. Falsified against a globally-constrained fit: Spearman **0.9999**, mean \|difference\| **0.010 pp** (§3.4) |
 | Std. errors | **HC1** heteroskedasticity-robust | Spec §8 |
 | Multiple testing | Benjamini-Hochberg FDR, q = 0.05 | 55 simultaneous hero tests |
-| Attribution | **W1** play-time (primary), **W2** dominant-hero (robustness) | §2.4 |
-| Team-ups / shape | Always built under **W2** | They need a definite set of six heroes; fractional weights cannot establish co-presence |
+| Attribution | **Starting-hero (W0)** — headline. Play-time (W1) and most-played-hero (W2) reported as comparisons | §2.4, §4.2 |
+| Team-ups / shape | Built from the **same rule's** lineup rosters as the hero block — under the headline (W0) this means the STARTING lineup, not dominant heroes; the W1/W2 comparison runs keep the most-played-hero (W2) roster | They need a definite set of six heroes; fractional weights cannot establish co-presence. Pairing a W0 hero block with a W2 lineup would reintroduce post-match information through the controls |
 | Forfeit floor | 240s | Short matches are the *least* swap-contaminated data (1.49 heroes/player under 5 min vs 2.40 over 15), so an aggressive floor discards the cleanest observations |
+| Map intercepts | 16 own dummies (default), disable with `--no-map-intercepts` | Camp-0 win rate varies 49.42%–52.52% across maps; a single pooled intercept would mask this |
 
 ### 3.3 Sample construction
 
@@ -252,28 +286,54 @@ Filters applied in order, each counted (see `apm/sample.py`):
 4. Every player has ≥1 hero row with `play_time > 0`
 5. Duration ≥ 240s
 
-On the 317,674-match fit: 321,337 starting, less 1,423 draws, 11 incomplete
-play-time, 2,229 short.
+On the 477,483-match fit: 482,997 starting, less 2,139 draws, 19 incomplete
+play-time, 3,356 short.
 
 ### 3.4 Reporting: within-role normalisation
 
 **The raw coefficients are not reported.** Because of §2.10 they measure
-composition, not hero strength. Each hero's own-role mean is subtracted — a
-linear contrast, so its covariance follows exactly by the delta method.
+composition, not hero strength. The within-role structure is now imposed
+directly in estimation (§3.2) — `contrasts.within_role_basis(roles)` fits
+three separate sum-to-zero constraints, one per role, rather than one global
+constraint — so the reported coefficients are the fitted parameters
+themselves, not a post-hoc projection.
+
+Historically, within-role effects were instead obtained after a
+globally-constrained fit by subtracting each hero's own-role mean — a linear
+contrast, so its covariance followed exactly by the delta method. That
+delta-method result stands as a historical validation: estimates from the
+global and within-role parameterisations agree with Spearman rank correlation
+**0.9999** and mean absolute difference **0.010 pp**, confirming that moving
+the constraint into estimation only removes the composition-collinear
+direction and does not otherwise change what is estimated.
 
 Validation: rank correlation against play-time-weighted raw win rates rises from
 **0.70 (raw) to 0.95 (within-role)**.
+
+### 3.5 Temporal holdout
+
+`results/compute_fit_quality.py` fits the headline specification on all
+matches except the final 7 days (437,453 training matches) and evaluates it
+on the 40,030 holdout matches of that week: calibration in 25 equal-count
+bins, log loss against a constant-prediction baseline, Brier score, AUC, Cox
+calibration slope/intercept, and a nested ladder of holdout log losses as
+blocks are added (map intercepts → + rank-score differential → + composition
+shapes → + hero contrasts → + team-up contrasts). The resulting numbers are
+reported in the PDF (Figure 2 and Appendix Table A2), not reproduced here, and
+are stored in `results/fit_quality_W0_specAplus.json` and
+`results/calibration_W0_specAplus.csv`.
 
 ---
 
 ## 4. Known limitations, ordered by severity
 
-### 4.1 Composition control: 12 shapes, everything else pooled
+### 4.1 Composition control: 18 shapes, everything else pooled
 
-Only shapes appearing at least `min_shape_count` times (default 500) get their
-own dummy; the rest are pooled into a single `other` bucket. Measured over
-961,697 team-instances, 27 distinct compositions occur, of which **12 get their
-own control and 15 are pooled**:
+Only shapes appearing at least `min_shape_count` times (default **100**, was
+500) get their own dummy; the rest are pooled into a single `other` bucket.
+Measured over 961,697 team-instances, 27 distinct compositions occur, of which
+**18 get their own control and 9 are pooled**. Full table in
+`results/comp_shapes.csv` (produced by `results/compute_aux_stats.py`):
 
 | T-D-S | teams | share | win rate | control |
 |---|---:|---:|---:|---|
@@ -289,26 +349,38 @@ own control and 15 are pooled**:
 | 0-4-2 | 1,558 | 0.16% | 21.63% | own dummy |
 | 0-3-3 | 1,051 | 0.11% | 17.22% | own dummy |
 | 1-1-4 | 1,016 | 0.11% | 19.88% | own dummy |
-| *15 others* | *1,502* | *0.16%* | *0.0–53.8%* | **pooled** |
+| 2-0-4 | 407 | 0.04% | 23.10% | own dummy |
+| 4-0-2 | 278 | 0.03% | 36.33% | own dummy |
+| 0-5-1 | 171 | 0.02% | 12.87% | own dummy |
+| 2-4-0 | 144 | 0.01% | 4.86% | own dummy |
+| 0-2-4 | 144 | 0.01% | 15.97% | own dummy |
+| 4-1-1 | 127 | 0.01% | 33.07% | own dummy |
+| *9 others* | *231* | *0.024%* | *0.0–53.8%* | **pooled** |
 
-**The pooling is far less damaging than it first appears: it covers 0.16% of
-team-instances.** The 12 dummies span 99.84% of the sample. Extreme comps that
-sound alarming are genuinely almost nonexistent — 5 Damage and 1 Support
-(`0-5-1`) occurs 171 times with a 12.87% win rate; all-Damage (`0-6-0`) occurs
-48 times.
+**The pooling is far less damaging than it first appears: it covers 0.024% of
+team-instances (231 teams).** The 18 dummies span 99.976% of the sample.
+Extreme comps that sound alarming are genuinely almost nonexistent — 5 Damage
+and 1 Support (`0-5-1`) occurs 171 times with a 12.87% win rate (own dummy at
+this threshold); all-Damage (`0-6-0`) occurs 48 times and remains pooled.
 
-The residual concern is heterogeneity, not coverage: win rates inside the pooled
-bucket span 0.0% to 53.8%, so one coefficient represents `2-0-4` (23.1%),
-`4-1-1` (33.1%) and `2-4-0` (4.9%) alike. Lowering `min_shape_count` to ~100
-would give own dummies to `2-0-4`, `4-0-2` and `0-5-1` at negligible cost.
+The residual concern is heterogeneity, not coverage: win rates inside the
+pooled bucket still span 0.0% to 53.8%, so one coefficient represents `5-1-0`
+(0.0%), `1-5-0` (7.1%) and `5-0-1` (53.8%) alike. This is exactly what
+lowering `min_shape_count` from 500 to its current default of 100 buys: six
+more own-dummy rows (`2-0-4`, `4-0-2`, `0-5-1`, `2-4-0`, `0-2-4`, `4-1-1`) at
+negligible added cost, shrinking the pooled bucket from 15 shapes / 0.16% to
+9 shapes / 0.024%.
 
 Two structural caveats remain regardless of the threshold:
 
 - Per §2.10 the shape dummies capture only the **non-linear residual**; the
   linear part of composition lives inside the hero coefficients and cannot be
   separated from them. This is why results are reported within role.
-- The shape is computed from **dominant heroes (W2)**, so a team that swapped
-  through several compositions is represented by one summary shape.
+- The shape is computed from the **same rule's lineup roster** as the hero
+  block (`_lineup_rosters`, §3.1–3.2) — under the headline starting-hero rule
+  (W0) this is the STARTING lineup, so a team that swapped through several
+  compositions is represented by its shape at kickoff, not by its most-played
+  shape. The W1/W2 comparison runs still use the most-played-hero (W2) roster.
 
 Note how strongly these figures corroborate §2.11: every deviation from 2-2-2
 loses, and the worst comps are those dropping a role entirely — `2-4-0` (no
@@ -316,13 +388,27 @@ Support) wins 4.86%, `1-5-0` wins 7.06%.
 
 ### 4.2 Magnitudes are attribution-dependent; only the ranking is stable
 
-W1 vs W2: Spearman **0.954**, but effect sizes roughly **halve** under W2
-(Squirrel Girl −16.79 → −9.02; Magik +14.65 → +7.97; mean absolute difference
-2.08 points). **Treat the ordering as the result and magnitudes as an upper
-bound.**
+All three attribution rules — starting-hero (W0), most-played-hero (W2), and
+play-time weighted (W1) — are fitted on the **identical** 477,483-match sample
+(within-role constraint, map intercepts):
 
-Note the two runs are not on an identical sample (317,674 vs 329,572 matches)
-because the crawl continued between them.
+| rule | cross-hero s.d. of estimates (pp) | log-likelihood | Spearman ρ with starting-hero |
+|---|---:|---:|---:|
+| Starting hero (W0) | 2.60 | −320,122 | — |
+| Most-played hero (W2) | 4.27 | −305,869 | 0.937 |
+| Play-time weighted (W1) | 6.38 | −297,648 | 0.890 |
+
+Magik moves +3.47 → +7.94 → +14.57 pp across the three rules in that order.
+Magnitude scales with how much post-start information the rule uses: a rule
+that lets outcome-correlated swapping (§2.3) into the attribution mechanically
+inflates the spread of the estimates it produces. The higher log-likelihood of
+W1 reflects regressors that encode more of what happened during the match, not
+a better model of hero strength.
+
+**The headline specification therefore uses starting-hero attribution (W0)**:
+it is fixed before the outcome is known (intention-to-treat) and yields the
+smallest, most conservative estimates. Treat the ordering as the result and
+magnitudes as attribution-rule-dependent upper bounds.
 
 ### 4.3 These are adjusted associations, not causal effects
 
@@ -336,15 +422,24 @@ the confounder is **bounded, never measured**.
 
 The design calls for a player-level cluster bootstrap — matches are not
 independent draws, since each contains twelve players and belongs to twelve
-overlapping clusters. The current implementation would need **~656 hours**:
+overlapping clusters. The naive implementation would need **~656 hours**:
 `build_design` re-queries the database every replication, and
 `attribution_weights` has no `match_uid` predicate, so it pulls the whole
 `match_player_heroes` join (65s per call, twice per build).
 
-Bootstrap is therefore **default-off** and the reported intervals are analytic
-HC1. They ignore cross-classified dependence and are **too narrow**. Point
-estimates are unaffected. Fix: build the design once, then row-replicate
-prebuilt arrays per replication.
+A fast implementation now exists. `apm/estimate.py` has
+`fit_logit_weighted(X, y, weights, beta0=None)` — a frequency-weighted,
+warm-started IRLS solver — and `results/run_bootstrap.py` uses it to run the
+player-cluster bootstrap by building the design **once**, resampling players
+with replacement, converting the resample to frequency weights on the fixed
+rows, and refitting from the full-sample solution: roughly 15s per
+replication, so ~4 hours for 1,000 replications versus the ~656 hours of the
+naive design. **It has not been run** — the analytic HC1 intervals below were
+judged sufficient for now.
+
+The reported intervals therefore remain analytic HC1. They ignore
+cross-classified player dependence and are **too narrow**. Point estimates are
+unaffected.
 
 ### 4.5 The sample is not random
 
@@ -364,13 +459,13 @@ Deferred to a follow-up plan:
   headline diagnostic: a hero whose value collapses under player fixed effects
   is one whose reputation is mostly its playerbase.
 - Two-way (match × player) clustered standard errors
-- The cluster bootstrap, made feasible per §4.4
+- Running the cluster bootstrap (§4.4) — the fast implementation
+  (`results/run_bootstrap.py`) exists but has not been executed
 - Robustness battery: attribution sensitivity tables, duration strata, temporal
   stability / structural break tests, rank-band refits at ≥4,750, forfeit-floor
   sensitivity, ridge appendix
 - `total_value` = solo effect plus expected team-up contribution
 - Ban-rate correlation as external validation
-- Nested out-of-sample evaluation on a temporal holdout
 
 ---
 
@@ -384,15 +479,28 @@ python3 main.py --status                      # progress, no network
 # refresh hero/team-up reference data (after a season change)
 python3 refresh_reference.py --db-path data/rivals.db
 
-# fit and persist; saves CSV before touching the DB
-python3 results/run_apm.py --attribution W1 --tag W1
+# fit (DB)
+python3 results/run_apm.py --attribution W0 --constraint within_role --min-shape-count 100 --tag W0_specAplus
+
+# non-fit statistics -> results/aux_stats.json, comp_shapes.csv (DB)
+python3 results/compute_aux_stats.py
+
+# temporal holdout -> fit_quality_*.json, calibration_*.csv (DB)
+python3 results/compute_fit_quality.py
 
 # validation: placebo, sum-to-zero, agreement with raw win rates
 python3 results/placebo_check.py
 
-# regenerate the LaTeX report
-python3 results/make_report.py && cd results && latexmk -pdf apm_report.tex
+# CSV/JSON -> results/apm_report.tex, no DB access
+python3 results/make_report.py
+latexmk -pdf -interaction=nonstopmode -outdir=results results/apm_report.tex
 ```
+
+Everything downstream of the fit is CSV/JSON → LaTeX; `make_report.py` never
+touches the database. Other runner flags: `--attribution {W0,W1,W2}`,
+`--constraint {global,within_role}`, `--no-map-intercepts`,
+`--min-shape-count N`, `--forfeit-floor S`, `--tag NAME`. Results are saved to
+CSV/JSON before any database write, so a lock (§2.13) cannot lose a run.
 
 Stop the crawler with plain `kill <pid>` (SIGTERM). It drains gracefully and
 hands claimed players back; `kill -9` strands them until the stale-claim sweep
