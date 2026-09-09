@@ -56,10 +56,14 @@ priv = pd.DataFrame(c.execute("""SELECT CAST(latest_known_score/250 AS INT)*250 
     GROUP BY band HAVING n>=15 ORDER BY band""").fetchall(), columns=["band", "attempted", "private_pct"])
 
 total = int(shapes.teams.sum())
+# rivalsmeta's integer season code is twice the season number: code 19 is Season 9.5.
+seasons = dict(c.execute("SELECT season, COUNT(*) FROM matches WHERE season IS NOT NULL GROUP BY season"))
+season_code = int(max(seasons, key=seasons.get))
 aux = json.load(open("results/aux_stats.json")) if __import__("os").path.exists("results/aux_stats.json") else {}
 aux.update({
     "team_instances": total,
-    "share_2_2_2": round(100 * float(shapes.loc[shapes.shape == "2-2-2", "teams"].sum()) / total, 1),
+    "season": season_code, "season_label": f"{season_code / 2:g}", "season_counts": {str(k): int(v) for k, v in seasons.items()},
+    "share_2_2_2": round(100 * float(shapes.loc[shapes["shape"] == "2-2-2", "teams"].sum()) / total, 1),
     "tank_winrate": {str(int(r.tanks)): {"teams": int(r.teams), "winrate": round(r.winrate, 2)}
                      for _, r in tank.iterrows()},
     "camp0_share_crawled": round(100 * done_by_camp.get(0, 0) / max(sum(done_by_camp.values()), 1), 2),

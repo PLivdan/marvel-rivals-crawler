@@ -1,0 +1,63 @@
+{
+  "tag": "W0_specAplus",
+  "holdout_days": 7,
+  "n_train": 437453,
+  "n_holdout": 40030,
+  "holdout_start": 1788260484,
+  "holdout_end": 1788865232,
+  "logloss_holdout": 0.6674300941356579,
+  "logloss_holdout_constant": 0.6927954184172954,
+  "brier_holdout": 0.23743241682809096,
+  "auc_holdout": 0.627259327822205,
+  "calibration_intercept": 0.01846079737923321,
+  "calibration_intercept_se": 0.01029112579911161,
+  "calibration_slope": 1.0670936606177022,
+  "calibration_slope_se": 0.02464479014598036,
+  "holdout_base_rate": 0.514114414189358,
+  "p_holdout_min": 0.045323557705193314,
+  "p_holdout_max": 0.9309076802739873,
+  "share_holdout_between_35_65": 0.84611541343992,
+  "bins": 25,
+  "ladder": [
+    {
+      "model": "Map intercepts only",
+      "k": 16,
+      "converged": true,
+      "loglik_train": -303098.5470275573,
+      "logloss_train": 0.6928711130739926,
+      "logloss_holdout": 0.6927177862393299
+    },
+    {
+      "model": "+ rank-score differential",
+      "k": 17,
+      "converged": true,
+      "loglik_train": -301826.1198574719,
+      "logloss_train": 0.6899623956344382,
+      "logloss_holdout": 0.6873645860443823
+    },
+    {
+      "model": "+ team-composition shapes",
+      "k": 35,
+      "converged": true,
+      "loglik_train": -299416.2035838234,
+      "logloss_train": 0.6844534237594059,
+      "logloss_holdout": 0.6818619228863225
+    },
+    {
+      "model": "+ hero contrasts",
+      "k": 87,
+      "converged": true,
+      "loglik_train": -294223.17359342513,
+      "logloss_train": 0.6725823656333942,
+      "logloss_holdout": 0.6697677279158714
+    },
+    {
+      "model": "+ team-up contrasts",
+      "k": 187,
+      "converged": true,
+      "loglik_train": -293361.95695738896,
+      "logloss_train": 0.6706136589699669,
+      "logloss_holdout": 0.6674300941356579
+    }
+  ]
+}
