@@ -13,3 +13,4 @@ results/*.fdb_latexmk
 results/*.fls
 results/*.log
 results/build.log
+results/aux_stats.json

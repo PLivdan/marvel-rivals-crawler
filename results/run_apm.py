@@ -91,6 +91,36 @@ def main():
     names = dict(conn.execute("SELECT hero_id, name FROM hero_info"))
     roles = dict(conn.execute("SELECT hero_id, role FROM hero_info"))
 
+    # Supporting statistics, written into the CSV here so the report generator
+    # is a pure CSV->TeX transform and never touches the database.
+    starts = dict(conn.execute("""
+        SELECT h.hero_id, COUNT(*) FROM match_player_heroes h
+        JOIN (SELECT match_uid, player_uid, MIN(rowid) AS first_rid
+              FROM match_player_heroes GROUP BY match_uid, player_uid) f
+          ON f.first_rid = h.rowid
+        GROUP BY h.hero_id"""))
+    total_slots = sum(starts.values()) or 1
+    raw_wr = dict(conn.execute("""
+        SELECT h.hero_id, 100.0*SUM(h.play_time*mp.is_win)/NULLIF(SUM(h.play_time),0)
+        FROM match_player_heroes h
+        JOIN match_players mp ON mp.match_uid=h.match_uid AND mp.player_uid=h.player_uid
+        WHERE mp.is_win IN (0,1) AND h.play_time>0 GROUP BY h.hero_id"""))
+
+    # Supporting statistics, written into the CSV here so the report generator
+    # is a pure CSV->TeX transform and never touches the database.
+    starts = dict(conn.execute("""
+        SELECT h.hero_id, COUNT(*) FROM match_player_heroes h
+        JOIN (SELECT match_uid, player_uid, MIN(rowid) AS first_rid
+              FROM match_player_heroes GROUP BY match_uid, player_uid) f
+          ON f.first_rid = h.rowid
+        GROUP BY h.hero_id"""))
+    total_slots = sum(starts.values()) or 1
+    raw_wr = dict(conn.execute("""
+        SELECT h.hero_id, 100.0*SUM(h.play_time*mp.is_win)/NULLIF(SUM(h.play_time),0)
+        FROM match_player_heroes h
+        JOIN match_players mp ON mp.match_uid=h.match_uid AND mp.player_uid=h.player_uid
+        WHERE mp.is_win IN (0,1) AND h.play_time>0 GROUP BY h.hero_id"""))
+
     # Within-role normalisation.
     #
     # The raw coefficients are dominated by a ROLE-COMPOSITION effect: teams
@@ -147,6 +177,12 @@ def main():
                 float(beta_wr[i] - 1.96 * err_wr[i])),
             "within_role_ci_high_pp": report.to_probability_points(
                 float(beta_wr[i] + 1.96 * err_wr[i])),
+            "n_start": int(starts.get(h, 0)),
+            "pick_pct": 100.0 * starts.get(h, 0) / total_slots,
+            "raw_wr": raw_wr.get(h),
+            "n_start": int(starts.get(h, 0)),
+            "pick_pct": 100.0 * starts.get(h, 0) / total_slots,
+            "raw_wr": raw_wr.get(h),
         })
     # Within-role significance. The p_adjusted column above tests the RAW
     # effect; the reported estimate is the within-role contrast, so it needs
@@ -176,6 +212,16 @@ def main():
     # so the coefficient is the pair-synergy premium ON TOP OF whatever the two
     # heroes contribute individually.
     tnames = dict(conn.execute("SELECT teamup_id, name FROM teamups"))
+    pairs = {}
+    for tid, hid, anc in conn.execute(
+            "SELECT teamup_id, hero_id, is_anchor FROM teamup_heroes "
+            "ORDER BY teamup_id, is_anchor DESC"):
+        pairs.setdefault(tid, []).append(names.get(hid, f"hero {hid}"))
+    pairs = {}
+    for tid, hid, anc in conn.execute(
+            "SELECT teamup_id, hero_id, is_anchor FROM teamup_heroes "
+            "ORDER BY teamup_id, is_anchor DESC"):
+        pairs.setdefault(tid, []).append(names.get(hid, f"hero {hid}"))
     tse = np.sqrt(np.clip(np.diag(fit.cov), 0, None))
     trows = []
     for j, name in enumerate(fit.column_names):
@@ -185,6 +231,10 @@ def main():
         trows.append({
             "teamup_id": tid,
             "name": tnames.get(tid),
+            "anchor": (pairs.get(tid) or [None])[0],
+            "partner": pairs[tid][1] if len(pairs.get(tid, [])) > 1 else None,
+            "anchor": pairs.get(tid, [None, None])[0],
+            "partner": pairs.get(tid, [None, None])[1] if len(pairs.get(tid, [])) > 1 else None,
             "effect_logodds": float(fit.params[j]),
             "effect_pp": report.to_probability_points(float(fit.params[j])),
             "std_error": float(tse[j]),
