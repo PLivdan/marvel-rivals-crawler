@@ -43,3 +43,47 @@ def effects_from_free(gamma, basis):
 def cov_from_free(cov_gamma, basis):
     """Delta-method covariance of the recovered effects."""
     return basis @ np.asarray(cov_gamma) @ basis.T
+
+
+def within_role_basis(roles):
+    """Block-diagonal basis for {b : sum of b within each role is zero}.
+
+    `roles` is the role label of each hero, in hero order. Returns a
+    (k, k - n_roles) matrix with orthonormal columns.
+
+    Why three constraints rather than one. The composition-shape block can
+    reproduce the role-count differential *exactly*: choosing delta_s equal to
+    the tank count of shape s makes sum_s delta_s c_s identical to t'x, where t
+    is the tank indicator. Under a single global sum-to-zero constraint the
+    hero block can express that same direction, so the two blocks are collinear
+    in it and are separated only by teams whose shape was pooled into "other"
+    -- 1,502 of 961,697 team-instances, or 0.16%. The role component of beta is
+    then identified off almost nothing, which is why a raw fit put twelve Tanks
+    at the top of the table.
+
+    Constraining beta to sum to zero within each role makes it orthogonal to
+    every role indicator, so the hero block cannot represent a role-count
+    effect at all and composition has nowhere to go but delta, where the full
+    sample identifies it. Within-role reporting then becomes structural rather
+    than a post-hoc projection of an ill-conditioned fit.
+
+    A role holding a single hero contributes no column: with nothing to compare
+    that hero against, its within-role deviation is definitionally zero.
+    """
+    roles = list(roles)
+    k = len(roles)
+    if k == 0:
+        raise ValueError("need at least one hero to build a within-role basis")
+
+    order = []
+    for role in dict.fromkeys(roles):          # first-appearance order, stable
+        order.append([i for i, r in enumerate(roles) if r == role])
+
+    blocks = [(idx, sum_to_zero_basis(len(idx))) for idx in order if len(idx) >= 2]
+    width = sum(b.shape[1] for _, b in blocks)
+    basis = np.zeros((k, width))
+    col = 0
+    for idx, block in blocks:
+        basis[np.ix_(idx, range(col, col + block.shape[1]))] = block
+        col += block.shape[1]
+    return basis

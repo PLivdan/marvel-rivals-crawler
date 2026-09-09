@@ -135,7 +135,8 @@ def _lineup_rosters(conn, match_uids, rule="W2"):
     }
 
 
-def build_design(conn, sample, attribution_rule="W1", min_shape_count=500):
+def build_design(conn, sample, attribution_rule="W1", min_shape_count=500,
+                 constraint="global", map_intercepts=False):
     # `order` may legitimately contain the same match twice: a cluster
     # bootstrap resamples players with replacement, so their matches repeat.
     # Every row-wise loop below must therefore index by position, never by a
@@ -148,7 +149,20 @@ def build_design(conn, sample, attribution_rule="W1", min_shape_count=500):
     hero_frame = hero_contrast_frame(weights).reindex(order, fill_value=0.0)
     hero_ids = [int(h) for h in hero_frame.columns]
     hero_raw = hero_frame.to_numpy(dtype=float)
-    hero_basis = contrasts.sum_to_zero_basis(len(hero_ids))
+    if constraint == "within_role":
+        # Three constraints instead of one. The shape block can reproduce the
+        # role-count differential exactly, so under a single global constraint
+        # the hero and shape blocks are collinear in that direction and are
+        # separated only by the 0.16% of teams pooled into "other". Constraining
+        # within role makes beta orthogonal to every role indicator, so
+        # composition has nowhere to go but delta. Within-role reporting then
+        # falls out of the parameterisation rather than a post-hoc projection.
+        hero_roles = dict(conn.execute("SELECT hero_id, role FROM hero_info"))
+        hero_basis = contrasts.within_role_basis([hero_roles.get(h) for h in hero_ids])
+    elif constraint == "global":
+        hero_basis = contrasts.sum_to_zero_basis(len(hero_ids))
+    else:
+        raise ValueError(f"unknown constraint {constraint!r}; expected 'global' or 'within_role'")
     hero_block = contrasts.reduce_design(hero_raw, hero_basis)
 
     # Under W0 the lineup blocks come from the STARTING roster, so the whole
@@ -214,16 +228,32 @@ def build_design(conn, sample, attribution_rule="W1", min_shape_count=500):
         [[pre.get((uid, 0), 0.0) - pre.get((uid, 1), 0.0)] for uid in order]
     )
 
-    intercept = np.ones((n, 1))
-    X = np.hstack([intercept, hero_block, teamup_block, shape_block, skill])
+    if map_intercepts:
+        # Check 2 measured camp-0 win rate varying 49.42%-52.52% across the 16
+        # maps, so one intercept pools a real 3.10pp spread. Map is a
+        # match-level attribute and applies to the match, not to a side, so
+        # these are plain indicators rather than contrasts.
+        match_map = dict(conn.execute("SELECT match_uid, map_id FROM matches"))
+        map_ids = sorted({match_map.get(uid) for uid in order} - {None})
+        lead = np.zeros((n, len(map_ids)))
+        pos = {m: j for j, m in enumerate(map_ids)}
+        for row, uid in enumerate(order):
+            m = match_map.get(uid)
+            if m is not None:
+                lead[row, pos[m]] = 1.0
+        lead_names = [f"map_{m}" for m in map_ids]
+    else:
+        lead = np.ones((n, 1))
+        lead_names = ["intercept"]
+    X = np.hstack([lead, hero_block, teamup_block, shape_block, skill])
     names = (
-        ["intercept"]
+        lead_names
         + [f"hero_free_{i}" for i in range(hero_block.shape[1])]
         + [f"teamup_{t}" for t in teamup_ids]
         + shape_names
         + ["skill_diff"]
     )
-    hero_slice = slice(1, 1 + hero_block.shape[1])
+    hero_slice = slice(len(lead_names), len(lead_names) + hero_block.shape[1])
     y = sample["camp0_win"].to_numpy(dtype=int)
     return DesignMatrix(X, y, names, hero_ids, hero_basis, hero_slice,
                         teamup_ids, order)

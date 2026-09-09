@@ -265,3 +265,53 @@ def test_w0_design_builds_lineups_from_starting_heroes():
     w1 = features.build_design(conn, frame, "W1")
     idx1 = w1.column_names.index("teamup_9001")
     assert w1.X[0, idx1] == pytest.approx(0.0), "W2 lineups lose the pair (both swapped away)"
+
+
+def _six_v_six(conn, uid, camp0, camp1, map_id=1231, camp0_win=1, ts=1_787_000_000):
+    conn.execute("INSERT INTO matches (match_uid, match_time_stamp, match_play_duration,"
+                 " map_id) VALUES (?,?,700.0,?)", (uid, ts, map_id))
+    for i, hero in enumerate(list(camp0) + list(camp1)):
+        camp = 0 if i < 6 else 1
+        pid = abs(hash((uid, i))) % 10**6
+        conn.execute("INSERT INTO match_players (match_uid, player_uid, camp, cur_hero_id,"
+                     " is_win, add_score, new_score) VALUES (?,?,?,?,?,10.0,?)",
+                     (uid, pid, camp, hero, camp0_win if camp == 0 else 1 - camp0_win,
+                      4500.0 + i))
+        conn.execute("INSERT INTO match_player_heroes (match_uid, player_uid, hero_id,"
+                     " play_time) VALUES (?,?,?,600.0)", (uid, pid, hero))
+    conn.commit()
+
+
+def test_within_role_constraint_makes_hero_effects_sum_to_zero_per_role():
+    conn = make_conn()
+    from apm import sample as sample_mod, contrasts
+    _six_v_six(conn, "m1", SIX_A, SIX_B)
+    frame, _ = sample_mod.build_sample(conn)
+    d = features.build_design(conn, frame, constraint="within_role")
+    roles = dict(conn.execute("SELECT hero_id, role FROM hero_info"))
+    # 6 heroes across 3 roles -> 6-3 = 3 free hero parameters, not 5.
+    assert d.hero_basis.shape == (6, 3)
+    beta = contrasts.effects_from_free(np.arange(1.0, 4.0), d.hero_basis)
+    for role in ("Tank", "Damage", "Support"):
+        idx = [i for i, h in enumerate(d.hero_ids) if roles[h] == role]
+        assert abs(beta[idx].sum()) < 1e-12
+
+
+def test_map_intercepts_give_each_map_its_own_baseline():
+    """Check 2 measured camp-0 win rate varying 49.42%-52.52% across the 16
+    maps, so a single intercept pools a real 3.10pp spread."""
+    conn = make_conn()
+    from apm import sample as sample_mod
+    _six_v_six(conn, "m1", SIX_A, SIX_B, map_id=1231)
+    _six_v_six(conn, "m2", SIX_A, SIX_B, map_id=1288, ts=1_787_000_600)
+    frame, _ = sample_mod.build_sample(conn)
+    d = features.build_design(conn, frame, map_intercepts=True)
+    assert "intercept" not in d.column_names
+    cols = [c for c in d.column_names if c.startswith("map_")]
+    assert sorted(cols) == ["map_1231", "map_1288"]
+    block = d.X[:, [d.column_names.index(c) for c in cols]]
+    np.testing.assert_allclose(block.sum(axis=1), np.ones(len(frame)))
+    # hero_slice must still point at exactly the hero columns after the shift
+    assert d.hero_slice.stop - d.hero_slice.start == d.hero_basis.shape[1]
+    assert all(d.column_names[i].startswith("hero_free_")
+               for i in range(d.hero_slice.start, d.hero_slice.stop))
