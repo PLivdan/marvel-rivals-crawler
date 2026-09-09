@@ -318,10 +318,16 @@ on the 40,030 holdout matches of that week: calibration in 25 equal-count
 bins, log loss against a constant-prediction baseline, Brier score, AUC, Cox
 calibration slope/intercept, and a nested ladder of holdout log losses as
 blocks are added (map intercepts → + rank-score differential → + composition
-shapes → + hero contrasts → + team-up contrasts). The resulting numbers are
-reported in the PDF (Figure 2 and Appendix Table A2), not reproduced here, and
-are stored in `results/fit_quality_W0_specAplus.json` and
-`results/calibration_W0_specAplus.csv`.
+shapes → + hero contrasts → + team-up contrasts). It also aggregates the
+holdout by starting hero and by composition shape: each holdout team-side's
+predicted and realised outcome is credited to every hero it started and to its
+T-D-S shape, for the full model and for the same model with the hero terms
+removed. That is the source of the report's Figure 2 (realised vs predicted
+holdout win rate per hero and per shape); the match-level calibration plot is
+Appendix Figure A1 and the block ladder is Appendix Table A2. The numbers are
+not reproduced here; they live in `results/fit_quality_W0_specAplus.json`,
+`results/calibration_W0_specAplus.csv` and
+`results/holdout_groups_W0_specAplus.csv`.
 
 ---
 
