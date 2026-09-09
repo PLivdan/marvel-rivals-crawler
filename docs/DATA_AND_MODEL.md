@@ -364,6 +364,32 @@ Thing, Jeff with Devil Dinosaur). Outputs: `results/apm_pairwise_{synergy,counte
 `results/apm_hero_table_pairwise_W0_specE.csv`, `results/pairwise_meta_W0_specE.json`; the
 report's team-up section and Appendix Tables on pairwise interactions read them.
 
+**Result (9 Sep 2026, `results/pairwise_meta_W0_specE.json`).** 1,112 synergy and 1,284
+counter columns (1,144 and 1,230 free after constraints; 2,374 free interaction parameters in
+total). Converged in 3 Newton steps from the Spec A+ warm start. After BH across all 2,396
+interactions, 52 counters and 74 synergies are significant at q<0.05; of the synergies, 32 of the
+100 designated team-ups and 42 of 1,015 other pairs. The five largest synergies are all
+designated team-ups (Moon Knight-Blade +8.1, Ultron-Adam Warlock +7.7, Squirrel Girl-Iron Man
++7.2, Iron Fist-White Fox +6.8, Gambit-Rogue +6.5 pp). Largest counters: Black Widow over Ultron
++4.8, Ultron over White Fox +4.7, Venom over Squirrel Girl +3.8, Thor over Black Panther +3.7,
+Spider-man over Iron Man +3.3, Black Widow over Iron Man +3.2 pp. Black Panther vs The Thing:
+-2.2 pp (SE 0.75, q=0.054), so most of the raw -5.6 pp gap is The Thing's own strength. Jeff with
+Devil Dinosaur: +1.9 pp (SE 0.82, q=0.18).
+
+**Holdout ladder (same 7-day split):** Spec A+ 0.66743 -> + synergies 0.66773 -> + counters
+0.66816. The interaction blocks do NOT improve out-of-sample prediction; in aggregate they add
+more noise than signal despite many precisely estimated individual pairs. The headline therefore
+keeps the parsimonious team-up block; Spec E is reported descriptively (report: team-up section,
+Appendix ladder and top-30 table).
+
+**Main effects move by definition, not evidence.** Spearman 0.869 with Spec A+, mean |change|
+1.07 pp, max 2.95 pp. Under Spec A+ a hero's coefficient is net of its designated team-up
+premiums; under Spec E it averages over all observed partners (team-ups included), so heroes
+with strong team-ups rise (Star-lord +2.6, Cyclops +2.6, Peni Parker +2.2) and heroes without
+fall (Daredevil -3.0, Magik -2.6, The Thing -2.3). Correlation of the change with the sum of a
+hero's positive team-up premiums: 0.45. Team-up premiums themselves: Spearman 0.88 with the old
+block, mean |diff| 0.54 pp.
+
 **Why this is not the play-time-weighting problem again.** The starting matchup is fixed before
 anything in the match happens, so counters are pre-start regressors. They measure the mechanism
 that makes realised play time endogenous (players swap in response to matchups) without using

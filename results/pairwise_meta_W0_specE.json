@@ -1,0 +1,69 @@
+{
+ "tag": "W0_specE",
+ "min_pair": 2500,
+ "n_matches": 477483,
+ "holdout_days": 7,
+ "n_train": 437453,
+ "n_holdout": 40030,
+ "n_synergy_cols": 1115,
+ "n_counter_cols": 1284,
+ "free_synergy": 1057,
+ "free_counter": 1230,
+ "loglike_full": -317797.9100834357,
+ "converged": true,
+ "n_iter": 3,
+ "ladder": [
+  {
+   "model": "Spec A+ (heroes, maps, skill, shapes, team-ups)",
+   "k_free": 187,
+   "logloss_holdout": 0.6674300941356579,
+   "converged": true
+  },
+  {
+   "model": "+ all pairwise synergies (team-ups subsumed)",
+   "k_free": 1144,
+   "logloss_holdout": 0.6677285835758959,
+   "converged": true
+  },
+  {
+   "model": "+ all pairwise counters",
+   "k_free": 2374,
+   "logloss_holdout": 0.6681604354043218,
+   "converged": true
+  }
+ ],
+ "main_effects_vs_specAplus": {
+  "spearman_vs_specAplus": 0.8694805194805196,
+  "mean_abs_diff_pp": 1.0735300090328597,
+  "max_abs_diff_pp": 2.9533231149429895,
+  "sd_pp_specE": 2.4035395393294734,
+  "sd_pp_specAplus": 2.6021177077535462
+ },
+ "teamups_vs_old_block": {
+  "n_matched": 100,
+  "spearman": 0.8792439243924393,
+  "mean_abs_diff_pp": 0.5398787399955868
+ },
+ "examples": {
+  "black_panther_vs_thing": {
+   "effect_pp_for_first_named": -2.2329671967984766,
+   "se_pp": 0.7525483395872367,
+   "q": 0.053801677496596166,
+   "n": 7099
+  },
+  "jeff_with_dino": {
+   "effect_pp_for_first_named": 1.8859631334070461,
+   "se_pp": 0.8233685925772979,
+   "q": 0.1831713179611196,
+   "n": 7082
+  }
+ },
+ "n_significant_q05": {
+  "synergy": 74,
+  "counter": 52
+ },
+ "sd_pp": {
+  "synergy": 1.2931003942120245,
+  "counter": 1.0836154208998199
+ }
+}
