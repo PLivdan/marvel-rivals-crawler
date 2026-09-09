@@ -851,26 +851,7 @@ in-sample column shows how little of the improvement is overfitting.
 \end{threeparttable}
 \end{center}
 
-\vspace{6pt}
-\begin{center}\small
-\begin{threeparttable}
-\captionof{table}{Out-of-sample fit with pairwise interactions}\label{tab:pwladder}
-\begin{tabular}{l r r}
-\toprule
-Model & \multicolumn{1}{c}{Free parameters} & \multicolumn{1}{c}{Log loss (holdout)} \\
-\midrule
-<<PW_LADDER_ROWS>>
-\bottomrule
-\end{tabular}
-\begin{tablenotes}[flushleft]\footnotesize
-\item Same chronological split as Table~\ref{tab:ladder}. The synergy block replaces the
-designated team-up block, which it contains; pairs below <<PW_MIN_PAIR>> co-occurrences carry no
-coefficient. Free parameters count the coefficients remaining after the identification
-constraints.
-\end{tablenotes}
-\end{threeparttable}
-\end{center}
-
+\clearpage
 \begin{figure}[H]\centering
 \caption{Out-of-sample calibration of the headline model}\label{fig:calib}
 \vspace{2pt}
@@ -924,6 +905,27 @@ shown for comparison. Predicted probabilities fall between <<P_MIN>> and <<P_MAX
 separates unbalanced matches well and, as it should, treats balanced ones as coin flips.
 \end{minipage}
 \end{figure}
+
+\vspace{6pt}
+\begin{center}\small
+\begin{threeparttable}
+\captionof{table}{Out-of-sample fit with pairwise interactions}\label{tab:pwladder}
+\begin{tabular}{l r r}
+\toprule
+Model & \multicolumn{1}{c}{Free parameters} & \multicolumn{1}{c}{Log loss (holdout)} \\
+\midrule
+<<PW_LADDER_ROWS>>
+\bottomrule
+\end{tabular}
+\begin{tablenotes}[flushleft]\footnotesize
+\item Same chronological split as Table~\ref{tab:ladder}. The synergy block replaces the
+designated team-up block, which it contains; pairs below <<PW_MIN_PAIR>> co-occurrences carry no
+coefficient. Free parameters count the coefficients remaining after the identification
+constraints.
+\end{tablenotes}
+\end{threeparttable}
+\end{center}
+
 
 \begin{landscape}
 \begin{center}

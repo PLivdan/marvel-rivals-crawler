@@ -5,7 +5,7 @@
 \titleformat{\section}{\large\bfseries}{}{0pt}{}
 \titlespacing*{\section}{0pt}{16pt plus 4pt minus 2pt}{6pt}
 \pagestyle{fancy}\fancyhf{}\renewcommand{\headrulewidth}{0pt}
-\fancyfoot[C]{\thepage}\fancyfoot[R]{\scriptsize build \texttt{97437f3f}}
+\fancyfoot[C]{\thepage}\fancyfoot[R]{\scriptsize build \texttt{ee1d3c55}}
 \pgfplotsset{compat=newest}
 \usepackage[colorlinks=true,linkcolor=black,urlcolor=black]{hyperref}
 \newcommand{\sym}[1]{\rlap{$^{#1}$}}
@@ -21,7 +21,7 @@
 {\normalsize Clocktock (Philip Livdan)}\\[2pt]
 {\small McCombs School of Business, The University of Texas at Austin}\\
 {\small\texttt{plivdan@utexas.edu}}\\[8pt]
-{\small Season 9.5, PC ranked. Prepared 8 September 2026. Model fit \texttt{31cfdff}, report build \texttt{97437f3f}.}
+{\small Season 9.5, PC ranked. Prepared 8 September 2026. Model fit \texttt{31cfdff}, report build \texttt{ee1d3c55}.}
 \end{center}
 
 \vspace{4pt}
@@ -672,28 +672,7 @@ in-sample column shows how little of the improvement is overfitting.
 \end{threeparttable}
 \end{center}
 
-\vspace{6pt}
-\begin{center}\small
-\begin{threeparttable}
-\captionof{table}{Out-of-sample fit with pairwise interactions}\label{tab:pwladder}
-\begin{tabular}{l r r}
-\toprule
-Model & \multicolumn{1}{c}{Free parameters} & \multicolumn{1}{c}{Log loss (holdout)} \\
-\midrule
-Spec A+ (heroes, maps, skill, shapes, team-ups) & 187 & 0.6674 \\
-+ all pairwise synergies (team-ups subsumed) & 1144 & 0.6677 \\
-+ all pairwise counters & 2374 & 0.6681 \\
-\bottomrule
-\end{tabular}
-\begin{tablenotes}[flushleft]\footnotesize
-\item Same chronological split as Table~\ref{tab:ladder}. The synergy block replaces the
-designated team-up block, which it contains; pairs below 2,500 co-occurrences carry no
-coefficient. Free parameters count the coefficients remaining after the identification
-constraints.
-\end{tablenotes}
-\end{threeparttable}
-\end{center}
-
+\clearpage
 \begin{figure}[H]\centering
 \caption{Out-of-sample calibration of the headline model}\label{fig:calib}
 \vspace{2pt}
@@ -795,6 +774,29 @@ shown for comparison. Predicted probabilities fall between 5\% and 93\%, and
 separates unbalanced matches well and, as it should, treats balanced ones as coin flips.
 \end{minipage}
 \end{figure}
+
+\vspace{6pt}
+\begin{center}\small
+\begin{threeparttable}
+\captionof{table}{Out-of-sample fit with pairwise interactions}\label{tab:pwladder}
+\begin{tabular}{l r r}
+\toprule
+Model & \multicolumn{1}{c}{Free parameters} & \multicolumn{1}{c}{Log loss (holdout)} \\
+\midrule
+Spec A+ (heroes, maps, skill, shapes, team-ups) & 187 & 0.6674 \\
++ all pairwise synergies (team-ups subsumed) & 1144 & 0.6677 \\
++ all pairwise counters & 2374 & 0.6681 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}[flushleft]\footnotesize
+\item Same chronological split as Table~\ref{tab:ladder}. The synergy block replaces the
+designated team-up block, which it contains; pairs below 2,500 co-occurrences carry no
+coefficient. Free parameters count the coefficients remaining after the identification
+constraints.
+\end{tablenotes}
+\end{threeparttable}
+\end{center}
+
 
 \begin{landscape}
 \begin{center}
