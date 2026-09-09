@@ -83,7 +83,40 @@ def _dominant_hero_per_player(conn, match_uids):
     return frame[["match_uid", "camp", "player_uid", "hero_id"]]
 
 
-def _lineup_rosters(conn, match_uids):
+def _starting_hero_per_player(conn, match_uids):
+    """Each player's STARTING hero, one row per player -- the W0 analogue of
+    `_dominant_hero_per_player`.
+
+    Entry 1 of the API hero array in rowid order (see
+    apm.attribution._starting_lineup_weights for the evidence that the array is
+    chronological by first appearance). Deliberately does NOT filter
+    `play_time > 0`: a player who swaps away in the opening seconds records ~0
+    time on the hero they started on, and dropping it would name the swap
+    target as the start.
+
+    No tie-break is needed. MIN(rowid) is unique per player, and hero
+    uniqueness binds at match start, so a starting roster is always six
+    distinct heroes -- unlike a W2 roster, which collapses below six for ~2% of
+    team-instances when two teammates share a dominant hero.
+    """
+    if not match_uids:
+        return pd.DataFrame(columns=["match_uid", "camp", "player_uid", "hero_id"])
+
+    rows = conn.execute(
+        "SELECT h.match_uid, p.camp, h.player_uid, h.hero_id "
+        "FROM match_player_heroes h "
+        "JOIN (SELECT match_uid, player_uid, MIN(rowid) AS first_rid "
+        "      FROM match_player_heroes GROUP BY match_uid, player_uid) f "
+        "  ON f.first_rid = h.rowid "
+        "JOIN match_players p ON p.match_uid = h.match_uid "
+        "                    AND p.player_uid = h.player_uid"
+    ).fetchall()
+    frame = pd.DataFrame(rows, columns=["match_uid", "camp", "player_uid", "hero_id"])
+    frame = frame[frame["match_uid"].isin(match_uids)]
+    return frame[["match_uid", "camp", "player_uid", "hero_id"]]
+
+
+def _lineup_rosters(conn, match_uids, rule="W2"):
     """Six player-slot heroes per (match, camp), duplicates preserved.
 
     Team-ups and composition need a definite lineup, so these always use W2
@@ -94,7 +127,8 @@ def _lineup_rosters(conn, match_uids):
     need counts (composition shape) iterate the list directly so a
     duplicated hero counts twice.
     """
-    per_player = _dominant_hero_per_player(conn, match_uids)
+    per_player = (_starting_hero_per_player(conn, match_uids) if rule == "W0"
+                  else _dominant_hero_per_player(conn, match_uids))
     return {
         key: list(group["hero_id"])
         for key, group in per_player.groupby(["match_uid", "camp"])
@@ -117,7 +151,11 @@ def build_design(conn, sample, attribution_rule="W1", min_shape_count=500):
     hero_basis = contrasts.sum_to_zero_basis(len(hero_ids))
     hero_block = contrasts.reduce_design(hero_raw, hero_basis)
 
-    rosters = _lineup_rosters(conn, match_uids)
+    # Under W0 the lineup blocks come from the STARTING roster, so the whole
+    # design is pre-outcome; pairing a W0 hero block with W2 lineups would
+    # reintroduce post-match information through the controls. W1/W2 keep the
+    # dominant-hero roster, so their previously-reported fits stay reproducible.
+    rosters = _lineup_rosters(conn, match_uids, attribution_rule)
     lineup_sets = {key: set(heroes) for key, heroes in rosters.items()}
     roles = dict(conn.execute("SELECT hero_id, role FROM hero_info"))
 

@@ -214,3 +214,54 @@ def test_team_up_membership_is_plus_one_minus_one_or_zero():
     assert by_match["pair_camp0"] == pytest.approx(1.0)
     assert by_match["pair_camp1"] == pytest.approx(-1.0)
     assert by_match["pair_split"] == pytest.approx(0.0)
+
+
+def test_w0_design_builds_lineups_from_starting_heroes():
+    """Under W0 the composition and team-up blocks must come from the STARTING
+    lineup, not the dominant-hero one.
+
+    Two reasons. It makes the whole design pre-outcome -- a W0 hero block paired
+    with W2 lineups would reintroduce post-match information through the
+    controls. And hero uniqueness binds at match start, so a W0 roster is six
+    genuinely distinct heroes, which a W2 roster is not (two teammates can each
+    spend most of a match on the same hero via sequential swaps, collapsing ~2%
+    of W2 rosters to five).
+    """
+    conn = make_conn()
+    # A seventh hero, so camp 1 can field six distinct heroes WITHOUT holding
+    # both members of the pair -- otherwise the contrast cancels to zero and the
+    # test proves nothing.
+    conn.execute("INSERT INTO hero_info (hero_id, name, role) VALUES (1077,'G','Damage')")
+    conn.execute("INSERT INTO teamups (teamup_id, name, anchor_hero_id) "
+                 "VALUES (9001,'START PAIR',1011)")
+    conn.execute("INSERT INTO teamup_heroes (teamup_id, hero_id, is_anchor) VALUES (9001,1011,1)")
+    conn.execute("INSERT INTO teamup_heroes (teamup_id, hero_id, is_anchor) VALUES (9001,1022,0)")
+    conn.execute("INSERT INTO matches (match_uid, match_time_stamp, match_play_duration) "
+                 "VALUES ('m1',1787000000,700.0)")
+    # camp0: two players START on the team-up pair (1011, 1022) but both spend
+    # most of the match on 1033/1044, so the W2 roster loses the pair entirely.
+    plan = [(0, 1011, 1033), (0, 1022, 1044), (0, 1055, None), (0, 1066, None),
+            (0, 1033, None), (0, 1044, None),
+            (1, 1055, None), (1, 1066, None), (1, 1011, None),
+            (1, 1077, None), (1, 1033, None), (1, 1044, None)]
+    for i, (camp, start, swap) in enumerate(plan):
+        pid = 500 + i
+        conn.execute("INSERT INTO match_players (match_uid, player_uid, camp, cur_hero_id,"
+                     " is_win, add_score, new_score) VALUES ('m1',?,?,?,?,10.0,?)",
+                     (pid, camp, swap or start, 1 if camp == 0 else 0, 4500.0 + i))
+        conn.execute("INSERT INTO match_player_heroes (match_uid, player_uid, hero_id,"
+                     " play_time) VALUES ('m1',?,?,?)", (pid, start, 60.0 if swap else 600.0))
+        if swap:
+            conn.execute("INSERT INTO match_player_heroes (match_uid, player_uid, hero_id,"
+                         " play_time) VALUES ('m1',?,?,540.0)", (pid, swap))
+    conn.commit()
+
+    from apm import sample as sample_mod
+    frame, _ = sample_mod.build_sample(conn)
+    w0 = features.build_design(conn, frame, "W0")
+    idx = w0.column_names.index("teamup_9001")
+    assert w0.X[0, idx] == pytest.approx(1.0), "W0 must see the starting pair on camp 0"
+
+    w1 = features.build_design(conn, frame, "W1")
+    idx1 = w1.column_names.index("teamup_9001")
+    assert w1.X[0, idx1] == pytest.approx(0.0), "W2 lineups lose the pair (both swapped away)"
