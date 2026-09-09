@@ -1,0 +1,24 @@
+{
+  "attribution_rule": "W0",
+  "forfeit_floor": 240,
+  "n_matches": 477483,
+  "exclusions": {
+    "starting": 482997,
+    "dropped_roster": 0,
+    "dropped_draw": 2139,
+    "dropped_missing_score": 0,
+    "dropped_missing_playtime": 19,
+    "dropped_short": 3356,
+    "remaining": 477483
+  },
+  "zero_variance_columns_dropped": 4,
+  "n_heroes": 55,
+  "n_teamups": 100,
+  "loglike": -320067.66618061526,
+  "intercept_logodds": 0.053541458952992386,
+  "git_commit": "31cfdff",
+  "interval_method": "analytic 1.96*HC1 SE (bootstrap infeasible at this scale)",
+  "constraint": "within_role",
+  "map_intercepts": true,
+  "min_shape_count": 100
+}

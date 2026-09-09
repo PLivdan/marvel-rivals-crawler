@@ -1,0 +1,33 @@
+{
+ "frozen_at_utc": "2026-09-09T23:46:38Z",
+ "code_revision": "832c61585ba567555ac8091c86b851ddcc253bfe",
+ "n_matches": 477483,
+ "n_crawled_at_freeze": 482997,
+ "filters": {
+  "players_per_match": 12,
+  "six_per_side": true,
+  "no_draw_is_win_2": true,
+  "scores_present": true,
+  "every_player_positive_play_time": true,
+  "forfeit_floor_seconds": 240
+ },
+ "exclusions": {
+  "starting": 482997,
+  "dropped_roster": 0,
+  "dropped_draw": 2139,
+  "dropped_missing_score": 0,
+  "dropped_missing_playtime": 19,
+  "dropped_short": 3356,
+  "remaining": 477483
+ },
+ "play_time_min_utc": "2026-08-07T11:12:53Z",
+ "play_time_max_utc": "2026-09-08T11:00:32Z",
+ "play_time_max_unix": 1788865232,
+ "download_time_max_utc": "2026-09-08T13:02:16Z",
+ "season_code": 19,
+ "season_label": "9.5",
+ "headline_fit": {
+  "tag": "W0_specAplus",
+  "model_fit_commit": "31cfdff"
+ }
+}
