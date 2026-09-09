@@ -1,0 +1,10 @@
+{
+ "lambda": 1.0,
+ "n": 477483,
+ "k_dense": 187,
+ "k_players": 879317,
+ "fit_seconds": 1068.1150369644165,
+ "nit": 2000,
+ "loglik": -142969.5867114356,
+ "converged": false
+}
