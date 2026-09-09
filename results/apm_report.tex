@@ -5,7 +5,7 @@
 \titleformat{\section}{\large\bfseries}{}{0pt}{}
 \titlespacing*{\section}{0pt}{16pt plus 4pt minus 2pt}{6pt}
 \pagestyle{fancy}\fancyhf{}\renewcommand{\headrulewidth}{0pt}
-\fancyfoot[C]{\thepage}\fancyfoot[R]{\scriptsize build \texttt{9c2c199e}}
+\fancyfoot[C]{\thepage}\fancyfoot[R]{\scriptsize build \texttt{9b7d4f36}}
 \pgfplotsset{compat=newest}
 \usepackage[colorlinks=true,linkcolor=black,urlcolor=black]{hyperref}
 \newcommand{\sym}[1]{\rlap{$^{#1}$}}
@@ -21,7 +21,7 @@
 {\normalsize Clocktock (Philip Livdan)}\\[2pt]
 {\small McCombs School of Business, The University of Texas at Austin}\\
 {\small\texttt{plivdan@utexas.edu}}\\[8pt]
-{\small Season 9.5, PC ranked. Prepared 8 September 2026. Model fit \texttt{31cfdff}, report build \texttt{9c2c199e}.}
+{\small Season 9.5, PC ranked. Prepared 8 September 2026. Model fit \texttt{31cfdff}, report build \texttt{9b7d4f36}.}
 \end{center}
 
 \vspace{4pt}
@@ -49,7 +49,7 @@ Role composition is the first identification problem. A hero coefficient should 
 credit for the fact that the hero happens to be played in a good role structure, or blame for
 being played in a bad one.
 
-The differences across structures are large. The conventional 2--2--2 composition of two
+This is not a small issue in \emph{Marvel Rivals}. The conventional 2--2--2 composition of two
 Tanks, two Damage heroes, and two Supports accounts for 75\% of teams in the sample and
 wins 53.5\% of its matches. A 1--3--2 composition wins 42.2\%, and 2--1--3 wins 40.4\%.
 These are large differences before anything has been said about which particular Tank, Damage,
@@ -180,8 +180,8 @@ Table~\ref{tab:attribcmp} reports every hero under all three rules.
 \FloatBarrier
 \section*{Why hero effects are identified within role}
 
-Hero effects are identified within role rather than across roles, for a mechanical reason.
-Changing the number of Tanks, Damage heroes, or Supports changes the team's composition, so a global
+Hero effects are identified within role, not across roles. The reason is mechanical. Changing
+the number of Tanks, Damage heroes, or Supports changes the team's composition, so a global
 normalisation asks the hero coefficients and the composition coefficients to explain nearly the
 same role-count variation.
 
@@ -221,13 +221,15 @@ distortion, and a reader can see which heroes are exposed to each.
 \FloatBarrier
 \section*{Does the structure survive out of sample?}
 
-With 477,483 observations and 187 parameters, in-sample fit says relatively
-little. I instead test whether the estimates survive a chronological holdout, estimating the
-model on the first 437,453 matches and evaluating it on the final 40,030, the last
-7 days of the sample. A random split would make the test easier by mixing the same
-evolving meta across the training and test samples.
+With nearly half a million observations and 187 parameters, in-sample fit says relatively
+little. I instead test whether the estimated structure survives a chronological holdout.
 
-The estimates hold up in the holdout week (Figure~\ref{fig:oos}). Across heroes, the predicted and realised holdout
+I therefore estimate the model on the first 437,453 matches and evaluate it on the final
+40,030, corresponding to the last 7 days of the sample. The split is
+chronological. A random split would make the test easier by mixing the same evolving meta across
+the training and test samples.
+
+The model travels well (Figure~\ref{fig:oos}). Across heroes, the predicted and realised holdout
 win rates of teams starting each hero have a correlation of 0.957 and differ by 0.50
 percentage points on average. Removing the hero coefficients while keeping every other control
 reduces that correlation to 0.139. Across composition structures, predicted and realised
@@ -451,7 +453,43 @@ ask whether a designated pair performs better or worse than the two heroes' indi
 would predict. Squirrel Girl with Iron Man carries a premium of 8.66 percentage points, Blade
 with Moon Knight 8.30, Rogue with Gambit 6.95, and Adam Warlock with Ultron 6.82. A
 premium is the increment beyond the two individual effects, so a team fielding two strong heroes
-with a positive team-up coefficient gains both hero terms plus the premium. The premium should not be read as the total value of the pair.
+with a positive team-up coefficient gains both hero terms plus the premium. Reading the premium
+as the total value of the pair would count the wrong object.
+
+Designated team-ups are a small subset of the pairwise structure a match contains. A hero's
+value can depend on who it starts alongside and, just as plausibly, on who it starts against:
+some matchups are counters. I therefore estimate a second specification that adds one
+coefficient for every hero pair that starts together at least 2,500 times (a synergy,
+1,115 pairs) and one for every pair that starts on opposite sides at least 2,500
+times (a counter, 1,284 pairs), on the same starting lineups as the headline model. The
+blocks need constraints to be identified at all. Summing a hero's synergy contrasts over its
+five teammates gives five times its own contrast, and summing its counter contrasts over six
+opponents gives six times it, so without restrictions the interaction blocks contain the main
+effects exactly. Each hero's synergies are therefore constrained to sum to zero across partners
+and its counters to sum to zero across opponents, with a further sum-to-zero within each role
+pair so that composition stays in the composition block. The main effect then reads as a hero's
+value averaged over the partners and opponents it actually faces, and each interaction is a
+deviation from that average.
+
+The main effects change definition rather than evidence. Under the headline specification a
+hero's coefficient is net of its designated team-up premiums; here it averages over every
+partner the hero actually starts with, team-ups included. The rank correlation with the headline
+estimates is 0.869 and the mean absolute change 1.07 percentage points, and
+the changes track team-up exposure (correlation 0.45 with the sum of a hero's positive
+team-up premiums): Star-lord (+2.6), Cyclops (+2.6), and Peni Parker (+2.2) gain, while Daredevil (-3.0), Magik (-2.6), and The Thing (-2.3) lose. Neither version is
+wrong. They answer different questions about the same hero.
+
+After false-discovery-rate correction across all 2,399 interactions, 52
+counters and 74 synergies are distinguishable from zero. The largest synergies are
+Moon Knight with Blade (+8.1), Ultron with Adam Warlock (+7.7), and Squirrel Girl with Iron Man (+7.2), all of them designated team-ups. Of the 100 designated team-ups, 32
+are significant, against 42 of the 1,015 other pairs, which is
+the pattern one would expect if the game's designed synergies are the main synergies. The largest
+counters are Black Widow over Ultron (+4.8), Ultron over White Fox (+4.7), and Deadpool (Duelist) over Deadpool (Strategist) (+3.9). Two folk beliefs can be checked directly. Black Panther against a
+starting Thing is -2.2 points (standard error 0.8, $q=0.05$, 7,099 matches), so most of the raw -5.6-point gap in Black Panther's
+win rate when a Thing is on the other side is The Thing's own strength rather than a specific
+counter. Jeff starting alongside Devil Dinosaur is +1.9 points (standard error 0.8, $q=0.18$, 7,082 team instances). On the chronological holdout
+the interaction blocks do not improve the holdout log loss, which moves from 0.6674 under the headline specification to 0.6677 with the synergy block and 0.6682 with both blocks. Individual interactions can be precisely estimated while the blocks as a whole, with 2,374 free parameters, add more noise than signal to prediction. The headline model therefore keeps the parsimonious team-up block, and the interactions are reported as a description of the sample rather than as part of the estimate (Appendix Table~\ref{tab:pwladder}). Appendix
+Table~\ref{tab:pairwise} lists the strongest interactions of each kind.
 
 \FloatBarrier
 \section*{What the coefficients do and do not mean}
@@ -479,8 +517,8 @@ confidence intervals should be read accordingly.
 
 The data also thin out at the edges. 18 composition shapes receive their own indicators, while 9 extremely rare shapes, together only 0.024\% of team instances, share the ``other'' category and one coefficient. Profile privacy rises sharply with rank
 score, reaching roughly 63\% above 5{,}000, and the crawl expands only through public
-profiles, so the very top of the ranked distribution is under-sampled. At this sample size, coverage at the top of the rank distribution is a more important
-limitation than ordinary sampling noise.
+profiles, so the very top of the ranked distribution is under-sampled. At this sample size the
+binding constraint is coverage at the top rather than sampling noise.
 
 \FloatBarrier
 \section*{Conclusion}
@@ -624,8 +662,30 @@ in-sample column shows how little of the improvement is overfitting.
 \end{threeparttable}
 \end{center}
 
-\begin{center}
-\captionof{figure}{Out-of-sample calibration of the headline model}\label{fig:calib}
+\vspace{6pt}
+\begin{center}\small
+\begin{threeparttable}
+\captionof{table}{Out-of-sample fit with pairwise interactions}\label{tab:pwladder}
+\begin{tabular}{l r r}
+\toprule
+Model & \multicolumn{1}{c}{Free parameters} & \multicolumn{1}{c}{Log loss (holdout)} \\
+\midrule
+Spec A+ (heroes, maps, skill, shapes, team-ups) & 187 & 0.6674 \\
++ all pairwise synergies (team-ups subsumed) & 1144 & 0.6677 \\
++ all pairwise counters & 2374 & 0.6682 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}[flushleft]\footnotesize
+\item Same chronological split as Table~\ref{tab:ladder}. The synergy block replaces the
+designated team-up block, which it contains; pairs below 2,500 co-occurrences carry no
+coefficient. Free parameters count the coefficients remaining after the identification
+constraints.
+\end{tablenotes}
+\end{threeparttable}
+\end{center}
+
+\begin{figure}[H]\centering
+\caption{Out-of-sample calibration of the headline model}\label{fig:calib}
 \vspace{2pt}
 \begin{minipage}[c]{9.4cm}\centering
 \begin{tikzpicture}
@@ -724,7 +784,7 @@ shown for comparison. Predicted probabilities fall between 5\% and 93\%, and
 85\% of holdout matches are predicted between 35\% and 65\%: the model
 separates unbalanced matches well and, as it should, treats balanced ones as coin flips.
 \end{minipage}
-\end{center}
+\end{figure}
 
 \begin{landscape}
 \begin{center}
@@ -787,6 +847,66 @@ stable. The difference (W1$-$W0) is reported rather than a ratio because a ratio
 heroes whose starting-hero estimate is near zero. The better in-sample likelihood under W1, $-297{,}648$ against $-320{,}122$, is not evidence that W1
 identifies hero strength better; part of the realised match has been placed inside the
 regressors.
+\end{minipage}
+\end{landscape}
+
+\begin{landscape}
+\begin{center}
+{\footnotesize\setlength{\tabcolsep}{5pt}\renewcommand{\arraystretch}{1.0}
+\captionof{table}{Strongest pairwise interactions on starting lineups}\label{tab:pairwise}
+\begin{tabular}{l r r r @{\hspace{2.5em}} l r r r}
+\toprule
+\multicolumn{4}{l}{\emph{Counters: A over B}} & \multicolumn{4}{l}{\emph{Synergies: A with B}} \\
+Matchup & \multicolumn{1}{c}{Effect} & \multicolumn{1}{c}{S.E.} & \multicolumn{1}{c}{Matches} &
+Pair & \multicolumn{1}{c}{Effect} & \multicolumn{1}{c}{S.E.} & \multicolumn{1}{c}{Teams} \\
+\midrule
+Black Widow over Ultron & +4.82\sym{***} & (1.01) & 3,256 & Moon Knight $\times$ Blade & +8.09\sym{***} & (0.85) & 4,378 \\
+Ultron over White Fox & +4.68\sym{***} & (0.99) & 4,228 & Ultron $\times$ Adam Warlock & +7.66\sym{***} & (0.75) & 6,510 \\
+Deadpool (Duelist) over Deadpool (Strategist) & +3.87\sym{**} & (1.07) & 3,133 & Squirrel Girl $\times$ Iron Man & +7.17\sym{***} & (0.94) & 3,394 \\
+Venom over Squirrel Girl & +3.78\sym{***} & (0.97) & 3,421 & Iron Fist $\times$ White Fox & +6.76\sym{***} & (0.63) & 15,235 \\
+Thor over Black Panther & +3.67\sym{***} & (0.82) & 5,728 & Gambit $\times$ Rogue & +6.51\sym{***} & (0.64) & 26,196 \\
+Storm over Iron Fist & +3.57\sym{***} & (0.90) & 3,986 & Loki $\times$ Mantis & +4.73\sym{***} & (0.84) & 7,635 \\
+Phoenix over Elsa Bloodstone & +3.34\sym{***} & (0.91) & 3,859 & Mantis $\times$ Adam Warlock & +4.00\sym{***} & (0.84) & 4,710 \\
+Spider-man over Iron Man & +3.31\sym{***} & (0.74) & 6,082 & The Punisher $\times$ Rocket Raccoon & +3.98\sym{***} & (0.58) & 24,911 \\
+Black Widow over Iron Man & +3.18\sym{**} & (0.88) & 4,090 & Luna Snow $\times$ White Fox & +3.80\sym{***} & (0.66) & 18,249 \\
+Peni Parker over Thor & +3.08\sym{**} & (0.98) & 3,726 & Storm $\times$ Jeff The Land Shark & +3.79\sym{***} & (0.73) & 8,014 \\
+White Fox over Wolverine & +2.97\sym{**} & (0.93) & 3,959 & Ultron $\times$ Devil Dinosaur & -3.62\sym{**} & (1.10) & 2,672 \\
+Magik over Devil Dinosaur & +2.93\sym{***} & (0.64) & 11,037 & Rocket Raccoon $\times$ Invisible Woman & -3.62\sym{***} & (0.57) & 28,719 \\
+Gambit over Angela & +2.91\sym{***} & (0.79) & 9,187 & Rocket Raccoon $\times$ Jeff The Land Shark & -3.59\sym{***} & (0.77) & 7,951 \\
+Hela over Ultron & +2.84\sym{**} & (0.90) & 4,310 & Doctor Strange $\times$ Invisible Woman & +3.53\sym{***} & (0.52) & 45,963 \\
+The Thing over Rogue & +2.71\sym{**} & (0.83) & 6,170 & Hela $\times$ Iron Man & -3.49\sym{**} & (0.99) & 2,852 \\
+Daredevil over Black Cat & +2.70\sym{**} & (0.85) & 4,640 & Rocket Raccoon $\times$ Gambit & -3.43\sym{***} & (0.60) & 22,783 \\
+Namor over Spider-man & +2.68\sym{***} & (0.63) & 9,237 & Mantis $\times$ Peni Parker & -3.39\sym{***} & (0.81) & 5,603 \\
+Black Panther over Mantis & +2.58\sym{**} & (0.75) & 10,240 & Human Torch $\times$ Jubilee & +3.34\sym{***} & (0.60) & 21,864 \\
+The Thing over Deadpool (Duelist) & +2.58\sym{**} & (0.78) & 6,657 & Gambit $\times$ Deadpool (Duelist) & +3.32\sym{***} & (0.65) & 15,503 \\
+Cloak \& Dagger over Cyclops & +2.55\sym{***} & (0.57) & 36,351 & Adam Warlock $\times$ Elsa Bloodstone & -3.31\sym{**} & (1.00) & 3,209 \\
+Rocket Raccoon over Squirrel Girl & +2.53\sym{**} & (0.81) & 6,380 & Loki $\times$ Devil Dinosaur & +3.30\sym{**} & (1.03) & 3,444 \\
+Gambit over Wolverine & +2.51\sym{**} & (0.74) & 9,067 & Adam Warlock $\times$ Cyclops & -3.22\sym{**} & (0.91) & 3,993 \\
+Devil Dinosaur over Magneto & +2.41\sym{***} & (0.57) & 26,012 & Doctor Strange $\times$ Angela & -3.12\sym{**} & (0.99) & 3,344 \\
+Winter Soldier over Ultron & +2.41\sym{**} & (0.69) & 9,083 & Hela $\times$ Ultron & -3.01\sym{**} & (0.95) & 3,497 \\
+Deadpool (Duelist) over Invisible Woman & +2.39\sym{**} & (0.71) & 13,683 & Namor $\times$ Gambit & -2.99\sym{***} & (0.64) & 14,862 \\
+Iron Man over The Thing & +2.38\sym{**} & (0.77) & 6,517 & Rocket Raccoon $\times$ Cloak \& Dagger & -2.98\sym{***} & (0.53) & 40,371 \\
+Human Torch over Jubilee & +2.28\sym{**} & (0.68) & 16,056 & Adam Warlock $\times$ Jubilee & +2.98\sym{***} & (0.76) & 6,613 \\
+The Hood over Storm & +2.28\sym{***} & (0.60) & 18,350 & Cloak \& Dagger $\times$ Peni Parker & -2.97\sym{***} & (0.66) & 13,400 \\
+Angela over Magneto & +2.25\sym{**} & (0.62) & 18,811 & Cloak \& Dagger $\times$ Invisible Woman & -2.92\sym{***} & (0.53) & 43,646 \\
+The Thing over Magik & +2.21\sym{***} & (0.53) & 17,714 & Rocket Raccoon $\times$ Jubilee & -2.92\sym{***} & (0.53) & 34,943 \\
+\bottomrule
+\end{tabular}
+}
+\end{center}
+\vspace{-2pt}
+\noindent\begin{minipage}{\linewidth}\footnotesize
+\emph{Notes.} The 30 largest counters and the 30 largest synergies among
+those significant at $q<0.05$ after Benjamini--Hochberg correction across all 2,399
+interactions (52 counters and 74 synergies are significant in total).
+A counter of $+x$ means that when A starts against B, A's side wins $x$ percentage points more
+often than the two heroes' individual effects predict, at a balanced match. A synergy of $+x$
+means a team starting both A and B wins $x$ points more than their individual effects predict.
+Interactions are deviations: each hero's counters sum to zero across its opponents and its
+synergies across its partners, so a hero's main effect already includes its average matchup.
+HC1 standard errors in parentheses. Full tables:
+\texttt{results/apm\_pairwise\_counter\_W0\_specE.csv} and
+\texttt{results/apm\_pairwise\_synergy\_W0\_specE.csv}.
 \end{minipage}
 \end{landscape}
 

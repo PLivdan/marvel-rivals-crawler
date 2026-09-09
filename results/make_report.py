@@ -40,6 +40,12 @@ CS  = need("results/comp_shapes.csv").set_index("shape")
 FQ  = need(f"results/fit_quality_{TAG}.json", "json")
 CAL = need(f"results/calibration_{TAG}.csv")
 HG  = need(f"results/holdout_groups_{TAG}.csv")
+PW_TAG = "W0_specE"
+PWS = need(f"results/apm_pairwise_synergy_{PW_TAG}.csv")
+PWC = need(f"results/apm_pairwise_counter_{PW_TAG}.csv")
+PWM = need(f"results/pairwise_meta_{PW_TAG}.json", "json")
+PWH = need(f"results/apm_hero_table_pairwise_{PW_TAG}.csv")
+IFJ = need("results/interaction_feasibility.json", "json")
 if "groups" not in FQ:
     raise SystemExit("fit_quality json lacks 'groups' -- rerun results/compute_fit_quality.py")
 
@@ -217,6 +223,64 @@ def bounds(*ds, pad=0.01, step=0.05):
 HG_LO, HG_HI = bounds(hg_full, hg_none)
 SG_LO, SG_HI = bounds(sg_full)
 G = FQ["groups"]
+
+# pairwise interactions (Spec E)
+def pw_row(r, counter):
+    if counter:
+        a, b, eff = (r.hero_a, r.hero_b, r.effect_pp) if r.effect_pp >= 0 else (r.hero_b, r.hero_a, -r.effect_pp)
+        label = f"{esc(a)} over {esc(b)}"
+    else:
+        label = f"{esc(r.hero_a)} $\\times$ {esc(r.hero_b)}"; eff = r.effect_pp
+    return f"{label} & {eff:+.2f}{stars(r.q)} & ({r.se_pp:.2f}) & {int(r.n_cooccur):,}"
+PW_TOPN = 30
+ctr_sig = PWC[PWC.q < .05].assign(a=lambda d: d.effect_pp.abs()).sort_values("a", ascending=False).head(PW_TOPN)
+syn_sig = PWS[PWS.q < .05].assign(a=lambda d: d.effect_pp.abs()).sort_values("a", ascending=False).head(PW_TOPN)
+PW_BODY = side_by_side([[pw_row(r, True) for r in ctr_sig.itertuples()], [pw_row(r, False) for r in syn_sig.itertuples()]], 4)
+def pw_phrase(r, counter):
+    if counter:
+        a, b, eff = (r.hero_a, r.hero_b, r.effect_pp) if r.effect_pp >= 0 else (r.hero_b, r.hero_a, -r.effect_pp)
+        return f"{esc(a)} over {esc(b)} ({eff:+.1f})"
+    return f"{esc(r.hero_a)} with {esc(r.hero_b)} ({r.effect_pp:+.1f})"
+PW_TOP_CTR = oxford(pw_phrase(r, True) for r in ctr_sig.head(3).itertuples())
+PW_TOP_SYN = oxford(pw_phrase(r, False) for r in syn_sig.head(3).itertuples())
+PWL = PWM["ladder"]
+PW_LL = [r["logloss_holdout"] for r in PWL]
+PW_VERDICT = ("lower the holdout log loss from <<PW_LL_A>> under the headline specification to <<PW_LL_S>> with the synergy block and <<PW_LL_SC>> with both blocks"
+              if PW_LL[2] < PW_LL[0] else
+              "do not improve the holdout log loss, which moves from <<PW_LL_A>> under the headline specification to <<PW_LL_S>> with the synergy block and <<PW_LL_SC>> with both blocks")
+PW_LADDER_ROWS = "\n".join(f"{esc(r['model'])} & {r['k_free']} & {r['logloss_holdout']:.4f} \\\\" for r in PWL)
+_ex = PWM["examples"]
+def ex_phrase(e, name_a, name_b, counter):
+    if e is None:
+        return f"the {name_a}--{name_b} pair is below the co-occurrence threshold"
+    v = e["effect_pp_for_first_named"]
+    return f"{v:+.1f} points (standard error {e['se_pp']:.1f}, $q={e['q']:.2f}$, {e['n']:,} matches)" if counter else \
+           f"{v:+.1f} points (standard error {e['se_pp']:.1f}, $q={e['q']:.2f}$, {e['n']:,} team instances)"
+PW_BP_THING = ex_phrase(_ex["black_panther_vs_thing"], "Black Panther", "The Thing", True)
+# how the main effects moved, and whether the moves track designated team-up exposure
+_tu_exp = {}
+for r in TU.itertuples():
+    for nm in (r.anchor, r.partner):
+        _tu_exp[nm] = _tu_exp.get(nm, 0.0) + max(r.effect_pp, 0.0)
+PW_EXP_CORR = float(PWH.diff_pp.corr(PWH.name.map(_tu_exp).fillna(0.0)))
+_up = PWH.sort_values("diff_pp", ascending=False).head(3); _down = PWH.sort_values("diff_pp").head(3)
+PW_MOVERS_UP = oxford(f"{esc(r['name'])} ({r.diff_pp:+.1f})" for _, r in _up.iterrows())
+PW_MOVERS_DOWN = oxford(f"{esc(r['name'])} ({r.diff_pp:+.1f})" for _, r in _down.iterrows())
+PW_SIG_SYN_TU = int(((PWS.q < .05) & PWS.is_teamup).sum()); PW_SIG_SYN_OTHER = int(((PWS.q < .05) & ~PWS.is_teamup).sum())
+PW_N_TU_COLS = int(PWS.is_teamup.sum()); PW_N_OTHER_COLS = int((~PWS.is_teamup).sum())
+PW_TOP_SYN_ALL_TU = bool(syn_sig.head(5).is_teamup.all())
+_bp = IFJ["examples"]["black_panther_vs_thing"]
+PW_BP_RAW = f"{100 * (_bp['bp_side_winrate'] - _bp['bp_side_winrate_without']):+.1f}"
+PW_VERDICT = (f"lower the holdout log loss from <<PW_LL_A>> under the headline specification to <<PW_LL_S>> with the "
+              f"synergy block and <<PW_LL_SC>> with both blocks, so the interactions carry predictive content beyond "
+              f"the designated team-ups"
+              if PW_LL[2] < PW_LL[0] else
+              f"do not improve the holdout log loss, which moves from <<PW_LL_A>> under the headline specification to "
+              f"<<PW_LL_S>> with the synergy block and <<PW_LL_SC>> with both blocks. Individual interactions can be "
+              f"precisely estimated while the blocks as a whole, with <<PW_K_SC>> free parameters, add more noise than "
+              f"signal to prediction. The headline model therefore keeps the parsimonious team-up block, and the "
+              f"interactions are reported as a description of the sample rather than as part of the estimate")
+PW_JEFF_DINO = ex_phrase(_ex["jeff_with_dino"], "Jeff", "Devil Dinosaur", False)
 LADDER_ROWS = "\n".join(
     f"{esc(r['model'])} & {r['k']} & {ll(r['loglik_train'])} & {r['logloss_train']:.4f} & {r['logloss_holdout']:.4f} \\\\"
     for r in LAD)
@@ -321,7 +385,7 @@ Role composition is the first identification problem. A hero coefficient should 
 credit for the fact that the hero happens to be played in a good role structure, or blame for
 being played in a bad one.
 
-The differences across structures are large. The conventional 2--2--2 composition of two
+This is not a small issue in \emph{Marvel Rivals}. The conventional 2--2--2 composition of two
 Tanks, two Damage heroes, and two Supports accounts for <<SHARE222>> of teams in the sample and
 wins <<WR222>> of its matches. A 1--3--2 composition wins <<WR132>>, and 2--1--3 wins <<WR213>>.
 These are large differences before anything has been said about which particular Tank, Damage,
@@ -452,8 +516,8 @@ Table~\ref{tab:attribcmp} reports every hero under all three rules.
 \FloatBarrier
 \section*{Why hero effects are identified within role}
 
-Hero effects are identified within role rather than across roles, for a mechanical reason.
-Changing the number of Tanks, Damage heroes, or Supports changes the team's composition, so a global
+Hero effects are identified within role, not across roles. The reason is mechanical. Changing
+the number of Tanks, Damage heroes, or Supports changes the team's composition, so a global
 normalisation asks the hero coefficients and the composition coefficients to explain nearly the
 same role-count variation.
 
@@ -493,13 +557,15 @@ distortion, and a reader can see which heroes are exposed to each.
 \FloatBarrier
 \section*{Does the structure survive out of sample?}
 
-With <<N_MATCHES>> observations and <<K_PARAMS>> parameters, in-sample fit says relatively
-little. I instead test whether the estimates survive a chronological holdout, estimating the
-model on the first <<N_TRAIN>> matches and evaluating it on the final <<N_HOLD>>, the last
-<<HOLD_DAYS>> days of the sample. A random split would make the test easier by mixing the same
-evolving meta across the training and test samples.
+With nearly half a million observations and <<K_PARAMS>> parameters, in-sample fit says relatively
+little. I instead test whether the estimated structure survives a chronological holdout.
 
-The estimates hold up in the holdout week (Figure~\ref{fig:oos}). Across heroes, the predicted and realised holdout
+I therefore estimate the model on the first <<N_TRAIN>> matches and evaluate it on the final
+<<N_HOLD>>, corresponding to the last <<HOLD_DAYS>> days of the sample. The split is
+chronological. A random split would make the test easier by mixing the same evolving meta across
+the training and test samples.
+
+The model travels well (Figure~\ref{fig:oos}). Across heroes, the predicted and realised holdout
 win rates of teams starting each hero have a correlation of <<HG_CORR>> and differ by <<HG_GAP>>
 percentage points on average. Removing the hero coefficients while keeping every other control
 reduces that correlation to <<HG_CORR0>>. Across composition structures, predicted and realised
@@ -593,7 +659,43 @@ ask whether a designated pair performs better or worse than the two heroes' indi
 would predict. <<TU1A>> with <<TU1B>> carries a premium of <<TU1V>> percentage points, <<TU2A>>
 with <<TU2B>> <<TU2V>>, <<TU3A>> with <<TU3B>> <<TU3V>>, and <<TU4A>> with <<TU4B>> <<TU4V>>. A
 premium is the increment beyond the two individual effects, so a team fielding two strong heroes
-with a positive team-up coefficient gains both hero terms plus the premium. The premium should not be read as the total value of the pair.
+with a positive team-up coefficient gains both hero terms plus the premium. Reading the premium
+as the total value of the pair would count the wrong object.
+
+Designated team-ups are a small subset of the pairwise structure a match contains. A hero's
+value can depend on who it starts alongside and, just as plausibly, on who it starts against:
+some matchups are counters. I therefore estimate a second specification that adds one
+coefficient for every hero pair that starts together at least <<PW_MIN_PAIR>> times (a synergy,
+<<PW_N_SYN>> pairs) and one for every pair that starts on opposite sides at least <<PW_MIN_PAIR>>
+times (a counter, <<PW_N_CTR>> pairs), on the same starting lineups as the headline model. The
+blocks need constraints to be identified at all. Summing a hero's synergy contrasts over its
+five teammates gives five times its own contrast, and summing its counter contrasts over six
+opponents gives six times it, so without restrictions the interaction blocks contain the main
+effects exactly. Each hero's synergies are therefore constrained to sum to zero across partners
+and its counters to sum to zero across opponents, with a further sum-to-zero within each role
+pair so that composition stays in the composition block. The main effect then reads as a hero's
+value averaged over the partners and opponents it actually faces, and each interaction is a
+deviation from that average.
+
+The main effects change definition rather than evidence. Under the headline specification a
+hero's coefficient is net of its designated team-up premiums; here it averages over every
+partner the hero actually starts with, team-ups included. The rank correlation with the headline
+estimates is <<PW_RHO_MAIN>> and the mean absolute change <<PW_MAD_MAIN>> percentage points, and
+the changes track team-up exposure (correlation <<PW_EXP_CORR>> with the sum of a hero's positive
+team-up premiums): <<PW_MOVERS_UP>> gain, while <<PW_MOVERS_DOWN>> lose. Neither version is
+wrong. They answer different questions about the same hero.
+
+After false-discovery-rate correction across all <<PW_N_ALL>> interactions, <<PW_SIG_CTR>>
+counters and <<PW_SIG_SYN>> synergies are distinguishable from zero. The largest synergies are
+<<PW_TOP_SYN>><<PW_SYN_TU_CLAUSE>>. Of the <<PW_N_TU_COLS>> designated team-ups, <<PW_SIG_SYN_TU>>
+are significant, against <<PW_SIG_SYN_OTHER>> of the <<PW_N_OTHER_COLS>> other pairs, which is
+the pattern one would expect if the game's designed synergies are the main synergies. The largest
+counters are <<PW_TOP_CTR>>. Two folk beliefs can be checked directly. Black Panther against a
+starting Thing is <<PW_BP_THING>>, so most of the raw <<PW_BP_RAW>>-point gap in Black Panther's
+win rate when a Thing is on the other side is The Thing's own strength rather than a specific
+counter. Jeff starting alongside Devil Dinosaur is <<PW_JEFF_DINO>>. On the chronological holdout
+the interaction blocks <<PW_VERDICT>> (Appendix Table~\ref{tab:pwladder}). Appendix
+Table~\ref{tab:pairwise} lists the strongest interactions of each kind.
 
 \FloatBarrier
 \section*{What the coefficients do and do not mean}
@@ -621,8 +723,8 @@ confidence intervals should be read accordingly.
 
 The data also thin out at the edges. <<POOLED_SENTENCE>> Profile privacy rises sharply with rank
 score, reaching roughly <<PRIV_HI>> above 5{,}000, and the crawl expands only through public
-profiles, so the very top of the ranked distribution is under-sampled. At this sample size, coverage at the top of the rank distribution is a more important
-limitation than ordinary sampling noise.
+profiles, so the very top of the ranked distribution is under-sampled. At this sample size the
+binding constraint is coverage at the top rather than sampling noise.
 
 \FloatBarrier
 \section*{Conclusion}
@@ -733,8 +835,28 @@ in-sample column shows how little of the improvement is overfitting.
 \end{threeparttable}
 \end{center}
 
-\begin{center}
-\captionof{figure}{Out-of-sample calibration of the headline model}\label{fig:calib}
+\vspace{6pt}
+\begin{center}\small
+\begin{threeparttable}
+\captionof{table}{Out-of-sample fit with pairwise interactions}\label{tab:pwladder}
+\begin{tabular}{l r r}
+\toprule
+Model & \multicolumn{1}{c}{Free parameters} & \multicolumn{1}{c}{Log loss (holdout)} \\
+\midrule
+<<PW_LADDER_ROWS>>
+\bottomrule
+\end{tabular}
+\begin{tablenotes}[flushleft]\footnotesize
+\item Same chronological split as Table~\ref{tab:ladder}. The synergy block replaces the
+designated team-up block, which it contains; pairs below <<PW_MIN_PAIR>> co-occurrences carry no
+coefficient. Free parameters count the coefficients remaining after the identification
+constraints.
+\end{tablenotes}
+\end{threeparttable}
+\end{center}
+
+\begin{figure}[H]\centering
+\caption{Out-of-sample calibration of the headline model}\label{fig:calib}
 \vspace{2pt}
 \begin{minipage}[c]{9.4cm}\centering
 \begin{tikzpicture}
@@ -785,7 +907,7 @@ shown for comparison. Predicted probabilities fall between <<P_MIN>> and <<P_MAX
 <<SHARE_MID>> of holdout matches are predicted between 35\% and 65\%: the model
 separates unbalanced matches well and, as it should, treats balanced ones as coin flips.
 \end{minipage}
-\end{center}
+\end{figure}
 
 \begin{landscape}
 \begin{center}
@@ -817,6 +939,37 @@ stable. The difference (W1$-$W0) is reported rather than a ratio because a ratio
 heroes whose starting-hero estimate is near zero. The better in-sample likelihood under W1, <<LL1>> against <<LL0>>, is not evidence that W1
 identifies hero strength better; part of the realised match has been placed inside the
 regressors.
+\end{minipage}
+\end{landscape}
+
+\begin{landscape}
+\begin{center}
+{\footnotesize\setlength{\tabcolsep}{5pt}\renewcommand{\arraystretch}{1.0}
+\captionof{table}{Strongest pairwise interactions on starting lineups}\label{tab:pairwise}
+\begin{tabular}{l r r r @{\hspace{2.5em}} l r r r}
+\toprule
+\multicolumn{4}{l}{\emph{Counters: A over B}} & \multicolumn{4}{l}{\emph{Synergies: A with B}} \\
+Matchup & \multicolumn{1}{c}{Effect} & \multicolumn{1}{c}{S.E.} & \multicolumn{1}{c}{Matches} &
+Pair & \multicolumn{1}{c}{Effect} & \multicolumn{1}{c}{S.E.} & \multicolumn{1}{c}{Teams} \\
+\midrule
+<<PW_BODY>>
+\bottomrule
+\end{tabular}
+}
+\end{center}
+\vspace{-2pt}
+\noindent\begin{minipage}{\linewidth}\footnotesize
+\emph{Notes.} The <<PW_TOPN>> largest counters and the <<PW_TOPN>> largest synergies among
+those significant at $q<0.05$ after Benjamini--Hochberg correction across all <<PW_N_ALL>>
+interactions (<<PW_SIG_CTR>> counters and <<PW_SIG_SYN>> synergies are significant in total).
+A counter of $+x$ means that when A starts against B, A's side wins $x$ percentage points more
+often than the two heroes' individual effects predict, at a balanced match. A synergy of $+x$
+means a team starting both A and B wins $x$ points more than their individual effects predict.
+Interactions are deviations: each hero's counters sum to zero across its opponents and its
+synergies across its partners, so a hero's main effect already includes its average matchup.
+HC1 standard errors in parentheses. Full tables:
+\texttt{results/apm\_pairwise\_counter\_<<PW_TAG>>.csv} and
+\texttt{results/apm\_pairwise\_synergy\_<<PW_TAG>>.csv}.
 \end{minipage}
 \end{landscape}
 
@@ -859,7 +1012,20 @@ subs = {
     "WR222": pct(CS.loc["2-2-2", "winrate"]), "WR132": pct(CS.loc["1-3-2", "winrate"]), "WR213": pct(CS.loc["2-1-3", "winrate"]),
     "MIN_SHAPE": str(MIN_SHAPE), "POOLED_SENTENCE": POOLED_SENTENCE, "POOLED_CLAUSE": POOLED_CLAUSE,
     "SD_RATIO": f"{SD['W1'] / SD['W0']:.1f}", "K_PARAMS": str(LAD[-1]["k"]),
-    "EX_ROLE": esc(EX["role"]),
+        "EX_ROLE": esc(EX["role"]),
+    "PW_TAG": PW_TAG.replace("_", "\\_"), "PW_MIN_PAIR": num(PWM["min_pair"]), "PW_TOPN": str(PW_TOPN),
+    "PW_N_SYN": num(PWM["n_synergy_cols"]), "PW_N_CTR": num(PWM["n_counter_cols"]), "PW_N_ALL": num(len(PWS) + len(PWC)),
+    "PW_SIG_SYN": str(PWM["n_significant_q05"]["synergy"]), "PW_SIG_CTR": str(PWM["n_significant_q05"]["counter"]),
+    "PW_RHO_MAIN": f"{PWM['main_effects_vs_specAplus']['spearman_vs_specAplus']:.3f}",
+    "PW_MAD_MAIN": f"{PWM['main_effects_vs_specAplus']['mean_abs_diff_pp']:.2f}",
+    "PW_LL_A": f"{PW_LL[0]:.4f}", "PW_LL_S": f"{PW_LL[1]:.4f}", "PW_LL_SC": f"{PW_LL[2]:.4f}",
+    "PW_TOP_CTR": PW_TOP_CTR, "PW_TOP_SYN": PW_TOP_SYN, "PW_BP_THING": PW_BP_THING, "PW_JEFF_DINO": PW_JEFF_DINO,
+        "PW_VERDICT": PW_VERDICT, "PW_LADDER_ROWS": PW_LADDER_ROWS, "PW_BODY": PW_BODY,
+    "PW_K_SC": num(PWL[-1]["k_free"]), "PW_EXP_CORR": f"{PW_EXP_CORR:.2f}",
+    "PW_MOVERS_UP": PW_MOVERS_UP, "PW_MOVERS_DOWN": PW_MOVERS_DOWN,
+    "PW_SIG_SYN_TU": str(PW_SIG_SYN_TU), "PW_SIG_SYN_OTHER": str(PW_SIG_SYN_OTHER),
+    "PW_N_TU_COLS": str(PW_N_TU_COLS), "PW_N_OTHER_COLS": num(PW_N_OTHER_COLS), "PW_BP_RAW": PW_BP_RAW,
+    "PW_SYN_TU_CLAUSE": ", all of them designated team-ups" if PW_TOP_SYN_ALL_TU else "",
     "TU1A": esc(TOP_TU.iloc[0].anchor), "TU1B": esc(TOP_TU.iloc[0].partner), "TU2A": esc(TOP_TU.iloc[1].anchor), "TU2B": esc(TOP_TU.iloc[1].partner),
     "TU3A": esc(TOP_TU.iloc[2].anchor), "TU3B": esc(TOP_TU.iloc[2].partner), "TU4A": esc(TOP_TU.iloc[3].anchor), "TU4B": esc(TOP_TU.iloc[3].partner),
     "SD0": f"{SD['W0']:.2f}", "SD2": f"{SD['W2']:.2f}", "SD1": f"{SD['W1']:.2f}",
