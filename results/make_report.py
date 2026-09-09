@@ -436,32 +436,24 @@ Figure~\ref{fig:swap} lays the three side by side.
 \label{fig:swap}
 \vspace{4pt}
 \begin{tikzpicture}[font=\small, x=1.2cm, y=1cm]
-  \node[inner sep=0] at (1,1.85) {\includegraphics[width=1.5cm]{figures/icon-spider-man.png}};
-  \node[inner sep=0] at (6,1.85) {\includegraphics[width=1.5cm]{figures/icon-elsa-bloodstone.png}};
+  \node[inner sep=0] at (1,1.62) {\includegraphics[width=1.5cm]{figures/icon-spider-man.png}};
+  \node[inner sep=0] at (6,1.62) {\includegraphics[width=1.5cm]{figures/icon-elsa-bloodstone.png}};
+  \fill (1,0.70) -- (0.88,0.84) -- (1.12,0.84) -- cycle;
+  \fill (6,0.70) -- (5.88,0.84) -- (6.12,0.84) -- cycle;
   \fill[black!22] (0,0.08) rectangle (2,0.62);
   \fill[black!58] (2,0.08) rectangle (10,0.62);
   \draw[|-|, thick] (0,0) -- (10,0);
-  \node[anchor=south] at (1,0.65) {Spider-man};
-  \node[anchor=south] at (6,0.65) {Elsa Bloodstone};
   \node[anchor=north] at (1,-0.06) {2 min};
   \node[anchor=north] at (6,-0.06) {8 min};
   \node[anchor=east] at (-0.15,0.35) {Start};
   \node[anchor=west] at (10.15,0.35) {End};
-  \tikzset{rule/.style={draw, align=center, text width=3.6cm, inner sep=4pt, minimum height=4.35cm, anchor=north}}
+  \tikzset{rule/.style={draw, align=center, text width=3.6cm, inner sep=4pt, minimum height=2.35cm, anchor=north}}
   \node[rule] at (1.55,-0.85)
-    {\textbf{Starting hero}\\(W0)\\[4pt]
-     \includegraphics[width=1.2cm]{figures/icon-spider-man.png}\\[2pt] 100\% Spider-man\\[3pt]
-     {\footnotesize\itshape ``What did you start on?''}};
+    {\textbf{Starting hero}\\(W0)\\[3pt] 100\% Spider-man\\[3pt] {\footnotesize\itshape ``What did you start on?''}};
   \node[rule] at (5,-0.85)
-    {\textbf{Most-played hero}\\(W2)\\[4pt]
-     \includegraphics[width=1.2cm]{figures/icon-elsa-bloodstone.png}\\[2pt] 100\% Elsa Bloodstone\\[3pt]
-     {\footnotesize\itshape ``What did you mostly play?''}};
+    {\textbf{Most-played hero}\\(W2)\\[3pt] 100\% Elsa Bloodstone\\[3pt] {\footnotesize\itshape ``What did you mostly play?''}};
   \node[rule] at (8.45,-0.85)
-    {\textbf{Play-time weighted}\\(W1)\\[4pt]
-     \raisebox{0.32cm}{\includegraphics[width=0.55cm]{figures/icon-spider-man.png}}\hspace{6pt}%
-     \includegraphics[width=1.2cm]{figures/icon-elsa-bloodstone.png}\\[2pt]
-     20\% Spider-man, 80\% Elsa Bloodstone\\[3pt]
-     {\footnotesize\itshape ``How was your time divided?''}};
+    {\textbf{Play-time weighted}\\(W1)\\[3pt] 20\% Spider-man, 80\% Elsa Bloodstone\\[3pt] {\footnotesize\itshape ``How was your time divided?''}};
 \end{tikzpicture}
 
 \begin{minipage}{0.92\linewidth}\footnotesize\vspace{4pt}
