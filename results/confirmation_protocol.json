@@ -1,20 +1,33 @@
 {
-  "declared_at_utc": "2026-09-09T23:50:00Z",
-  "development_snapshot": "results/dev_snapshot (manifest.json sha256; play_time_max_unix 1788865232 = 2026-09-08T11:00:32Z)",
-  "confirmation_sample": {
-    "definition": "matches whose PLAY timestamp (matches.match_time_stamp) is strictly greater than the snapshot's maximum play time, passing the identical filters (12 players, 6 per side, no is_win=2, scores present, every player with positive play time, duration >= 240 s), and inside the same balance regime",
-    "not_confirmation": "matches downloaded after the freeze but played on or before 2026-09-08T11:00:32Z (historical backfill)",
-    "regime_rule": "if an official patch that changes hero, team-up or map mechanics is released inside the window, the window ends at that patch's release time and matches played after it are excluded; the patch audit (results/patch_audit.md) records the regime boundaries",
-    "stopping_rule": "evaluate once, at the earlier of (a) 40,000 eligible confirmation matches or (b) 2026-09-30T23:59:59Z; if fewer than 20,000 eligible matches are available at (b) or at a regime break, report INCONCLUSIVE (insufficient sample) and open a new window",
-    "isolation": "confirmation matches are excluded from every design build, tuning fold, diagnostic plot, interaction selection and report decision by filtering on play time <= 1788865232; nothing in results/lineup_* reads matches beyond that bound before the lock"
+ "declared_at_utc": "2026-09-09T23:50:00Z",
+ "development_snapshot": "results/dev_snapshot (manifest.json sha256; play_time_max_unix 1788865232 = 2026-09-08T11:00:32Z)",
+ "confirmation_sample": {
+  "definition": "matches whose PLAY timestamp (matches.match_time_stamp) is strictly greater than the snapshot's maximum play time, passing the identical filters (12 players, 6 per side, no is_win=2, scores present, every player with positive play time, duration >= 240 s), and inside the same balance regime",
+  "not_confirmation": "matches downloaded after the freeze but played on or before 2026-09-08T11:00:32Z (historical backfill)",
+  "regime_rule": "if an official patch that changes hero, team-up or map mechanics is released inside the window, the window ends at that patch's release time and matches played after it are excluded; the patch audit (results/patch_audit.md) records the regime boundaries",
+  "stopping_rule": "evaluate once, at the earlier of (a) 40,000 eligible confirmation matches or (b) 2026-09-30T23:59:59Z harvest stop; if fewer than 10,000 eligible matches (amended, see amendments) report INCONCLUSIVE (insufficient sample)",
+  "isolation": "confirmation matches are excluded from every design build, tuning fold, diagnostic plot, interaction selection and report decision by filtering on play time <= 1788865232; nothing in results/lineup_* reads matches beyond that bound before the lock"
+ },
+ "lock": "the candidate specification, penalties, feature definitions and fitted coefficients are hashed into results/lineup_lock.json BEFORE any confirmation outcome is read; the baseline is the headline fit W0_specAplus (model fit 31cfdff) as published, refitted on the frozen development sample only if the patch audit removes more than 5% of it",
+ "promotion_criterion": {
+  "primary": "paired per-match log-loss improvement D = mean(loss_baseline - loss_candidate) over eligible confirmation matches, with both models predicting from pre-match information only",
+  "uncertainty": "two 95% intervals for D: (i) paired i.i.d. over matches, (ii) player-multiplicity bootstrap over the confirmation matches' players (1,000 draws); PROMOTE requires interval (ii) to exclude zero with D > 0",
+  "calibration": "candidate calibration slope in [0.85, 1.15] and |intercept| <= 0.05 on the log-odds scale, overall and within each supported rank third (dev-sample boundaries 4,443 and 4,649 on mean lobby score)",
+  "subgroups": "no supported rank third with D < -0.001",
+  "outcomes": "PROMOTE if all conditions hold; RETAIN headline if interval (ii) is entirely below zero or calibration fails; INCONCLUSIVE otherwise, including insufficient sample",
+  "after_failure": "any revised candidate needs a new confirmation window"
+ },
+ "amendments": [
+  {
+   "at_utc": "2026-09-10T00:05:00Z",
+   "before_any_confirmation_outcome_was_read": true,
+   "change": "minimum eligible sample lowered from 20,000 to 10,000",
+   "reason": "the patch audit (external fact, results/patch_audit.md) shows the Season 9.5 regime ends 2026-09-11T09:00Z, bounding the window to ~70 hours of play; a power calculation on development-fold per-match loss differences (sd ~0.05-0.10) gives SE(D) ~0.0007 at 10,000 matches, sufficient for the gains that would justify promotion (D >= 0.002); the 40,000 target and the 2026-09-30 harvest stop are unchanged"
   },
-  "lock": "the candidate specification, penalties, feature definitions and fitted coefficients are hashed into results/lineup_lock.json BEFORE any confirmation outcome is read; the baseline is the headline fit W0_specAplus (model fit 31cfdff) as published, refitted on the frozen development sample only if the patch audit removes more than 5% of it",
-  "promotion_criterion": {
-    "primary": "paired per-match log-loss improvement D = mean(loss_baseline - loss_candidate) over eligible confirmation matches, with both models predicting from pre-match information only",
-    "uncertainty": "two 95% intervals for D: (i) paired i.i.d. over matches, (ii) player-multiplicity bootstrap over the confirmation matches' players (1,000 draws); PROMOTE requires interval (ii) to exclude zero with D > 0",
-    "calibration": "candidate calibration slope in [0.85, 1.15] and |intercept| <= 0.05 on the log-odds scale, overall and within each supported rank third (dev-sample boundaries 4,443 and 4,649 on mean lobby score)",
-    "subgroups": "no supported rank third with D < -0.001",
-    "outcomes": "PROMOTE if all conditions hold; RETAIN headline if interval (ii) is entirely below zero or calibration fails; INCONCLUSIVE otherwise, including insufficient sample",
-    "after_failure": "any revised candidate needs a new confirmation window"
+  {
+   "at_utc": "2026-09-10T00:05:00Z",
+   "change": "regime boundary fixed",
+   "reason": "eligible confirmation matches are those played after 2026-09-08T11:00:32Z and before 2026-09-11T09:00:00Z (Season 10 patch)"
   }
+ ]
 }
