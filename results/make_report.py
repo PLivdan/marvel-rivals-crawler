@@ -988,9 +988,7 @@ often than the two heroes' individual effects predict, at a balanced match. A sy
 means a team starting both A and B wins $x$ points more than their individual effects predict.
 Interactions are deviations: each hero's counters sum to zero across its opponents and its
 synergies across its partners, so a hero's main effect already includes its average matchup.
-HC1 standard errors in parentheses. Full tables:
-\texttt{results/apm\_pairwise\_counter\_<<PW_TAG>>.csv} and
-\texttt{results/apm\_pairwise\_synergy\_<<PW_TAG>>.csv}.
+HC1 standard errors in parentheses.
 \end{minipage}
 \end{landscape}
 
