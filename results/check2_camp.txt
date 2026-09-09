@@ -1,0 +1,26 @@
+=== CHECK 2: is camp absolute (map side) or relative to the discovering player? ===
+
+crawled ('done') players by camp: camp0=266,498  camp1=267,910
+  share in camp 0: 49.87%   (50% => absolute; skewed => relative)
+all players by camp: camp0=2,897,982 camp1=2,897,982 (50.00% camp0)
+
+camp-0 win rate by map (absolute side => varies by map; relative => flat):
+   map_id   matches  camp0 win
+     1418   181,278     52.52%
+     1434   182,160     51.95%
+     1245   180,318     51.81%
+     2042   176,982     51.53%
+     1292   179,266     51.47%
+     1231   181,632     51.36%
+     1421   178,250     50.98%
+     1230   178,758     50.90%
+     1291   180,234     50.86%
+     1318   181,140     50.82%
+     1290   180,081     50.80%
+     1311   179,688     50.78%
+     1272   182,472     50.75%
+     1267   178,302     50.62%
+     1310   182,544     49.89%
+     1288   182,064     49.42%
+
+  spread across maps: 49.42% to 52.52%  (range 3.10 pp)

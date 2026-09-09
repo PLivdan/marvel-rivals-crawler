@@ -1,0 +1,10 @@
+=== CHECK 1: hero-list chronology (25,000-match sample) ===
+match_player_heroes has an implicit rowid, so rowid order = insertion order = API array order.
+
+player-matches with >=2 heroes : 165,705
+  LAST  entry == cur_hero_id   : 123,213 (74.36%)
+  FIRST entry == cur_hero_id   : 30,094 (18.16%)
+
+adjacent pairs in list order  : 303,397
+  hero_id ascending            : 46.60%   (100% => sorted by hero_id)
+  play_time non-increasing     : 58.24%   (100% => sorted by play_time)
