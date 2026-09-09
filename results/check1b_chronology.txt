@@ -1,0 +1,13 @@
+=== CHECK 1b: chronology broken down by hero count ===
+If the array were chronological, last==cur_hero_id should be ~100% at EVERY k.
+If cur_hero_id were simply the longest-played hero, max-playtime==cur should be ~100%.
+
+  k  player-matches  last==cur  first==cur  argmax_pt==cur  1/k baseline
+  2          40,045     73.62%      25.44%          50.92%         50.0%
+  3          22,631     74.31%      13.18%          37.03%         33.3%
+  4          10,548     75.91%       8.44%          29.87%         25.0%
+  5           4,174     76.45%       6.66%          24.48%         20.0%
+  6           1,503     77.84%       4.79%          18.43%         16.7%
+
+=== does the FIRST entry tend to be the longest-played? ===
+  first entry is argmax play_time: 55.60%  (chance ~35.3%)

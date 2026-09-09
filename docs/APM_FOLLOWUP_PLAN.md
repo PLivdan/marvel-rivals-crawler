@@ -54,6 +54,50 @@ Share of discovering players in camp 0; camp-0 win rate by map and mode. If
 relative, the 2.2-point side advantage is crawl selection and must be corrected
 before α means anything.
 
+### Results (run 8 Sep 2026, 482,997-match database)
+
+**Hero-list chronology — W0 EXISTS.** The plan's stated criterion ("last entry
+== `cur_hero_id` in ~100% of cases") is the *wrong test for this schema* and
+fails: the last entry matches only 74.4% of the time. But the array is
+chronological anyway, ordered **by first appearance**. Evidence:
+
+| test | result | reading |
+|---|---|---|
+| `hero_id` ascending | 46.60% | not sorted by id (chance ≈ 50%) |
+| `play_time` non-increasing | 58.24% | not sorted by playtime |
+| `argmax(play_time) == cur` | tracks 1/k (50.9 / 37.0 / 29.9 / 24.5 / 18.4 vs 50 / 33 / 25 / 20 / 17) | `cur_hero_id` is **not** the longest-played hero |
+| `last == cur` by k=2..6 | 73.6 / 74.3 / 75.9 / 76.5 / 77.8% — **flat** | a real ordering rule; chance would collapse with 1/k |
+| `first == cur` by k=2..6 | 25.4 / 13.2 / 8.4 / 6.7 / 4.8% — declining | more swaps ⇒ less likely to end where you started |
+| when `last != cur`, is `cur` in the array? | **97.08%** | yes — it was used earlier |
+| position of `cur` among those | position 1 in ~63% | **swap-back**: A → B → A |
+
+The mechanism: the primary key is `(match_uid, player_uid, hero_id)`, so a
+player who returns to an earlier hero gets **no second row** — that row already
+exists and holds their *total* time on it. The last array entry is therefore the
+last *newly-introduced* hero, which diverges from `cur_hero_id` precisely when
+someone swaps back. That is the entire 25% gap.
+
+**Consequence: entry 1 (by `rowid`) is the starting hero, and W0 is
+constructible.** `match_player_heroes` is not `WITHOUT ROWID`, so its implicit
+rowid preserves API array order; `ROW_NUMBER() OVER (PARTITION BY match_uid,
+player_uid ORDER BY rowid)` recovers it.
+
+Two caveats for the W0 builder:
+- Do **not** filter `play_time > 0` when locating entry 1. That filter is why
+  `cur_hero_id` was missing from the array in the residual 2.92% of cases — a
+  hero swapped to in the final seconds carries ~0 recorded time.
+- The corrected acceptance criterion is "`cur_hero_id` is recoverable from the
+  array", not "`cur_hero_id` is last".
+
+**Camp indexing — ABSOLUTE (map side), no crawl selection.** Crawled (`done`)
+players sit 49.87% in camp 0, so camp is not assigned relative to the
+discovering player. Camp-0 win rate varies across the 16 maps from 49.42% to
+52.52% (3.10 pp spread), with two maps favouring camp 1. The ~2.2-point side
+advantage is therefore **real and map-varying**, `alpha_map(m)` is justified, and
+Spec A's single intercept is mildly misspecified in pooling that spread.
+
+────────
+
 ────────
 
 ## 2. Attribution

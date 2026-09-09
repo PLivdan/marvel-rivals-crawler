@@ -1,0 +1,16 @@
+=== CHECK 1c: is the array ordered by FIRST APPEARANCE? ===
+Hypothesis: PK is (match_uid,player_uid,hero_id), so a player going A->B->A has only
+TWO rows. If the array is chronological BY FIRST APPEARANCE, the last entry is the last
+NEWLY-INTRODUCED hero, which differs from cur_hero_id exactly when the player swapped back.
+Prediction: whenever last != cur_hero_id, cur_hero_id still appears EARLIER in the array.
+
+player-matches where last != cur_hero_id : 20,426
+  ...but cur_hero_id IS in the array      : 19,830 (97.08%)
+
+position of cur_hero_id among the mismatches (1 = first/starting hero):
+  position 1:   34,934 (63.03%)
+  position 2:   12,079 (21.79%)
+  position 3:    5,274 ( 9.52%)
+  position 4:    2,124 ( 3.83%)
+  position 5:      678 ( 1.22%)
+  position 6:      339 ( 0.61%)
