@@ -1,10 +1,11 @@
 \documentclass[11pt]{article}
 \usepackage[margin=1in]{geometry}
 \usepackage{booktabs,siunitx,threeparttable,caption,amsmath,longtable,microtype}
+\usepackage{pdflscape}
 \usepackage[colorlinks=true,linkcolor=black,urlcolor=black]{hyperref}
 \newcommand{\sym}[1]{\rlap{$^{#1}$}}
 \captionsetup{font=small,labelfont=bf,skip=6pt}
-\setlength{\tabcolsep}{6pt}
+\setlength{\tabcolsep}{5pt}
 \renewcommand{\arraystretch}{1.05}
 \begin{document}
 
@@ -18,11 +19,10 @@
 \noindent\textbf{Specification.} One observation per match; the outcome is victory for
 side~0. Each hero enters as a signed contrast (own-side weight less opposing-side
 weight) under \emph{starting-lineup} attribution (W0), reduced onto a basis that
-sums to zero \emph{within each role}, so every hero receives both a coefficient
-and a standard error. Controls: a separate intercept per map, the pre-match
-rank-score differential, composition-shape indicators, and 100
-team-up contrasts. Estimated by unpenalised logit with heteroskedasticity-robust
-(HC1) standard errors.
+sums to zero \emph{within each role}, so every hero receives both a coefficient and
+a standard error. Controls: a separate intercept per map, the pre-match rank-score
+differential, composition-shape indicators, and 100 team-up contrasts.
+Estimated by unpenalised logit with heteroskedasticity-robust (HC1) standard errors.
 
 \vspace{6pt}
 \noindent\textbf{The estimand is intention-to-treat.} W0 is the hero each player
@@ -30,152 +30,45 @@ team-up contrasts. Estimated by unpenalised logit with heteroskedasticity-robust
 chronological by first appearance. It is the only attribution fixed before any
 outcome information exists. A player who starts on a hero and abandons it after
 thirty seconds still carries full weight, so these effects are diluted by
-non-compliance --- but how often a hero gets abandoned is part of its value, not
-an error to remove.
+non-compliance --- but how often a hero gets abandoned is part of its value, not an
+error to remove.
 
 \vspace{6pt}
 \noindent\textbf{Why not play-time weighting.} Table~\ref{tab:attrib} shows effect
 magnitude rising monotonically with how much post-outcome information the
 attribution uses. The best-\emph{fitting} rule is the most contaminated: play-time
 weighting predicts better precisely because its regressors encode what happened.
-Its effects are roughly 2.5 times larger than W0's while the ranking is
-substantially preserved.
 
 \vspace{6pt}
 \noindent\textbf{Why estimates are within role.} Cross-role comparisons are not a
-hero property but a composition property. The composition-shape block can
-reproduce the role-count differential \emph{exactly}, so under a single global
-sum-to-zero constraint the hero and shape blocks are collinear in that direction
-and are separated only by the 0.16\% of teams pooled into an ``other'' category.
-Constraining $\beta$ to sum to zero within each role makes it orthogonal to every
-role indicator, so composition can only land in the shape block, where the full
-sample identifies it. Refitting under this constraint leaves the reported
-estimates numerically unchanged (Spearman 0.9999, mean absolute difference
-0.010~pp), confirming that the earlier post-hoc projection was already removing
-exactly the ill-conditioned direction.
-
-{\footnotesize
-\begin{longtable}{l r c c r}
-\caption{Hero adjusted plus--minus, relative to an average hero of the same role}
-\label{tab:main} \\
-\toprule
-& \multicolumn{1}{c}{APM} & \multicolumn{1}{c}{Std.\ error} &
-\multicolumn{1}{c}{95\% CI} & \multicolumn{1}{c}{W1} \\
-\midrule
-\endfirsthead
-\multicolumn{5}{l}{\emph{Table \ref{tab:main}, continued}} \\
-\toprule
-& \multicolumn{1}{c}{APM} & \multicolumn{1}{c}{Std.\ error} &
-\multicolumn{1}{c}{95\% CI} & \multicolumn{1}{c}{W1} \\
-\midrule
-\endhead
-\midrule
-\multicolumn{5}{r}{\emph{continued on next page}} \\
-\endfoot
-\midrule
-Matches & \multicolumn{4}{l}{477,483} \\
-Player--matches & \multicolumn{4}{l}{3,812,088} \\
-Heroes & \multicolumn{4}{l}{55} \\
-Log-likelihood & \multicolumn{4}{l}{-320,067.7} \\
-\bottomrule
-\endlastfoot
-\multicolumn{5}{l}{\emph{Panel A: Tank \ (15 heroes)}} \\[2pt]
-The Thing & 5.46\sym{***} & (0.204) & [5.06, 5.86] & 7.21 \\
-Magneto & 1.96\sym{***} & (0.139) & [1.69, 2.24] & 3.57 \\
-Angela & 1.87\sym{***} & (0.261) & [1.36, 2.38] & 2.68 \\
-Peni Parker & 1.51\sym{***} & (0.328) & [0.86, 2.15] & 7.41 \\
-Hulk & 1.33\sym{***} & (0.219) & [0.90, 1.76] & 3.55 \\
-Thor & 1.29\sym{***} & (0.219) & [0.86, 1.72] & 0.65 \\
-The Hood & 0.45\sym{**} & (0.172) & [0.11, 0.78] & 6.52 \\
-Devil Dinosaur & -0.03 & (0.231) & [-0.48, 0.42] & -2.24 \\
-Groot & -0.67\sym{**} & (0.290) & [-1.23, -0.10] & -3.79 \\
-Venom & -0.93\sym{***} & (0.219) & [-1.36, -0.51] & -1.35 \\
-Doctor Strange & -0.98\sym{***} & (0.202) & [-1.37, -0.58] & -6.82 \\
-Captain America & -1.22\sym{***} & (0.352) & [-1.91, -0.53] & -1.78 \\
-Emma Frost & -1.77\sym{***} & (0.192) & [-2.15, -1.39] & -6.68 \\
-Rogue & -3.41\sym{***} & (0.344) & [-4.09, -2.74] & -1.78 \\
-Deadpool (Vanguard) & -4.86\sym{***} & (0.252) & [-5.36, -4.37] & -7.15 \\
-\addlinespace[4pt]
-\multicolumn{5}{l}{\emph{Panel B: Damage \ (27 heroes)}} \\[2pt]
-Black Cat & 4.85\sym{***} & (0.260) & [4.34, 5.36] & 11.62 \\
-Magik & 3.47\sym{***} & (0.219) & [3.04, 3.90] & 14.57 \\
-Storm & 3.09\sym{***} & (0.305) & [2.49, 3.68] & 10.27 \\
-Daredevil & 2.92\sym{***} & (0.217) & [2.50, 3.35] & 8.47 \\
-Mister Fantastic & 2.52\sym{***} & (0.351) & [1.83, 3.21] & 3.95 \\
-Iron Man & 1.34\sym{***} & (0.279) & [0.79, 1.89] & 3.10 \\
-Iron Fist & 1.32\sym{***} & (0.224) & [0.88, 1.76] & 4.52 \\
-Hela & 1.14\sym{***} & (0.199) & [0.75, 1.53] & 1.22 \\
-Winter Soldier & 1.00\sym{***} & (0.141) & [0.73, 1.28] & 0.17 \\
-Wolverine & 0.82\sym{**} & (0.317) & [0.20, 1.44] & 0.21 \\
-Spider-man & 0.58\sym{***} & (0.175) & [0.24, 0.93] & 2.90 \\
-Moon Knight & 0.10 & (0.297) & [-0.49, 0.68] & -3.37 \\
-Black Widow & 0.02 & (0.200) & [-0.37, 0.42] & -1.24 \\
-Blade & -0.20 & (0.317) & [-0.82, 0.43] & 1.09 \\
-Black Panther & -0.21 & (0.239) & [-0.68, 0.26] & 2.87 \\
-Human Torch & -0.28 & (0.351) & [-0.97, 0.41] & 4.56 \\
-Elsa Bloodstone & -0.39 & (0.229) & [-0.83, 0.06] & -0.12 \\
-Psylocke & -0.58 & (0.342) & [-1.25, 0.09] & 1.54 \\
-Deadpool (Duelist) & -0.67\sym{***} & (0.220) & [-1.10, -0.24] & 1.85 \\
-Namor & -0.82\sym{***} & (0.243) & [-1.30, -0.34] & -7.57 \\
-Hawkeye & -1.22\sym{***} & (0.341) & [-1.89, -0.55] & -2.25 \\
-The Punisher & -1.81\sym{***} & (0.262) & [-2.33, -1.30] & -10.45 \\
-Star-lord & -2.41\sym{***} & (0.300) & [-3.00, -1.82] & -4.05 \\
-Scarlet Witch & -2.49\sym{***} & (0.414) & [-3.30, -1.68] & -5.91 \\
-Squirrel Girl & -3.78\sym{***} & (0.350) & [-4.46, -3.09] & -16.61 \\
-Cyclops & -4.04\sym{***} & (0.195) & [-4.42, -3.66] & -7.65 \\
-Phoenix & -4.28\sym{***} & (0.345) & [-4.96, -3.61] & -13.67 \\
-\addlinespace[4pt]
-\multicolumn{5}{l}{\emph{Panel C: Support \ (13 heroes)}} \\[2pt]
-Mantis & 6.76\sym{***} & (0.181) & [6.40, 7.11] & 13.50 \\
-Rocket Raccoon & 4.14\sym{***} & (0.150) & [3.85, 4.44] & 5.18 \\
-Ultron & 3.59\sym{***} & (0.297) & [3.01, 4.17] & 6.76 \\
-Adam Warlock & 2.08\sym{***} & (0.315) & [1.47, 2.70] & 3.93 \\
-Loki & 1.18\sym{***} & (0.268) & [0.65, 1.70] & 1.84 \\
-Cloak \& Dagger & -0.04 & (0.170) & [-0.37, 0.29] & 0.38 \\
-Gambit & -0.30 & (0.210) & [-0.71, 0.11] & -0.64 \\
-Invisible Woman & -1.38\sym{***} & (0.151) & [-1.67, -1.08] & -5.39 \\
-Jeff The Land Shark & -1.75\sym{***} & (0.233) & [-2.21, -1.29] & -5.01 \\
-Jubilee & -1.91\sym{***} & (0.172) & [-2.25, -1.58] & 0.32 \\
-Luna Snow & -3.01\sym{***} & (0.167) & [-3.33, -2.68] & -7.25 \\
-White Fox & -3.48\sym{***} & (0.208) & [-3.89, -3.07] & -6.69 \\
-Deadpool (Strategist) & -5.89\sym{***} & (0.210) & [-6.30, -5.48] & -6.91 \\
-\end{longtable}
-\noindent\begin{minipage}{\linewidth}\footnotesize
-\emph{Notes.} Units are percentage points of win probability evaluated at a balanced
-match ($\partial p/\partial x=\beta/4$). Standard errors in parentheses are HC1 and are
-propagated through the within-role contrast by the delta method. Stars denote
-Benjamini--Hochberg false-discovery-rate control across the 55-hero family:
-$^{*}$~$q<0.10$, $^{**}$~$q<0.05$, $^{***}$~$q<0.01$; 10 of the 55 heroes are
-not distinguishable from their role average. The final column repeats the estimate under
-play-time attribution (W1) rather than starting-lineup attribution (W0), on the
-\emph{same} 477,483-match sample.
-Sample: 482,997 matches crawled, less
-2,139 containing draws ($\texttt{is\_win}=2$),
-19 with incomplete play time, and
-3,356 below a 240-second forfeit floor. Four team-up
-contrasts were structurally empty and dropped.
-\end{minipage}
-}
+hero property but a composition property. The composition-shape block can reproduce
+the role-count differential \emph{exactly}, so under a single global sum-to-zero
+constraint the hero and shape blocks are collinear in that direction and are
+separated only by the 0.16\% of teams pooled into an ``other'' category. Constraining
+$\beta$ to sum to zero within each role makes it orthogonal to every role indicator,
+so composition can only land in the shape block, where the full sample identifies it.
+Refitting under this constraint leaves the estimates numerically unchanged (Spearman
+0.9999, mean absolute difference 0.010~pp), confirming that the earlier post-hoc
+projection was already removing exactly the ill-conditioned direction.
 
 \begin{table}[t]\centering\small
 \begin{threeparttable}
 \caption{Effect magnitude rises with post-outcome contamination}\label{tab:attrib}
-\begin{tabular}{l l r r r}
+\begin{tabular}{l l r r r r}
 \toprule
 Rule & Attribution & \multicolumn{1}{c}{Log-lik.} & \multicolumn{1}{c}{Effect s.d.} &
-\multicolumn{1}{c}{vs W0} \\
+\multicolumn{1}{c}{vs W0} & \multicolumn{1}{c}{$\rho$ with W0} \\
 \midrule
-\textbf{W0} & starting lineup (pre-outcome) & $-320{,}122$ & \textbf{2.60} & 1.00$\times$ \\
-W2 & dominant hero & $-305{,}869$ & 4.27 & 1.64$\times$ \\
-W1 & play-time weighted & $-297{,}648$ & 6.38 & 2.45$\times$ \\
+\textbf{W0} & starting lineup (pre-outcome) & $-320{,}122$ & \textbf{2.60} & 1.00$\times$ & {---} \\
+W2 & dominant hero & $-305{,}869$ & 4.27 & 1.64$\times$ & 0.937 \\
+W1 & play-time weighted & $-297{,}648$ & 6.38 & 2.45$\times$ & 0.891 \\
 \bottomrule
 \end{tabular}
 \begin{tablenotes}[flushleft]\footnotesize
 \item All three fitted on the same 477,483 matches. Effect s.d.\ is the
-standard deviation of within-role estimates in percentage points. Rank agreement
-with W0: $\rho=0.937$ (W2), $\rho=0.891$ (W1). Squirrel Girl reads $-3.76$ under
-W0, $-8.62$ under W2 and $-16.61$ under W1. Higher log-likelihood here indicates
-worse identification, not a better model.
+standard deviation of within-role estimates in percentage points; $\rho$ is Spearman
+rank correlation. Higher log-likelihood here indicates worse identification, not a
+better model.
 \end{tablenotes}
 \end{threeparttable}
 \end{table}
@@ -197,11 +90,10 @@ Tanks & \multicolumn{1}{c}{Teams} & \multicolumn{1}{c}{Win rate (\%)} &
 \end{tabular}
 \begin{tablenotes}[flushleft]\footnotesize
 \item Composition from each player's play-time-dominant hero. The relationship is an
-inverted~U peaking at the 2--2--2 standard that 76\% of teams field, so more Tanks is
-not better. A term linear in tank counts cannot represent this shape; because teams
-fielding too few Tanks outnumber those fielding too many by roughly four to one, the
-fitted slope is dragged positive. This is the artifact the within-role normalisation
-in Table~\ref{tab:main} removes.
+inverted~U peaking at the 2--2--2 standard that 76\% of teams field. A term linear in
+tank counts cannot represent this shape; because teams fielding too few Tanks
+outnumber those fielding too many by roughly four to one, a fitted slope is dragged
+positive. This is the artifact the within-role constraint removes.
 \end{tablenotes}
 \end{threeparttable}
 \end{table}
@@ -216,80 +108,239 @@ Check & Result & Interpretation \\
 Placebo (permuted heroes) & $0.023$ vs $0.881$ & 97.4\% of signal destroyed \\
 Sum-to-zero normalisation & $-1.1\times10^{-16}$ & holds at machine precision \\
 Rank agreement, raw win rates & $\rho=0.949$ & up from $0.703$ before correction \\
-Attribution robustness (W1 vs W2) & $\rho=0.954$ & ranking stable; magnitudes are not \\
+Within-role reparameterisation & $\rho=0.9999$ & estimates numerically unchanged \\
+Camp indexing & 49.87\% camp 0 & absolute map side, no crawl selection \\
 \bottomrule
 \end{tabular}
 \begin{tablenotes}[flushleft]\footnotesize
-\item The placebo shuffles hero assignment against outcomes and refits; a placebo that
-failed would invalidate the specification. Rank agreement is Spearman's $\rho$ against
-play-time-weighted raw win rates. Under W2 the ranking is preserved but effect sizes
-roughly halve (mean absolute difference 2.08 points; Squirrel Girl moves from $-16.79$
-to $-9.02$), so the \emph{ordering} should be treated as the result and magnitudes as
-an upper bound.
+\item The placebo shuffles hero assignment against outcomes and refits; a placebo
+that failed would invalidate the specification. It was run under play-time
+attribution on the same pipeline. Camp-0 win rate varies 49.42\%--52.52\% across the
+16 maps, which is why each map carries its own intercept.
 \end{tablenotes}
 \end{threeparttable}
 \end{table}
 
-\begin{table}[t]\centering\small
-\begin{threeparttable}
-\caption{Team-up synergies, largest and smallest}\label{tab:teamups}
-\begin{tabular}{l r c}
+\begin{landscape}
+{\footnotesize
+\begin{longtable}{l r c c r r r r}
+\caption{Hero adjusted plus--minus, relative to an average hero of the same role}
+\label{tab:main} \\
 \toprule
-Team-up & \multicolumn{1}{c}{Premium} & \multicolumn{1}{c}{Std.\ error} \\
+& \multicolumn{1}{c}{APM} & \multicolumn{1}{c}{Std.\ error} &
+\multicolumn{1}{c}{95\% CI} & \multicolumn{1}{c}{W2} &
+\multicolumn{1}{c}{W1} & \multicolumn{1}{c}{W1$-$W0} &
+\multicolumn{1}{c}{$q$} \\
 \midrule
-SQUIRREL MISSILE & 8.66 & (0.965) \\
-BLADE OF KHONSHU & 8.30 & (0.851) \\
-MR. \& MRS. X & 6.95 & (0.472) \\
-FLAWLESS DESIGN & 6.82 & (0.768) \\
-KUMIHO PALM & 6.61 & (0.498) \\
-STAR BLOSSOM & 4.27 & (0.503) \\
-\addlinespace[3pt]
-\multicolumn{3}{c}{\emph{$\cdots$ 90 team-ups omitted $\cdots$}} \\
-\addlinespace[3pt]
-COMPREHENSIVE DEFENSE & -1.80 & (0.741) \\
-STORMING IGNITION & -1.80 & (1.057) \\
-DIMENSIONAL SHORTCUT & -2.09 & (0.666) \\
-BINDING TIES & -2.24 & (0.627) \\
+\endfirsthead
+\multicolumn{8}{l}{\emph{Table \ref{tab:main}, continued}} \\
+\toprule
+& \multicolumn{1}{c}{APM} & \multicolumn{1}{c}{Std.\ error} &
+\multicolumn{1}{c}{95\% CI} & \multicolumn{1}{c}{W2} &
+\multicolumn{1}{c}{W1} & \multicolumn{1}{c}{W1$-$W0} &
+\multicolumn{1}{c}{$q$} \\
+\midrule
+\endhead
+\midrule
+\multicolumn{8}{r}{\emph{continued on next page}} \\
+\endfoot
+\midrule
+Matches & \multicolumn{7}{l}{477,483} \\
+Player--matches & \multicolumn{7}{l}{5,729,796} \\
+Heroes & \multicolumn{7}{l}{55} \\
+Log-likelihood & \multicolumn{7}{l}{-320,067.7} \\
 \bottomrule
-\end{tabular}
-\begin{tablenotes}[flushleft]\footnotesize
-\item The premium a pair earns \emph{beyond} what its two heroes contribute
-individually, in percentage points, under W2 attribution. Median absolute effect across
-all 100 team-ups is 2.08 points. Squirrel Missile is the largest while Squirrel
-Girl is the weakest Damage hero individually, which is the separation of solo value
-from pair synergy the specification is built to make.
-\end{tablenotes}
-\end{threeparttable}
-\end{table}
+\endlastfoot
+\multicolumn{8}{l}{\emph{Panel A: Tank} \ (15 heroes)} \\[2pt]
+The Thing & 5.46\sym{***} & (0.204) & [5.06, 5.86] & 4.94 & 7.21 & +1.75 & 0.000 \\
+Magneto & 1.96\sym{***} & (0.139) & [1.69, 2.24] & 0.55 & 3.57 & +1.60 & 0.000 \\
+Angela & 1.87\sym{***} & (0.261) & [1.36, 2.38] & 2.00 & 2.68 & +0.81 & 0.000 \\
+Peni Parker & 1.51\sym{***} & (0.328) & [0.86, 2.15] & 10.18 & 7.41 & +5.90 & 0.000 \\
+Hulk & 1.33\sym{***} & (0.219) & [0.90, 1.76] & 2.03 & 3.55 & +2.21 & 0.000 \\
+Thor & 1.29\sym{***} & (0.219) & [0.86, 1.72] & 0.73 & 0.65 & -0.64 & 0.000 \\
+The Hood & 0.45\sym{**} & (0.172) & [0.11, 0.78] & 0.35 & 6.52 & +6.08 & 0.012 \\
+Devil Dinosaur & -0.03 & (0.231) & [-0.48, 0.42] & -0.56 & -2.24 & -2.21 & 0.907 \\
+Groot & -0.67\sym{**} & (0.290) & [-1.23, -0.10] & -1.52 & -3.79 & -3.13 & 0.027 \\
+Venom & -0.93\sym{***} & (0.219) & [-1.36, -0.51] & -1.25 & -1.35 & -0.41 & 0.000 \\
+Doctor Strange & -0.98\sym{***} & (0.202) & [-1.37, -0.58] & -2.55 & -6.82 & -5.85 & 0.000 \\
+Captain America & -1.22\sym{***} & (0.352) & [-1.91, -0.53] & -0.51 & -1.78 & -0.57 & 0.001 \\
+Emma Frost & -1.77\sym{***} & (0.192) & [-2.15, -1.39] & -4.62 & -6.68 & -4.91 & 0.000 \\
+Rogue & -3.41\sym{***} & (0.344) & [-4.09, -2.74] & -3.98 & -1.78 & +1.64 & 0.000 \\
+Deadpool (Vanguard) & -4.86\sym{***} & (0.252) & [-5.36, -4.37] & -5.79 & -7.15 & -2.28 & 0.000 \\
+\addlinespace[4pt]
+\multicolumn{8}{l}{\emph{Panel B: Damage} \ (27 heroes)} \\[2pt]
+Black Cat & 4.85\sym{***} & (0.260) & [4.34, 5.36] & 7.74 & 11.62 & +6.77 & 0.000 \\
+Magik & 3.47\sym{***} & (0.219) & [3.04, 3.90] & 7.94 & 14.57 & +11.11 & 0.000 \\
+Storm & 3.09\sym{***} & (0.305) & [2.49, 3.68] & 6.57 & 10.27 & +7.18 & 0.000 \\
+Daredevil & 2.92\sym{***} & (0.217) & [2.50, 3.35] & 5.70 & 8.47 & +5.55 & 0.000 \\
+Mister Fantastic & 2.52\sym{***} & (0.351) & [1.83, 3.21] & 3.02 & 3.95 & +1.43 & 0.000 \\
+Iron Man & 1.34\sym{***} & (0.279) & [0.79, 1.89] & 2.21 & 3.10 & +1.76 & 0.000 \\
+Iron Fist & 1.32\sym{***} & (0.224) & [0.88, 1.76] & 2.84 & 4.52 & +3.19 & 0.000 \\
+Hela & 1.14\sym{***} & (0.199) & [0.75, 1.53] & 1.04 & 1.22 & +0.08 & 0.000 \\
+Winter Soldier & 1.00\sym{***} & (0.141) & [0.73, 1.28] & -0.07 & 0.17 & -0.83 & 0.000 \\
+Wolverine & 0.82\sym{**} & (0.317) & [0.20, 1.44] & 0.62 & 0.21 & -0.61 & 0.012 \\
+Spider-man & 0.58\sym{***} & (0.175) & [0.24, 0.93] & 1.48 & 2.90 & +2.32 & 0.001 \\
+Moon Knight & 0.10 & (0.297) & [-0.49, 0.68] & -2.01 & -3.37 & -3.47 & 0.792 \\
+Black Widow & 0.02 & (0.200) & [-0.37, 0.42] & -0.96 & -1.24 & -1.26 & 0.907 \\
+Blade & -0.20 & (0.317) & [-0.82, 0.43] & 0.28 & 1.09 & +1.28 & 0.578 \\
+Black Panther & -0.21 & (0.239) & [-0.68, 0.26] & 1.20 & 2.87 & +3.08 & 0.423 \\
+Human Torch & -0.28 & (0.351) & [-0.97, 0.41] & 1.74 & 4.56 & +4.84 & 0.468 \\
+Elsa Bloodstone & -0.39 & (0.229) & [-0.83, 0.06] & -0.46 & -0.12 & +0.26 & 0.108 \\
+Psylocke & -0.58 & (0.342) & [-1.25, 0.09] & 0.08 & 1.54 & +2.12 & 0.106 \\
+Deadpool (Duelist) & -0.67\sym{***} & (0.220) & [-1.10, -0.24] & 0.48 & 1.85 & +2.52 & 0.003 \\
+Namor & -0.82\sym{***} & (0.243) & [-1.30, -0.34] & -3.87 & -7.57 & -6.75 & 0.001 \\
+Hawkeye & -1.22\sym{***} & (0.341) & [-1.89, -0.55] & -1.31 & -2.25 & -1.03 & 0.001 \\
+The Punisher & -1.81\sym{***} & (0.262) & [-2.33, -1.30] & -5.38 & -10.45 & -8.64 & 0.000 \\
+Star-lord & -2.41\sym{***} & (0.300) & [-3.00, -1.82] & -2.64 & -4.05 & -1.64 & 0.000 \\
+Scarlet Witch & -2.49\sym{***} & (0.414) & [-3.30, -1.68] & -4.65 & -5.91 & -3.43 & 0.000 \\
+Squirrel Girl & -3.78\sym{***} & (0.350) & [-4.46, -3.09] & -8.62 & -16.61 & -12.83 & 0.000 \\
+Cyclops & -4.04\sym{***} & (0.195) & [-4.42, -3.66] & -5.45 & -7.65 & -3.61 & 0.000 \\
+Phoenix & -4.28\sym{***} & (0.345) & [-4.96, -3.61] & -7.54 & -13.67 & -9.38 & 0.000 \\
+\addlinespace[4pt]
+\multicolumn{8}{l}{\emph{Panel C: Support} \ (13 heroes)} \\[2pt]
+Mantis & 6.76\sym{***} & (0.181) & [6.40, 7.11] & 9.88 & 13.50 & +6.74 & 0.000 \\
+Rocket Raccoon & 4.14\sym{***} & (0.150) & [3.85, 4.44] & 4.50 & 5.18 & +1.03 & 0.000 \\
+Ultron & 3.59\sym{***} & (0.297) & [3.01, 4.17] & 6.92 & 6.76 & +3.17 & 0.000 \\
+Adam Warlock & 2.08\sym{***} & (0.315) & [1.47, 2.70] & 4.11 & 3.93 & +1.84 & 0.000 \\
+Loki & 1.18\sym{***} & (0.268) & [0.65, 1.70] & 2.14 & 1.84 & +0.66 & 0.000 \\
+Cloak \& Dagger & -0.04 & (0.170) & [-0.37, 0.29] & -1.84 & 0.38 & +0.42 & 0.852 \\
+Gambit & -0.30 & (0.210) & [-0.71, 0.11] & -2.07 & -0.64 & -0.34 & 0.178 \\
+Invisible Woman & -1.38\sym{***} & (0.151) & [-1.67, -1.08] & -3.32 & -5.39 & -4.01 & 0.000 \\
+Jeff The Land Shark & -1.75\sym{***} & (0.233) & [-2.21, -1.29] & -3.04 & -5.01 & -3.27 & 0.000 \\
+Jubilee & -1.91\sym{***} & (0.172) & [-2.25, -1.58] & -1.94 & 0.32 & +2.23 & 0.000 \\
+Luna Snow & -3.01\sym{***} & (0.167) & [-3.33, -2.68] & -5.00 & -7.25 & -4.24 & 0.000 \\
+White Fox & -3.48\sym{***} & (0.208) & [-3.89, -3.07] & -4.73 & -6.69 & -3.21 & 0.000 \\
+Deadpool (Strategist) & -5.89\sym{***} & (0.210) & [-6.30, -5.48] & -5.62 & -6.91 & -1.02 & 0.000 \\
+\end{longtable}
+}
+
+\noindent\begin{minipage}{\linewidth}\footnotesize
+\emph{Notes.} All 55 heroes are listed; none are omitted. Units are percentage points
+of win probability at a balanced match ($\partial p/\partial x=\beta/4$). Standard
+errors in parentheses are HC1, propagated through the within-role contrast by the
+delta method. Stars denote Benjamini--Hochberg false-discovery-rate control across
+the 55-hero family: \sym{*}~$q<0.10$, \sym{**}~$q<0.05$, \sym{***}~$q<0.01$;
+10 of the 55 are not distinguishable from their role average. \emph{W2} and
+\emph{W1} repeat the estimate under dominant-hero and play-time attribution on the
+same sample, and \emph{W1$-$W0} is their difference in points --- a per-hero measure of how much
+play-time attribution inflates the effect. A ratio is not reported because it
+diverges for heroes whose W0 estimate is near zero. Under the within-role constraint
+the fitted coefficient already \emph{is} the within-role effect, so no separate
+unconstrained column exists. Sample: 482,997 matches crawled, less
+2,139 containing draws ($\texttt{is\_win}=2$),
+19 with incomplete play time, and
+3,356 below a 240-second forfeit floor. Four team-up
+contrasts were structurally empty and dropped.
+\end{minipage}
+\end{landscape}
+
+\begin{landscape}
+{\footnotesize
+\begin{longtable}{l r c @{\hspace{2.2em}} l r c}
+\caption{Team-up synergies, all 100 pairs}\label{tab:teamups} \\
+\toprule
+Team-up & \multicolumn{1}{c}{Premium} & \multicolumn{1}{c}{Std.\ err.} &
+Team-up & \multicolumn{1}{c}{Premium} & \multicolumn{1}{c}{Std.\ err.} \\
+\midrule
+\endfirsthead
+\multicolumn{6}{l}{\emph{Table \ref{tab:teamups}, continued}} \\
+\toprule
+Team-up & \multicolumn{1}{c}{Premium} & \multicolumn{1}{c}{Std.\ err.} &
+Team-up & \multicolumn{1}{c}{Premium} & \multicolumn{1}{c}{Std.\ err.} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Squirrel Girl $\times$ Iron Man & 8.66 & (0.965) & Angela $\times$ Loki & 1.35 & (0.957) \\
+Blade $\times$ Moon Knight & 8.30 & (0.851) & Invisible Woman $\times$ Human Torch & 1.32 & (0.507) \\
+Rogue $\times$ Gambit & 6.95 & (0.472) & Gambit $\times$ Magneto & 1.31 & (0.277) \\
+Adam Warlock $\times$ Ultron & 6.82 & (0.768) & Star-lord $\times$ Groot & 1.24 & (0.784) \\
+Iron Fist $\times$ White Fox & 6.61 & (0.498) & Elsa Bloodstone $\times$ Devil Dinosaur & 1.21 & (0.583) \\
+Mantis $\times$ Star-lord & 4.27 & (0.503) & The Thing $\times$ Invisible Woman & 1.20 & (0.358) \\
+The Punisher $\times$ Rocket Raccoon & 4.13 & (0.422) & Rogue $\times$ Magneto & 1.07 & (0.501) \\
+Storm $\times$ Jeff The Land Shark & 3.86 & (0.667) & Cloak \& Dagger $\times$ Luna Snow & 1.07 & (0.318) \\
+Human Torch $\times$ Jubilee & 3.71 & (0.469) & Captain America $\times$ Winter Soldier & 0.98 & (0.672) \\
+Loki $\times$ Mantis & 3.53 & (0.667) & Namor $\times$ Hulk & 0.86 & (0.585) \\
+Doctor Strange $\times$ Hulk & 3.47 & (0.603) & Devil Dinosaur $\times$ Jeff The Land Shark & 0.83 & (0.679) \\
+Magik $\times$ The Hood & 3.36 & (0.295) & Phoenix $\times$ Rogue & 0.79 & (1.066) \\
+Adam Warlock $\times$ Storm & 3.28 & (1.149) & Iron Fist $\times$ The Thing & 0.73 & (0.490) \\
+Luna Snow $\times$ White Fox & 3.19 & (0.447) & Emma Frost $\times$ Luna Snow & 0.70 & (0.332) \\
+Peni Parker $\times$ Rocket Raccoon & 3.05 & (0.543) & Wolverine $\times$ Cyclops & 0.68 & (0.881) \\
+Cyclops $\times$ Phoenix & 2.79 & (0.641) & White Fox $\times$ Psylocke & 0.61 & (0.778) \\
+Mantis $\times$ Adam Warlock & 2.76 & (0.831) & Peni Parker $\times$ Black Panther & 0.52 & (1.041) \\
+Cloak \& Dagger $\times$ The Hood & 2.60 & (0.233) & Rocket Raccoon $\times$ Squirrel Girl & 0.50 & (0.726) \\
+Doctor Strange $\times$ Invisible Woman & 2.58 & (0.326) & Loki $\times$ Hela & 0.45 & (0.708) \\
+Scarlet Witch $\times$ Jubilee & 2.47 & (0.510) & Hela $\times$ Namor & 0.21 & (0.552) \\
+Jubilee $\times$ The Hood & 2.46 & (0.236) & Gambit $\times$ Jubilee & 0.21 & (0.322) \\
+Black Widow $\times$ Phoenix & 2.44 & (0.859) & Mister Fantastic $\times$ The Thing & 0.17 & (0.773) \\
+Hulk $\times$ Captain America & 2.39 & (0.998) & Luna Snow $\times$ Adam Warlock & 0.16 & (0.763) \\
+Hawkeye $\times$ Psylocke & 2.35 & (0.907) & Devil Dinosaur $\times$ The Punisher & 0.10 & (0.700) \\
+Squirrel Girl $\times$ Spider-man & 2.17 & (0.959) & Namor $\times$ Luna Snow & 0.09 & (0.483) \\
+Ultron $\times$ Peni Parker & 2.11 & (1.072) & Spider-man $\times$ Venom & 0.06 & (0.424) \\
+Spider-man $\times$ Peni Parker & 2.02 & (0.714) & Groot $\times$ Jeff The Land Shark & -0.02 & (0.819) \\
+Winter Soldier $\times$ Elsa Bloodstone & 2.00 & (0.442) & Psylocke $\times$ Cloak \& Dagger & -0.03 & (0.514) \\
+Phoenix $\times$ Hela & 1.98 & (0.808) & Venom $\times$ Blade & -0.04 & (0.750) \\
+Moon Knight $\times$ Cloak \& Dagger & 1.97 & (0.465) & Captain America $\times$ Thor & -0.06 & (1.079) \\
+Star-lord $\times$ Adam Warlock & 1.95 & (1.190) & Moon Knight $\times$ Elsa Bloodstone & -0.06 & (0.940) \\
+Iron Man $\times$ Thor & 1.87 & (0.688) & Winter Soldier $\times$ The Punisher & -0.07 & (0.538) \\
+Scarlet Witch $\times$ Doctor Strange & 1.85 & (0.628) & Magneto $\times$ Emma Frost & -0.12 & (0.313) \\
+Groot $\times$ Mantis & 1.84 & (0.535) & Black Cat $\times$ Black Panther & -0.25 & (1.018) \\
+White Fox $\times$ Black Cat & 1.77 & (0.587) & Jubilee $\times$ Blade & -0.41 & (0.519) \\
+Black Panther $\times$ Storm & 1.77 & (0.996) & Invisible Woman $\times$ Mister Fantastic & -0.44 & (0.614) \\
+Hela $\times$ Venom & 1.74 & (0.552) & The Thing $\times$ Human Torch & -0.45 & (0.548) \\
+Thor $\times$ Hela & 1.71 & (0.552) & Psylocke $\times$ Emma Frost & -0.49 & (0.615) \\
+Venom $\times$ Phoenix & 1.67 & (0.596) & Magneto $\times$ Scarlet Witch & -0.55 & (0.511) \\
+Mister Fantastic $\times$ Rocket Raccoon & 1.62 & (0.591) & Rocket Raccoon $\times$ Groot & -0.55 & (0.518) \\
+Blade $\times$ Captain America & 1.62 & (0.981) & Thor $\times$ Angela & -0.81 & (1.007) \\
+The Punisher $\times$ Daredevil & 1.58 & (0.850) & Iron Man $\times$ Hulk & -0.86 & (0.796) \\
+Hawkeye $\times$ Cloak \& Dagger & 1.58 & (0.542) & Cyclops $\times$ Gambit & -1.00 & (0.411) \\
+Ultron $\times$ Iron Man & 1.54 & (0.864) & Storm $\times$ Thor & -1.17 & (0.733) \\
+Emma Frost $\times$ Mantis & 1.50 & (0.363) & Hulk $\times$ Wolverine & -1.39 & (0.805) \\
+Daredevil $\times$ Black Widow & 1.48 & (0.728) & Black Widow $\times$ Hawkeye & -1.54 & (1.126) \\
+Wolverine $\times$ Gambit & 1.47 & (0.581) & Daredevil $\times$ Iron Fist & -1.80 & (0.741) \\
+Magik $\times$ Doctor Strange & 1.45 & (0.389) & Human Torch $\times$ Storm & -1.80 & (1.057) \\
+Jeff The Land Shark $\times$ Venom & 1.41 & (0.600) & Black Panther $\times$ Magik & -2.09 & (0.666) \\
+Angela $\times$ Star-lord & 1.39 & (1.006) & Black Cat $\times$ Spider-man & -2.24 & (0.627) \\
+\end{longtable}
+}
+
+\noindent\begin{minipage}{\linewidth}\footnotesize
+\emph{Notes.} All 100 team-ups are listed; none are omitted. Read down the left
+column, then the right. Each is labelled by its member heroes, anchor first. The
+premium is what a pair earns \emph{beyond} what its two heroes contribute
+individually, in percentage points, under W0 attribution. Four further team-ups are
+absent because they are defined against hero id 1057, base ``Deadpool'', whose plays
+are all recorded under his three role variants, leaving those columns structurally
+empty.
+\end{minipage}
+\end{landscape}
 
 \clearpage
 \noindent\textbf{Limitations.}
 \begin{enumerate}\setlength{\itemsep}{2pt}
 \item \emph{Magnitudes depend on the attribution rule; the ranking is far more
 stable.} Across W0, W2 and W1 on an identical sample the within-role standard
-deviation runs 2.60, 4.27 and 6.38 points while rank agreement with W0 stays at
-$\rho=0.937$ and $0.891$ (Table~\ref{tab:attrib}). W0 is reported because it is
-the only rule fixed before any outcome information exists, but it is an
-intention-to-treat quantity and is diluted by players abandoning a hero mid-match.
-Read the ordering as the firmer result.
+deviation runs 2.60, 4.27 and 6.38 points while rank agreement with W0 holds at
+$\rho=0.937$ and $0.891$. W0 is reported because it is the only rule fixed before any
+outcome information exists, but it is intention-to-treat and diluted by mid-match
+abandonment. Read the ordering as the firmer result.
 \item \emph{These are adjusted associations, not causal effects.} Hero choice is not
-random. Pre-match rank score controls for general player skill but not for skill on the
-specific hero, and a one-trick is not a random player assigned that hero. Per-player
-hero playtime would measure this confounder directly; it was costed and declined, so it
-is bounded rather than eliminated.
+random. Pre-match rank score controls for \emph{general} player skill but not for
+skill \emph{on that specific hero}, and a one-trick is not a random player assigned
+that hero. Per-player hero playtime would measure this confounder directly; it was
+costed and declined, so it is bounded rather than eliminated.
 \item \emph{Intervals are analytic, not bootstrapped.} Matches are not independent
 draws --- each contains twelve players and so belongs to twelve overlapping player
-clusters. The specified player-level cluster bootstrap would require roughly 656 hours
-at this scale under the current implementation, so HC1 intervals are reported instead.
-They ignore cross-classified dependence and are therefore \emph{too narrow}; point
-estimates are unaffected.
-\item \emph{The sample is rank-selected.} Profile privacy rises from 0\% below 4{,}000
-rank score to 70\% above 5{,}000, and the crawl can only expand through public players,
-so high-elo matches are structurally under-sampled. Further crawling does not fix this.
-\item \emph{Four team-ups are absent.} Hero id 1057 is base ``Deadpool'', but the
-roster records only his three role variants, so 1057 is played zero times. The four
-team-ups defined against it are structurally empty and were dropped rather than mapped
-onto the variants, which would be an unverifiable modelling assumption.
+clusters. The specified cluster bootstrap would need roughly 656 hours at this scale
+under the current implementation, so HC1 intervals are reported instead. They ignore
+cross-classified dependence and are therefore \emph{too narrow}; point estimates are
+unaffected.
+\item \emph{Composition control is coarse in the tail.} Twelve shapes carry their own
+indicator and the remainder share one, covering 0.16\% of team-instances whose win
+rates span 0.0--53.8\%.
+\item \emph{The sample is rank-selected.} Profile privacy rises from 0\% below
+4{,}000 rank score to 70\% above 5{,}000, and the crawl can only expand through
+public players, so high-elo matches are structurally under-sampled.
 \end{enumerate}
 
 \end{document}
