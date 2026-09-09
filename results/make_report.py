@@ -45,15 +45,24 @@ H["w2_pp"] = H["hero_id"].map(W2["within_role_pp"])
 N_NS = int((~H["within_role_significant"].astype(bool)).sum())
 
 
-def hero_panel(role, letter):
+def hero_panel(role, letter, ncols=5):
     d = H[H.role == role].sort_values("within_role_pp", ascending=False)
-    out = [rf"\multicolumn{{8}}{{l}}{{\emph{{Panel {letter}: {role}}} \ ({len(d)} heroes)}} \\[2pt]"]
+    out = [rf"\multicolumn{{{ncols}}}{{l}}{{\emph{{Panel {letter}: {role}}} \ ({len(d)} heroes)}} \\[2pt]"]
     for _, r in d.iterrows():
         out.append(
             f"{esc(r['name'])} & {r.within_role_pp:.2f}{stars(r.within_role_p_adjusted)} & "
             f"({r.se_pp:.3f}) & [{r.within_role_ci_low_pp:.2f}, {r.within_role_ci_high_pp:.2f}] & "
-            f"{r.w2_pp:.2f} & {r.w1_pp:.2f} & {r.w1_pp - r.within_role_pp:+.2f} & "
             f"{r.within_role_p_adjusted:.3f} \\\\")
+    return "\n".join(out)
+
+
+def attrib_panel(role, letter):
+    """Appendix: the same heroes under all three attribution rules."""
+    d = H[H.role == role].sort_values("within_role_pp", ascending=False)
+    out = [rf"\multicolumn{{5}}{{l}}{{\emph{{Panel {letter}: {role}}}}} \\[2pt]"]
+    for _, r in d.iterrows():
+        out.append(f"{esc(r['name'])} & {r.within_role_pp:.2f} & {r.w2_pp:.2f} & "
+                   f"{r.w1_pp:.2f} & {r.w1_pp - r.within_role_pp:+.2f} \\\\")
     return "\n".join(out)
 
 
@@ -119,7 +128,7 @@ non-compliance --- but how often a hero gets abandoned is part of its value, not
 error to remove.
 
 \vspace{{6pt}}
-\noindent\textbf{{Why not play-time weighting.}} Table~\ref{{tab:attrib}} shows effect
+\noindent\textbf{{Why not play-time weighting.}} Appendix Table~\ref{{tab:attribcmp}} shows effect
 magnitude rising monotonically with how much post-outcome information the
 attribution uses. The best-\emph{{fitting}} rule is the most contaminated: play-time
 weighting predicts better precisely because its regressors encode what happened.
@@ -136,27 +145,7 @@ Refitting under this constraint leaves the estimates numerically unchanged (Spea
 0.9999, mean absolute difference 0.010~pp), confirming that the earlier post-hoc
 projection was already removing exactly the ill-conditioned direction.
 
-\begin{{table}}[t]\centering\small
-\begin{{threeparttable}}
-\caption{{Effect magnitude rises with post-outcome contamination}}\label{{tab:attrib}}
-\begin{{tabular}}{{l l r r r r}}
-\toprule
-Rule & Attribution & \multicolumn{{1}}{{c}}{{Log-lik.}} & \multicolumn{{1}}{{c}}{{Effect s.d.}} &
-\multicolumn{{1}}{{c}}{{vs W0}} & \multicolumn{{1}}{{c}}{{$\rho$ with W0}} \\
-\midrule
-\textbf{{W0}} & starting lineup (pre-outcome) & $-320{{,}}122$ & \textbf{{2.60}} & 1.00$\times$ & {{---}} \\
-W2 & dominant hero & $-305{{,}}869$ & 4.27 & 1.64$\times$ & 0.937 \\
-W1 & play-time weighted & $-297{{,}}648$ & 6.38 & 2.45$\times$ & 0.891 \\
-\bottomrule
-\end{{tabular}}
-\begin{{tablenotes}}[flushleft]\footnotesize
-\item All three fitted on the same {MW1['n_matches']:,} matches. Effect s.d.\ is the
-standard deviation of within-role estimates in percentage points; $\rho$ is Spearman
-rank correlation. Higher log-likelihood here indicates worse identification, not a
-better model.
-\end{{tablenotes}}
-\end{{threeparttable}}
-\end{{table}}
+
 
 \begin{{table}}[t]\centering\small
 \begin{{threeparttable}}
@@ -202,34 +191,29 @@ attribution on the same pipeline. Camp-0 win rate varies 49.42\%--52.52\% across
 \end{{threeparttable}}
 \end{{table}}
 
-\begin{{landscape}}
 {{\footnotesize
-\begin{{longtable}}{{l r c c r r r r}}
+\begin{{longtable}}{{l r c c r}}
 \caption{{Hero adjusted plus--minus, relative to an average hero of the same role}}
 \label{{tab:main}} \\
 \toprule
 & \multicolumn{{1}}{{c}}{{APM}} & \multicolumn{{1}}{{c}}{{Std.\ error}} &
-\multicolumn{{1}}{{c}}{{95\% CI}} & \multicolumn{{1}}{{c}}{{W2}} &
-\multicolumn{{1}}{{c}}{{W1}} & \multicolumn{{1}}{{c}}{{W1$-$W0}} &
-\multicolumn{{1}}{{c}}{{$q$}} \\
+\multicolumn{{1}}{{c}}{{95\% CI}} & \multicolumn{{1}}{{c}}{{$q$}} \\
 \midrule
 \endfirsthead
-\multicolumn{{8}}{{l}}{{\emph{{Table \ref{{tab:main}}, continued}}}} \\
+\multicolumn{{5}}{{l}}{{\emph{{Table \ref{{tab:main}}, continued}}}} \\
 \toprule
 & \multicolumn{{1}}{{c}}{{APM}} & \multicolumn{{1}}{{c}}{{Std.\ error}} &
-\multicolumn{{1}}{{c}}{{95\% CI}} & \multicolumn{{1}}{{c}}{{W2}} &
-\multicolumn{{1}}{{c}}{{W1}} & \multicolumn{{1}}{{c}}{{W1$-$W0}} &
-\multicolumn{{1}}{{c}}{{$q$}} \\
+\multicolumn{{1}}{{c}}{{95\% CI}} & \multicolumn{{1}}{{c}}{{$q$}} \\
 \midrule
 \endhead
 \midrule
-\multicolumn{{8}}{{r}}{{\emph{{continued on next page}}}} \\
+\multicolumn{{5}}{{r}}{{\emph{{continued on next page}}}} \\
 \endfoot
 \midrule
-Matches & \multicolumn{{7}}{{l}}{{{M['n_matches']:,}}} \\
-Player--matches & \multicolumn{{7}}{{l}}{{5,729,796}} \\
-Heroes & \multicolumn{{7}}{{l}}{{{M['n_heroes']}}} \\
-Log-likelihood & \multicolumn{{7}}{{l}}{{{M['loglike']:,.1f}}} \\
+Matches & \multicolumn{{4}}{{l}}{{{M['n_matches']:,}}} \\
+Player--matches & \multicolumn{{4}}{{l}}{{5,729,796}} \\
+Heroes & \multicolumn{{4}}{{l}}{{{M['n_heroes']}}} \\
+Log-likelihood & \multicolumn{{4}}{{l}}{{{M['loglike']:,.1f}}} \\
 \bottomrule
 \endlastfoot
 {hero_panel('Tank','A')}
@@ -241,22 +225,68 @@ Log-likelihood & \multicolumn{{7}}{{l}}{{{M['loglike']:,.1f}}} \\
 }}
 
 \noindent\begin{{minipage}}{{\linewidth}}\footnotesize
-\emph{{Notes.}} All 55 heroes are listed; none are omitted. Units are percentage points
-of win probability at a balanced match ($\partial p/\partial x=\beta/4$). Standard
-errors in parentheses are HC1, propagated through the within-role contrast by the
-delta method. Stars denote Benjamini--Hochberg false-discovery-rate control across
-the 55-hero family: \sym{{*}}~$q<0.10$, \sym{{**}}~$q<0.05$, \sym{{***}}~$q<0.01$;
-{N_NS} of the 55 are not distinguishable from their role average. \emph{{W2}} and
-\emph{{W1}} repeat the estimate under dominant-hero and play-time attribution on the
-same sample, and \emph{{W1$-$W0}} is their difference in points --- a per-hero measure of how much
-play-time attribution inflates the effect. A ratio is not reported because it
-diverges for heroes whose W0 estimate is near zero. Under the within-role constraint
-the fitted coefficient already \emph{{is}} the within-role effect, so no separate
-unconstrained column exists. Sample: {M['exclusions']['starting']:,} matches crawled, less
+\emph{{Notes.}} All 55 heroes are listed. Units are percentage points of win
+probability at a balanced match ($\partial p/\partial x=\beta/4$): the change from
+fielding this hero at match start in place of an average hero of the same role.
+Standard errors in parentheses are HC1. Stars and $q$ denote Benjamini--Hochberg
+false-discovery-rate control across the 55-hero family: \sym{{*}}~$q<0.10$,
+\sym{{**}}~$q<0.05$, \sym{{***}}~$q<0.01$; {N_NS} of the 55 are not distinguishable from
+their role average. Sample: {M['exclusions']['starting']:,} matches crawled, less
 {M['exclusions']['dropped_draw']:,} containing draws ($\texttt{{is\_win}}=2$),
 {M['exclusions']['dropped_missing_playtime']} with incomplete play time, and
 {M['exclusions']['dropped_short']:,} below a 240-second forfeit floor. Four team-up
-contrasts were structurally empty and dropped.
+contrasts were structurally empty and dropped. Appendix Table~\ref{{tab:attribcmp}}
+repeats every hero under the two contaminated attribution rules.
+\end{{minipage}}
+
+\clearpage
+\appendix
+\section*{{Appendix}}
+\renewcommand{{\thetable}}{{A\arabic{{table}}}}
+\setcounter{{table}}{{0}}
+
+\begin{{landscape}}
+{{\footnotesize
+\begin{{longtable}}{{l r r r r}}
+\caption{{Every hero under all three attribution rules, same sample}}\label{{tab:attribcmp}} \\
+\toprule
+& \multicolumn{{1}}{{c}}{{W0}} & \multicolumn{{1}}{{c}}{{W2}} &
+\multicolumn{{1}}{{c}}{{W1}} & \multicolumn{{1}}{{c}}{{W1$-$W0}} \\
+& \multicolumn{{1}}{{c}}{{\footnotesize starting}} & \multicolumn{{1}}{{c}}{{\footnotesize dominant}} &
+\multicolumn{{1}}{{c}}{{\footnotesize play-time}} & \\
+\midrule
+\endfirsthead
+\multicolumn{{5}}{{l}}{{\emph{{Table \ref{{tab:attribcmp}}, continued}}}} \\
+\toprule
+& \multicolumn{{1}}{{c}}{{W0}} & \multicolumn{{1}}{{c}}{{W2}} &
+\multicolumn{{1}}{{c}}{{W1}} & \multicolumn{{1}}{{c}}{{W1$-$W0}} \\
+\midrule
+\endhead
+\midrule
+\multicolumn{{5}}{{r}}{{\emph{{continued on next page}}}} \\
+\endfoot
+\midrule
+Log-likelihood & $-320{{,}}068$ & $-305{{,}}869$ & $-297{{,}}648$ & \\
+Effect s.d. & 2.60 & 4.27 & 6.38 & \\
+$\rho$ with W0 & --- & 0.937 & 0.891 & \\
+\bottomrule
+\endlastfoot
+{attrib_panel('Tank','A')}
+\addlinespace[4pt]
+{attrib_panel('Damage','B')}
+\addlinespace[4pt]
+{attrib_panel('Support','C')}
+\end{{longtable}}
+}}
+
+\noindent\begin{{minipage}}{{\linewidth}}\footnotesize
+\emph{{Notes.}} Within-role estimates in percentage points, all three fitted on the same
+{MW1['n_matches']:,} matches. Effect magnitude rises monotonically with how much
+post-outcome information the rule uses, while the ranking is broadly preserved.
+W1$-$W0 is reported as a difference rather than a ratio because a ratio diverges for
+heroes whose W0 estimate is near zero. Higher log-likelihood here indicates worse
+identification, not a better model: play-time weighting predicts better precisely
+because its regressors encode what happened.
 \end{{minipage}}
 \end{{landscape}}
 
@@ -282,13 +312,12 @@ Team-up & \multicolumn{{1}}{{c}}{{Premium}} & \multicolumn{{1}}{{c}}{{Std.\ err.
 }}
 
 \noindent\begin{{minipage}}{{\linewidth}}\footnotesize
-\emph{{Notes.}} All {len(tu)} team-ups are listed; none are omitted. Read down the left
-column, then the right. Each is labelled by its member heroes, anchor first. The
-premium is what a pair earns \emph{{beyond}} what its two heroes contribute
-individually, in percentage points, under W0 attribution. Four further team-ups are
-absent because they are defined against hero id 1057, base ``Deadpool'', whose plays
-are all recorded under his three role variants, leaving those columns structurally
-empty.
+\emph{{Notes.}} All {len(tu)} team-ups are listed. Read down the left column, then the
+right. Each is labelled by its member heroes, anchor first. The premium is what a pair
+earns \emph{{beyond}} what its two heroes contribute individually, in percentage points,
+under W0 attribution. Four further team-ups are absent because they are defined against
+hero id 1057, base ``Deadpool'', whose plays are all recorded under his three role
+variants, leaving those columns structurally empty.
 \end{{minipage}}
 \end{{landscape}}
 
