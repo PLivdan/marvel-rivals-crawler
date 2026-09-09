@@ -142,6 +142,29 @@ CREATE INDEX IF NOT EXISTS idx_match_player_heroes_player_uid ON match_player_he
 CREATE INDEX IF NOT EXISTS idx_match_players_cur_hero_id ON match_players(cur_hero_id);
 CREATE INDEX IF NOT EXISTS idx_matches_time_stamp ON matches(match_time_stamp);
 
+-- Covering indexes for the APM feature build, added after profiling the real
+-- 483k-match database. Both replace a plan that read far more than it needed:
+--
+--   attribution_weights' pull+join was a raw TABLE SCAN of match_player_heroes
+--   (776 MB) because the PK autoindex (match_uid, player_uid, hero_id) does not
+--   carry play_time. Adding it makes the query covering: 16.9s -> 9.1s, and it
+--   runs twice per design build. The same index also serves W0's
+--   MIN(rowid)-per-player grouping, which is narrower here than on the PK
+--   autoindex: 64.1s -> 5.1s. (rowid itself cannot be indexed -- SQLite rejects
+--   it with "no such column" -- so this is the only available route.)
+--
+--   The skill differential groups by (match_uid, camp) while the PK is
+--   (match_uid, player_uid), so camp was out of index order and SQLite sorted
+--   5.8M rows through a temp B-tree. Covering it removes the sort: 16.7s -> 1.8s.
+--
+-- Together they cost ~1.1 GB on a 3.4 GB database. That is a deliberate trade:
+-- these run on every fit, and the crawler is network-bound so the extra write
+-- cost never becomes its bottleneck.
+CREATE INDEX IF NOT EXISTS idx_mph_cover_attribution
+    ON match_player_heroes(match_uid, player_uid, hero_id, play_time);
+CREATE INDEX IF NOT EXISTS idx_mp_cover_skill
+    ON match_players(match_uid, camp, new_score, add_score);
+
 -- Model results. Coefficients are meaningless without the run metadata that
 -- produced them, so apm_runs records the specification, attribution rule,
 -- sample filters and git commit alongside every fit.
