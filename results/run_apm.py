@@ -147,6 +147,21 @@ def main():
             "within_role_ci_high_pp": report.to_probability_points(
                 float(beta_wr[i] + 1.96 * err_wr[i])),
         })
+    # Within-role significance. The p_adjusted column above tests the RAW
+    # effect; the reported estimate is the within-role contrast, so it needs
+    # its own test or the table pairs an estimate with a p-value for a
+    # different quantity.
+    z_wr = beta_wr / np.where(err_wr > 0, err_wr, np.nan)
+    raw_p_wr = 2 * (1 - stats.norm.cdf(np.abs(z_wr)))
+    finite = np.isfinite(raw_p_wr)
+    adj_wr = np.full(k, np.nan)
+    if finite.any():
+        adj_wr[finite] = inference.benjamini_hochberg(raw_p_wr[finite])[0]
+    for i, row in enumerate(rows):
+        row["within_role_p_raw"] = float(raw_p_wr[i])
+        row["within_role_p_adjusted"] = float(adj_wr[i])
+        row["within_role_significant"] = bool(adj_wr[i] <= 0.05)
+
     table = pd.DataFrame(rows).sort_values("within_role_pp", ascending=False)
     np.savez(
         f"results/apm_cov_{tag}.npz",
