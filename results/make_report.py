@@ -62,6 +62,11 @@ def esc(s):
 def stars(q):
     return r"\sym{***}" if q < .01 else r"\sym{**}" if q < .05 else r"\sym{*}" if q < .10 else ""
 
+def starcell(q):
+    """Stars in their own column: they occupy real width, so they never overlap the S.E. column."""
+    n = 3 if q < .01 else 2 if q < .05 else 1 if q < .10 else 0
+    return rf"$^{{{'*' * n}}}$" if n else ""
+
 def pct(x, d=1): return f"{x:.{d}f}\\%"
 def num(x): return f"{x:,}"
 def ll(x): return f"$-{abs(x):,.0f}$".replace(",", "{,}")
@@ -146,7 +151,7 @@ LL_POST_HERO = next(r for r in LAD if r["model"].startswith("+ hero"))["logloss_
 # ----------------------------------------------------------------------------
 # tables
 def hero_row(r):
-    return (f"{esc(r['name'])} & {r.within_role_pp:.2f}{stars(r.within_role_p_adjusted)} & "
+    return (f"{esc(r['name'])} & {r.within_role_pp:.2f} & {starcell(r.within_role_p_adjusted)} & "
             f"({r.se_pp:.3f}) & {r.within_role_p_adjusted:.3f} & {r.n_start:,} & {r.pick_pct:.2f} & "
             f"{r.raw_wr:.1f} & {r.w1_pp - r.within_role_pp:+.2f}")
 
@@ -159,8 +164,8 @@ def role_block(role, letter, row_fn, ncol):
     return [panel(f"Panel {letter}: {role} ({len(d)} heroes)", ncol)] + [row_fn(r) for _, r in d.iterrows()]
 
 HERO_BODY = side_by_side(
-    [role_block("Tank", "A", hero_row, 8) + role_block("Support", "C", hero_row, 8),
-     role_block("Damage", "B", hero_row, 8)], 8)
+    [role_block("Tank", "A", hero_row, 9) + role_block("Support", "C", hero_row, 9),
+     role_block("Damage", "B", hero_row, 9)], 9)
 ATTR_BODY = side_by_side(
     [role_block("Tank", "A", attrib_row, 5) + role_block("Support", "C", attrib_row, 5),
      role_block("Damage", "B", attrib_row, 5)], 5)
@@ -171,7 +176,7 @@ for b in range(3):
     TU_BLOCKS.append([f"{r.label} & {r.effect_pp:.2f} & ({r.std_error * 25:.3f})" for r in part.itertuples()])
 TU_BODY = side_by_side(TU_BLOCKS, 3)
 
-_hero_hdr = (r"& \multicolumn{1}{c}{APM} & \multicolumn{1}{c}{S.E.} & \multicolumn{1}{c}{$q$} & "
+_hero_hdr = (r"& \multicolumn{2}{c}{APM} & \multicolumn{1}{c}{S.E.} & \multicolumn{1}{c}{$q$} & "
              r"\multicolumn{1}{c}{Starts} & \multicolumn{1}{c}{\makecell{Pick\\(\%)}} & \multicolumn{1}{c}{\makecell{Raw WR\\(\%)}} & "
              r"\multicolumn{1}{c}{\makecell{Play-time\\$-$ Starting}}")
 HERO_HDR = _hero_hdr + " & " + _hero_hdr + r" \\"
@@ -476,14 +481,14 @@ estimated percentage-point difference as a literal causal effect.
 {\scriptsize\setlength{\tabcolsep}{3pt}\renewcommand{\arraystretch}{1.06}
 \captionof{table}{Hero adjusted plus--minus, relative to an average hero of the same role}
 \label{tab:main}
-\begin{tabular}{l r@{\hspace{10pt}} r r r r r r @{\hspace{1.5em}} l r@{\hspace{10pt}} r r r r r r}
+\begin{tabular}{l r@{}l r r r r r r @{\hspace{1.5em}} l r@{}l r r r r r r}
 \toprule
 <<HERO_HDR>>
 \midrule
 <<HERO_BODY>>
 \midrule
-Matches & \multicolumn{7}{l}{<<N_MATCHES>>} & Log-likelihood & \multicolumn{7}{l}{<<LOGLIK>>} \\
-Player--matches & \multicolumn{7}{l}{<<N_PLAYERS>>} & Heroes & \multicolumn{7}{l}{<<N_HEROES>>} \\
+Matches & \multicolumn{8}{l}{<<N_MATCHES>>} & Log-likelihood & \multicolumn{8}{l}{<<LOGLIK>>} \\
+Player--matches & \multicolumn{8}{l}{<<N_PLAYERS>>} & Heroes & \multicolumn{8}{l}{<<N_HEROES>>} \\
 \bottomrule
 \end{tabular}
 }
@@ -495,7 +500,7 @@ probability at a balanced match ($\partial p/\partial x=\beta/4$): the change fr
 fielding this hero at match start in place of an average hero of the same role.
 Standard errors in parentheses are HC1; the 95\% confidence interval is APM $\pm$
 1.96~S.E. Stars and $q$ denote Benjamini--Hochberg false-discovery-rate control across the
-55-hero family: \sym{*}~$q<0.10$, \sym{**}~$q<0.05$, \sym{***}~$q<0.01$; <<N_NS>> of
+55-hero family: $^{*}$~$q<0.10$, $^{**}$~$q<0.05$, $^{***}$~$q<0.01$; <<N_NS>> of
 the 55 are not distinguishable from their role average. \emph{Starts} is the number of
 player-slots that began the match on this hero and \emph{Pick~\%} its share of all
 starting slots; both reflect the crawl's per-hero leaderboard seeding, not population
