@@ -5,7 +5,7 @@
 \titleformat{\section}{\large\bfseries}{}{0pt}{}
 \titlespacing*{\section}{0pt}{16pt plus 4pt minus 2pt}{6pt}
 \pagestyle{fancy}\fancyhf{}\renewcommand{\headrulewidth}{0pt}
-\fancyfoot[C]{\thepage}\fancyfoot[R]{\scriptsize build \texttt{e66d1d6c}}
+\fancyfoot[C]{\thepage}\fancyfoot[R]{\scriptsize build \texttt{9e494b78}}
 \pgfplotsset{compat=newest}
 \usepackage[colorlinks=true,linkcolor=black,urlcolor=black]{hyperref}
 \newcommand{\sym}[1]{\rlap{$^{#1}$}}
@@ -21,7 +21,7 @@
 {\normalsize Clocktock (Philip Livdan)}\\[2pt]
 {\small McCombs School of Business, The University of Texas at Austin}\\
 {\small\texttt{plivdan@utexas.edu}}\\[8pt]
-{\small Season 9.5, PC ranked. Prepared 8 September 2026. Model fit \texttt{31cfdff}, report build \texttt{e66d1d6c}.}
+{\small Season 9.5, PC ranked. Prepared 8 September 2026. Model fit \texttt{31cfdff}, report build \texttt{9e494b78}.}
 \end{center}
 
 \vspace{4pt}
@@ -517,7 +517,14 @@ percentage points.''
 Second, hero choice remains endogenous. Rank score controls for broad differences in player
 strength, but not for hero-specific skill. A player with five hundred hours on Magik is not
 observationally equivalent to a player selecting Magik for the first time. Without
-player-by-hero proficiency, that source of selection remains in the coefficient.
+player-by-hero proficiency, that source of selection remains in the coefficient. A related point
+shows up within the sample. Refitting the model separately on the bottom, middle, and top thirds
+of matches by mean pre-match rank score (Appendix Figure~\ref{fig:rank}) shows that
+23 of the 55 heroes differ by more than two standard errors between the bottom and
+top thirds, 12 gaining with rank and 11 losing. The largest
+gains are Wolverine (-1.4 to +2.0) and Elsa Bloodstone (-1.7 to +1.0), and the largest loss is Black Panther (+0.9 to -1.4). For heroes like
+these the headline estimate averages over players of very different skill with them, and the top
+of the ladder, where privacy hides most profiles, is not in the sample at all.
 
 Third, the reported standard errors are likely optimistic. HC1 treats matches as independent
 observations, while players recur across matches and twelve players appear in each match, so the
@@ -791,11 +798,216 @@ Spec A+ (heroes, maps, skill, shapes, team-ups) & 187 & 0.6674 \\
 \begin{tablenotes}[flushleft]\footnotesize
 \item Same chronological split as Table~\ref{tab:ladder}. The synergy block replaces the
 designated team-up block, which it contains; pairs below 2,500 co-occurrences carry no
-coefficient. Free parameters count the coefficients remaining after the identification
-constraints.
+coefficient. Free parameters count the coefficients remaining after the identification constraints.
 \end{tablenotes}
 \end{threeparttable}
 \end{center}
+
+\begin{figure}[H]\centering
+\caption{Hero effects by rank: bottom third against top third of the sample}\label{fig:rank}
+\vspace{2pt}
+\begin{tikzpicture}
+\begin{axis}[
+  width=12.2cm, height=20.5cm, axis lines=left, tick style={draw=none},
+  xmin=-8, xmax=9, ymin=0, ymax=58.5,
+  xlabel={APM, percentage points relative to the average hero of the same role},
+  label style={font=\footnotesize}, tick label style={font=\scriptsize},
+  ytick={57.5,56.5,55.5,54.5,53.5,52.5,51.5,50.5,49.5,48.5,47.5,46.5,45.5,44.5,43.5,41.5,40.5,39.5,38.5,37.5,36.5,35.5,34.5,33.5,32.5,31.5,30.5,29.5,28.5,27.5,26.5,25.5,24.5,23.5,22.5,21.5,20.5,19.5,18.5,17.5,16.5,15.5,13.5,12.5,11.5,10.5,9.5,8.5,7.5,6.5,5.5,4.5,3.5,2.5,1.5}, yticklabels={{Thor$^{*}$},{Peni Parker},{Magneto$^{*}$},{Groot},{The Hood$^{*}$},{Rogue},{Devil Dinosaur},{Angela},{Venom},{Emma Frost},{The Thing},{Hulk},{Doctor Strange$^{*}$},{Captain America},{Deadpool (Vanguard)$^{*}$},{Wolverine$^{*}$},{Elsa Bloodstone$^{*}$},{Phoenix$^{*}$},{Black Cat$^{*}$},{Moon Knight},{Daredevil},{Iron Fist},{Black Widow},{Psylocke},{Hela},{Star-lord},{Deadpool (Duelist)},{Spider-man},{Storm},{Mister Fantastic},{Human Torch},{Squirrel Girl},{Cyclops},{Magik},{The Punisher},{Blade},{Winter Soldier$^{*}$},{Scarlet Witch},{Namor$^{*}$},{Iron Man$^{*}$},{Hawkeye$^{*}$},{Black Panther$^{*}$},{Mantis$^{*}$},{Loki$^{*}$},{Invisible Woman$^{*}$},{Jeff The Land Shark$^{*}$},{Gambit$^{*}$},{Luna Snow},{Rocket Raccoon},{Jubilee},{Cloak \& Dagger$^{*}$},{White Fox},{Deadpool (Strategist)$^{*}$},{Adam Warlock$^{*}$},{Ultron$^{*}$}}, yticklabel style={font=\tiny},
+  y axis line style={draw=none},
+  legend style={at={(0.98,0.985)}, anchor=north east, font=\scriptsize, draw=none, fill=none, cells={anchor=west}},
+  clip=false,
+]
+\draw[dashed, thin] (axis cs:0,0) -- (axis cs:0,58.5);
+\draw[black!35, thin] (axis cs:-8.0,42.5) -- (axis cs:9.0,42.5);
+\draw[black!35, thin] (axis cs:-8.0,14.5) -- (axis cs:9.0,14.5);
+\draw[thin] (axis cs:0.506,57.5) -- (axis cs:2.041,57.5);
+\draw[thin] (axis cs:0.867,56.5) -- (axis cs:2.221,56.5);
+\draw[thin] (axis cs:1.458,55.5) -- (axis cs:2.717,55.5);
+\draw[thin] (axis cs:-0.958,54.5) -- (axis cs:0.191,54.5);
+\draw[thin] (axis cs:-0.240,53.5) -- (axis cs:0.788,53.5);
+\draw[thin] (axis cs:-3.793,52.5) -- (axis cs:-3.296,52.5);
+\draw[thin] (axis cs:-0.088,51.5) -- (axis cs:-0.190,51.5);
+\draw[thin] (axis cs:2.140,50.5) -- (axis cs:1.815,50.5);
+\draw[thin] (axis cs:-0.702,49.5) -- (axis cs:-1.125,49.5);
+\draw[thin] (axis cs:-1.534,48.5) -- (axis cs:-1.993,48.5);
+\draw[thin] (axis cs:5.682,47.5) -- (axis cs:5.053,47.5);
+\draw[thin] (axis cs:1.610,46.5) -- (axis cs:0.962,46.5);
+\draw[thin] (axis cs:-0.507,45.5) -- (axis cs:-1.615,45.5);
+\draw[thin] (axis cs:-0.540,44.5) -- (axis cs:-1.800,44.5);
+\draw[thin] (axis cs:-3.901,43.5) -- (axis cs:-5.770,43.5);
+\draw[thin] (axis cs:-1.430,41.5) -- (axis cs:2.038,41.5);
+\draw[thin] (axis cs:-1.704,40.5) -- (axis cs:0.973,40.5);
+\draw[thin] (axis cs:-5.022,39.5) -- (axis cs:-2.809,39.5);
+\draw[thin] (axis cs:4.907,38.5) -- (axis cs:6.789,38.5);
+\draw[thin] (axis cs:-0.209,37.5) -- (axis cs:0.658,37.5);
+\draw[thin] (axis cs:2.807,36.5) -- (axis cs:3.530,36.5);
+\draw[thin] (axis cs:0.749,35.5) -- (axis cs:1.471,35.5);
+\draw[thin] (axis cs:-0.190,34.5) -- (axis cs:0.531,34.5);
+\draw[thin] (axis cs:-0.579,33.5) -- (axis cs:-0.066,33.5);
+\draw[thin] (axis cs:0.964,32.5) -- (axis cs:1.433,32.5);
+\draw[thin] (axis cs:-2.259,31.5) -- (axis cs:-1.866,31.5);
+\draw[thin] (axis cs:-0.873,30.5) -- (axis cs:-0.568,30.5);
+\draw[thin] (axis cs:0.359,29.5) -- (axis cs:0.663,29.5);
+\draw[thin] (axis cs:2.994,28.5) -- (axis cs:2.910,28.5);
+\draw[thin] (axis cs:2.615,27.5) -- (axis cs:2.361,27.5);
+\draw[thin] (axis cs:-0.217,26.5) -- (axis cs:-0.732,26.5);
+\draw[thin] (axis cs:-3.260,25.5) -- (axis cs:-3.958,25.5);
+\draw[thin] (axis cs:-3.690,24.5) -- (axis cs:-4.394,24.5);
+\draw[thin] (axis cs:3.704,23.5) -- (axis cs:2.974,23.5);
+\draw[thin] (axis cs:-1.504,22.5) -- (axis cs:-2.501,22.5);
+\draw[thin] (axis cs:0.125,21.5) -- (axis cs:-0.879,21.5);
+\draw[thin] (axis cs:1.480,20.5) -- (axis cs:0.321,20.5);
+\draw[thin] (axis cs:-2.323,19.5) -- (axis cs:-3.556,19.5);
+\draw[thin] (axis cs:0.075,18.5) -- (axis cs:-1.690,18.5);
+\draw[thin] (axis cs:2.061,17.5) -- (axis cs:0.259,17.5);
+\draw[thin] (axis cs:-0.435,16.5) -- (axis cs:-2.492,16.5);
+\draw[thin] (axis cs:0.854,15.5) -- (axis cs:-1.398,15.5);
+\draw[thin] (axis cs:5.553,13.5) -- (axis cs:7.787,13.5);
+\draw[thin] (axis cs:0.053,12.5) -- (axis cs:1.972,12.5);
+\draw[thin] (axis cs:-1.932,11.5) -- (axis cs:-0.680,11.5);
+\draw[thin] (axis cs:-2.239,10.5) -- (axis cs:-1.059,10.5);
+\draw[thin] (axis cs:-0.724,9.5) -- (axis cs:0.404,9.5);
+\draw[thin] (axis cs:-3.068,8.5) -- (axis cs:-2.702,8.5);
+\draw[thin] (axis cs:4.168,7.5) -- (axis cs:3.781,7.5);
+\draw[thin] (axis cs:-1.651,6.5) -- (axis cs:-2.118,6.5);
+\draw[thin] (axis cs:0.231,5.5) -- (axis cs:-0.709,5.5);
+\draw[thin] (axis cs:-3.066,4.5) -- (axis cs:-4.090,4.5);
+\draw[thin] (axis cs:-5.044,3.5) -- (axis cs:-6.662,3.5);
+\draw[thin] (axis cs:3.021,2.5) -- (axis cs:1.248,2.5);
+\draw[thin] (axis cs:4.698,1.5) -- (axis cs:2.827,1.5);
+\addplot[only marks, mark=o, mark size=1.6pt] coordinates {
+(0.506,57.5)
+(0.867,56.5)
+(1.458,55.5)
+(-0.958,54.5)
+(-0.240,53.5)
+(-3.793,52.5)
+(-0.088,51.5)
+(2.140,50.5)
+(-0.702,49.5)
+(-1.534,48.5)
+(5.682,47.5)
+(1.610,46.5)
+(-0.507,45.5)
+(-0.540,44.5)
+(-3.901,43.5)
+(-1.430,41.5)
+(-1.704,40.5)
+(-5.022,39.5)
+(4.907,38.5)
+(-0.209,37.5)
+(2.807,36.5)
+(0.749,35.5)
+(-0.190,34.5)
+(-0.579,33.5)
+(0.964,32.5)
+(-2.259,31.5)
+(-0.873,30.5)
+(0.359,29.5)
+(2.994,28.5)
+(2.615,27.5)
+(-0.217,26.5)
+(-3.260,25.5)
+(-3.690,24.5)
+(3.704,23.5)
+(-1.504,22.5)
+(0.125,21.5)
+(1.480,20.5)
+(-2.323,19.5)
+(0.075,18.5)
+(2.061,17.5)
+(-0.435,16.5)
+(0.854,15.5)
+(5.553,13.5)
+(0.053,12.5)
+(-1.932,11.5)
+(-2.239,10.5)
+(-0.724,9.5)
+(-3.068,8.5)
+(4.168,7.5)
+(-1.651,6.5)
+(0.231,5.5)
+(-3.066,4.5)
+(-5.044,3.5)
+(3.021,2.5)
+(4.698,1.5)
+};
+\addlegendentry{Bottom third by rank}
+\addplot[only marks, mark=*, mark size=1.6pt] coordinates {
+(2.041,57.5)
+(2.221,56.5)
+(2.717,55.5)
+(0.191,54.5)
+(0.788,53.5)
+(-3.296,52.5)
+(-0.190,51.5)
+(1.815,50.5)
+(-1.125,49.5)
+(-1.993,48.5)
+(5.053,47.5)
+(0.962,46.5)
+(-1.615,45.5)
+(-1.800,44.5)
+(-5.770,43.5)
+(2.038,41.5)
+(0.973,40.5)
+(-2.809,39.5)
+(6.789,38.5)
+(0.658,37.5)
+(3.530,36.5)
+(1.471,35.5)
+(0.531,34.5)
+(-0.066,33.5)
+(1.433,32.5)
+(-1.866,31.5)
+(-0.568,30.5)
+(0.663,29.5)
+(2.910,28.5)
+(2.361,27.5)
+(-0.732,26.5)
+(-3.958,25.5)
+(-4.394,24.5)
+(2.974,23.5)
+(-2.501,22.5)
+(-0.879,21.5)
+(0.321,20.5)
+(-3.556,19.5)
+(-1.690,18.5)
+(0.259,17.5)
+(-2.492,16.5)
+(-1.398,15.5)
+(7.787,13.5)
+(1.972,12.5)
+(-0.680,11.5)
+(-1.059,10.5)
+(0.404,9.5)
+(-2.702,8.5)
+(3.781,7.5)
+(-2.118,6.5)
+(-0.709,5.5)
+(-4.090,4.5)
+(-6.662,3.5)
+(1.248,2.5)
+(2.827,1.5)
+};
+\addlegendentry{Top third by rank}
+\node[anchor=west, font=\scriptsize\itshape] at (axis cs:-7.85,58.0) {Tanks};
+\node[anchor=west, font=\scriptsize\itshape] at (axis cs:-7.85,42.0) {Damages};
+\node[anchor=west, font=\scriptsize\itshape] at (axis cs:-7.85,14.0) {Supports};
+\end{axis}
+\end{tikzpicture}
+
+\begin{minipage}{0.92\linewidth}\footnotesize\vspace{2pt}
+\emph{Notes.} The headline specification refitted separately on each third of the
+477,483 matches, split by the mean pre-match rank score of their twelve players (thirds
+of 159,161 matches; boundaries 4,443 and 4,649). Open circles are the
+bottom third, filled circles the top third, and the line between them is the change. Within
+each role, heroes are sorted by that change. An asterisk marks heroes whose change exceeds
+two standard errors (HC1): 23 of 55, 12 gaining with rank and 11
+losing. The top third of this sample is not the top of the ranked ladder, where privacy hides
+most profiles.
+\end{minipage}
+\end{figure}
 
 
 \begin{landscape}

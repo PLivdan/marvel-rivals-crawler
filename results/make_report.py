@@ -46,6 +46,8 @@ PWC = need(f"results/apm_pairwise_counter_{PW_TAG}.csv")
 PWM = need(f"results/pairwise_meta_{PW_TAG}.json", "json")
 PWH = need(f"results/apm_hero_table_pairwise_{PW_TAG}.csv")
 IFJ = need("results/interaction_feasibility.json", "json")
+RK  = need("results/heterogeneity_rank_W0_specAplus.csv")
+RKM = need("results/heterogeneity_rank_meta.json", "json")
 if "groups" not in FQ:
     raise SystemExit("fit_quality json lacks 'groups' -- rerun results/compute_fit_quality.py")
 
@@ -263,6 +265,37 @@ def ex_phrase(e, name_a, name_b, counter):
     return f"{v:+.1f} points (standard error {e['se_pp']:.1f}, $q={e['q']:.2f}$, {e['n']:,} matches)" if counter else \
            f"{v:+.1f} points (standard error {e['se_pp']:.1f}, $q={e['q']:.2f}$, {e['n']:,} team instances)"
 PW_BP_THING = ex_phrase(_ex["black_panther_vs_thing"], "Black Panther", "The Thing", True)
+
+# rank heterogeneity figure: bottom-third vs top-third APM per hero, grouped by role
+RK = RK.copy(); RK["sig"] = RK.z_diff.abs() >= 1.96
+_rows, _ticks, _labels, _seps, _rolelab = [], [], [], [], []
+_y = 0
+for role in ("Tank", "Damage", "Support"):
+    block = RK[RK.role == role].sort_values("top_minus_bottom", ascending=False)
+    _rolelab.append((role + "s", _y + 0.5))
+    _y += 1
+    for r in block.itertuples():
+        _rows.append((r.apm_t0, r.apm_t2, _y)); _ticks.append(_y)
+        _labels.append(esc(r.name) + ("$^{*}$" if r.sig else "")); _y += 1
+    _seps.append(_y)
+RK_N_SLOTS = _y
+RK_YMAX = RK_N_SLOTS + 0.5
+def rk_y(y): return RK_YMAX - y                     # first hero at the top
+RK_BOTTOM = "\n".join(f"({a:.3f},{rk_y(y):.1f})" for a, b, y in _rows)
+RK_TOP = "\n".join(f"({b:.3f},{rk_y(y):.1f})" for a, b, y in _rows)
+RK_SEGS = "\n".join(rf"\draw[thin] (axis cs:{a:.3f},{rk_y(y):.1f}) -- (axis cs:{b:.3f},{rk_y(y):.1f});" for a, b, y in _rows)
+RK_TICKS = ",".join(f"{rk_y(y):.1f}" for y in _ticks)
+RK_TICKLABELS = ",".join("{" + l + "}" for l in _labels)
+_lo = min(min(a, b) for a, b, _ in _rows) - 0.6; _hi = max(max(a, b) for a, b, _ in _rows) + 0.6
+RK_XMIN, RK_XMAX = np.floor(_lo), np.ceil(_hi)
+RK_ROLELABS = "\n".join(rf"\node[anchor=west, font=\scriptsize\itshape] at (axis cs:{RK_XMIN + 0.15:.2f},{rk_y(y):.1f}) {{{lab}}};" for lab, y in _rolelab)
+RK_SEPLINES = "\n".join(rf"\draw[black!35, thin] (axis cs:{RK_XMIN:.1f},{rk_y(y):.1f}) -- (axis cs:{RK_XMAX:.1f},{rk_y(y):.1f});" for y in _seps[:-1])
+RK_N_SIG = int(RK.sig.sum()); RK_N_UP = int((RK.sig & (RK.top_minus_bottom > 0)).sum()); RK_N_DOWN = int((RK.sig & (RK.top_minus_bottom < 0)).sum())
+_g = RK.sort_values("top_minus_bottom", ascending=False)
+def rk_phrase(r): return f"{esc(r['name'])} ({r.apm_t0:+.1f} to {r.apm_t2:+.1f})"
+RK_GAIN1, RK_GAIN2 = rk_phrase(_g.iloc[0]), rk_phrase(_g.iloc[1]); RK_LOSE1 = rk_phrase(_g.iloc[-1])
+RK_EDGE_LO, RK_EDGE_HI = f"{RKM['edges'][0]:,.0f}", f"{RKM['edges'][1]:,.0f}"
+RK_N_T = num(RKM["n"]["0"])
 # how the main effects moved, and whether the moves track designated team-up exposure
 _tu_exp = {}
 for r in TU.itertuples():
@@ -729,7 +762,14 @@ percentage points.''
 Second, hero choice remains endogenous. Rank score controls for broad differences in player
 strength, but not for hero-specific skill. A player with five hundred hours on <<EX_HERO>> is not
 observationally equivalent to a player selecting <<EX_HERO>> for the first time. Without
-player-by-hero proficiency, that source of selection remains in the coefficient.
+player-by-hero proficiency, that source of selection remains in the coefficient. A related point
+shows up within the sample. Refitting the model separately on the bottom, middle, and top thirds
+of matches by mean pre-match rank score (Appendix Figure~\ref{fig:rank}) shows that
+<<RK_N_SIG>> of the 55 heroes differ by more than two standard errors between the bottom and
+top thirds, <<RK_N_UP>> gaining with rank and <<RK_N_DOWN>> losing. The largest
+gains are <<RK_GAIN1>> and <<RK_GAIN2>>, and the largest loss is <<RK_LOSE1>>. For heroes like
+these the headline estimate averages over players of very different skill with them, and the top
+of the ladder, where privacy hides most profiles, is not in the sample at all.
 
 Third, the reported standard errors are likely optimistic. HC1 treats matches as independent
 observations, while players recur across matches and twelve players appear in each match, so the
@@ -920,11 +960,51 @@ Model & \multicolumn{1}{c}{Free parameters} & \multicolumn{1}{c}{Log loss (holdo
 \begin{tablenotes}[flushleft]\footnotesize
 \item Same chronological split as Table~\ref{tab:ladder}. The synergy block replaces the
 designated team-up block, which it contains; pairs below <<PW_MIN_PAIR>> co-occurrences carry no
-coefficient. Free parameters count the coefficients remaining after the identification
-constraints.
+coefficient. Free parameters count the coefficients remaining after the identification constraints.
 \end{tablenotes}
 \end{threeparttable}
 \end{center}
+
+\begin{figure}[H]\centering
+\caption{Hero effects by rank: bottom third against top third of the sample}\label{fig:rank}
+\vspace{2pt}
+\begin{tikzpicture}
+\begin{axis}[
+  width=12.2cm, height=20.5cm, axis lines=left, tick style={draw=none},
+  xmin=<<RK_XMIN>>, xmax=<<RK_XMAX>>, ymin=0, ymax=<<RK_YMAX>>,
+  xlabel={APM, percentage points relative to the average hero of the same role},
+  label style={font=\footnotesize}, tick label style={font=\scriptsize},
+  ytick={<<RK_TICKS>>}, yticklabels={<<RK_TICKLABELS>>}, yticklabel style={font=\tiny},
+  y axis line style={draw=none},
+  legend style={at={(0.98,0.985)}, anchor=north east, font=\scriptsize, draw=none, fill=none, cells={anchor=west}},
+  clip=false,
+]
+\draw[dashed, thin] (axis cs:0,0) -- (axis cs:0,<<RK_YMAX>>);
+<<RK_SEPLINES>>
+<<RK_SEGS>>
+\addplot[only marks, mark=o, mark size=1.6pt] coordinates {
+<<RK_BOTTOM>>
+};
+\addlegendentry{Bottom third by rank}
+\addplot[only marks, mark=*, mark size=1.6pt] coordinates {
+<<RK_TOP>>
+};
+\addlegendentry{Top third by rank}
+<<RK_ROLELABS>>
+\end{axis}
+\end{tikzpicture}
+
+\begin{minipage}{0.92\linewidth}\footnotesize\vspace{2pt}
+\emph{Notes.} The headline specification refitted separately on each third of the
+<<N_MATCHES>> matches, split by the mean pre-match rank score of their twelve players (thirds
+of <<RK_N_T>> matches; boundaries <<RK_EDGE_LO>> and <<RK_EDGE_HI>>). Open circles are the
+bottom third, filled circles the top third, and the line between them is the change. Within
+each role, heroes are sorted by that change. An asterisk marks heroes whose change exceeds
+two standard errors (HC1): <<RK_N_SIG>> of 55, <<RK_N_UP>> gaining with rank and <<RK_N_DOWN>>
+losing. The top third of this sample is not the top of the ranked ladder, where privacy hides
+most profiles.
+\end{minipage}
+\end{figure}
 
 
 \begin{landscape}
@@ -1044,7 +1124,13 @@ subs = {
     "PW_MOVERS_UP": PW_MOVERS_UP, "PW_MOVERS_DOWN": PW_MOVERS_DOWN,
     "PW_SIG_SYN_TU": str(PW_SIG_SYN_TU), "PW_SIG_SYN_OTHER": str(PW_SIG_SYN_OTHER),
     "PW_N_TU_COLS": str(PW_N_TU_COLS), "PW_N_OTHER_COLS": num(PW_N_OTHER_COLS), "PW_BP_RAW": PW_BP_RAW,
-        "PW_SYN_TU_CLAUSE": ", all of them designated team-ups" if PW_TOP_SYN_ALL_TU else "",
+            "PW_SYN_TU_CLAUSE": ", all of them designated team-ups" if PW_TOP_SYN_ALL_TU else "",
+    "RK_XMIN": f"{RK_XMIN:.0f}", "RK_XMAX": f"{RK_XMAX:.0f}", "RK_YMAX": f"{RK_YMAX:.1f}",
+    "RK_TICKS": RK_TICKS, "RK_TICKLABELS": RK_TICKLABELS, "RK_BOTTOM": RK_BOTTOM, "RK_TOP": RK_TOP,
+    "RK_SEGS": RK_SEGS, "RK_SEPLINES": RK_SEPLINES, "RK_ROLELABS": RK_ROLELABS,
+    "RK_N_SIG": str(RK_N_SIG), "RK_N_UP": str(RK_N_UP), "RK_N_DOWN": str(RK_N_DOWN),
+    "RK_GAIN1": RK_GAIN1, "RK_GAIN2": RK_GAIN2, "RK_LOSE1": RK_LOSE1,
+    "RK_EDGE_LO": RK_EDGE_LO, "RK_EDGE_HI": RK_EDGE_HI, "RK_N_T": RK_N_T,
     "PW_TOP_SYN_NT": PW_TOP_SYN_NT, "PW_NEG_SYN_NT": PW_NEG_SYN_NT, "PW_TOP_SYN_TU": PW_TOP_SYN_TU,
     "PW_NT_POS": str(PW_NT_POS), "PW_NT_NEG": str(PW_NT_NEG),
     "TU1A": esc(TOP_TU.iloc[0].anchor), "TU1B": esc(TOP_TU.iloc[0].partner), "TU2A": esc(TOP_TU.iloc[1].anchor), "TU2B": esc(TOP_TU.iloc[1].partner),

@@ -331,6 +331,21 @@ not reproduced here; they live in `results/fit_quality_W0_specAplus.json`,
 
 ---
 
+### 3.7 Rank heterogeneity
+
+`results/run_rank_heterogeneity.py` refits Spec A+ separately on the bottom, middle and top
+thirds of matches by mean pre-match rank score of the twelve players (boundaries 4,443 and 4,649;
+159,161 matches each), weighted IRLS from the full-sample warm start, HC1 per tercile. Output
+`results/heterogeneity_rank_W0_specAplus.csv` (per hero: APM and SE per tercile, top-minus-bottom
+and its SE). Report: Appendix Figure A2 (dumbbell chart by role) and a paragraph in the
+limitations. Result: 23 of 55 heroes differ by more than two SEs between bottom and top thirds
+(12 gain with rank, 11 lose). Largest gains Wolverine (-1.4 to +2.0) and Elsa Bloodstone (-1.7 to
++1.0); largest loss Black Panther (+0.9 to -1.4). Motivated by the Elsa question: her raw side WR
+rises 48.0% -> 50.7% across rank quintiles, her ban rate 16% -> 77%, and she beats dive heroes
+(Magik +2.1) while losing to Phoenix (-3.4). `results/hero_diagnostic.py <hero_id...>` prints the
+per-hero rank-band descriptives. The top tercile is still below the privacy-hidden top of the
+ladder.
+
 ### 3.6 Specification E: pairwise interactions on starting lineups
 
 `results/run_pairwise.py` adds two blocks to Spec A+, one coefficient per unordered hero pair,
