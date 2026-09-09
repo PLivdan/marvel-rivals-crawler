@@ -297,67 +297,68 @@ TEX = r"""\documentclass[11pt]{article}
 \end{center}
 
 \vspace{4pt}
-\noindent If all we wanted to know was which heroes win the most games, there would be no
-reason to build this model. We could sort the leaderboard by raw win rate, declare the hero at
-the top broken, declare the hero at the bottom useless, and be done by lunch. The problem is
-that a hero does not randomly materialise into an otherwise identical match. Better players
-choose some heroes more often. Some heroes appear disproportionately in strong or weak
-compositions. Some are tied to particular team-ups. Maps differ. Teams differ in skill. Role
-structures differ. A 55\% raw win rate can therefore mean that a hero is strong, that the
-situations in which the hero gets picked are strong, or some mixture of the two, and the raw
-number cannot tell you which.
+\noindent Raw win rates answer an easy question: which heroes are on the winning team most
+often? They do not answer the question we usually care about. Heroes are not randomly assigned
+to otherwise identical matches. Better players may select some heroes more often, and particular
+heroes may appear in stronger compositions, on favourable maps, or alongside specific team-ups.
+A 55\% win rate therefore combines the effect of the hero with the circumstances in which that
+hero is chosen.
 
-The object of this report is narrower and more useful. Using <<N_MATCHES>> competitive PC
-ranked matches from Season <<SEASON>>, I estimate the association between starting a
-particular hero and winning after holding fixed the observable features of the match that can
-reasonably be separated from hero identity. The resulting number is an adjusted plus--minus,
-or APM. It answers the question: if an average hero of the same role is replaced by this hero
-at the start of an otherwise comparable match, how much does the predicted probability of
-winning change? Raw win rate answers a different question, and the size of the sample is what
-makes it possible to answer the narrower one with some precision.
+The object here is to separate the two as far as the data allow. Using <<N_MATCHES>> Season
+<<SEASON>> competitive PC ranked matches, I estimate how the probability of winning changes when
+a team starts a particular hero rather than an average hero in the same role, holding fixed
+observed differences in map, team strength, role composition, and designated team-ups. I call
+this adjusted plus--minus, or APM.
 
-The first nuisance is team composition. \emph{Marvel Rivals} does not force every team into
-the same role structure, and those structures have very different outcomes before anyone asks
-which specific heroes occupy them. The standard composition of two Tanks, two Damage heroes,
-and two Supports accounts for <<SHARE222>> of teams in the sample and wins <<WR222>> of its
-matches. A 1--3--2 team is a different object, as are 2--1--3, 0--4--2, and the more exotic
-structures ranked players occasionally decide are a good idea. In the data, one Tank with three
-Damage heroes wins <<WR132>> of its matches, and two Tanks with three Supports wins <<WR213>>.
-If composition were ignored, the regression would attribute part of the penalty from bad role
-structures to the heroes who happen to appear in them, which is exactly the sort of confounding
-the model is supposed to remove.
+A hero can have a high raw win rate because the hero is strong, because strong players and strong
+teams tend to select it, or both. The regression cannot eliminate every source of selection, but it
+can separate hero choice from several large, observable differences in match environment. The
+result is a different object from a leaderboard sorted by win rate.
 
-I therefore control for composition directly. Every Tank--Damage--Support combination that
-appears at least <<MIN_SHAPE>> times receives its own indicator, entered as the difference
-between the two teams<<POOLED_CLAUSE>>. The composition block then explains whether a given
-role structure is good or bad, while the hero block explains which heroes are relatively good or
-bad within their roles, and the two questions are answered by different coefficients rather than
-forced onto one.
+\section*{Role composition}
 
-Each match is one observation, and the outcome is whether side~0 wins. A hero enters as a
-signed contrast between the two teams. If Hela starts on side~0, that adds one to the Hela
-regressor. If she starts on side~1, it subtracts one. The hero coefficients are constrained to
-sum to zero separately within Tanks, Damage heroes, and Supports, so <<T1>> is compared with
-the average Tank, <<D1>> with the average Damage hero, and <<S1>> with the average Support.
-Cross-role comparisons are deliberately left outside what is being estimated, for reasons
-given below. The rest of the
-specification absorbs the obvious sources of variation. Each of the <<N_MAPS>> maps receives
-its own intercept, the pre-match rank-score difference between the teams enters directly, and
-<<N_TEAMUPS>> designated team-up contrasts sit alongside the composition contrasts just
-described. The model is an unpenalised logistic regression with HC1
-heteroskedasticity-robust standard errors.
+Role composition is the first identification problem. A hero coefficient should not receive
+credit for the fact that the hero happens to be played in a good role structure, or blame for
+being played in a bad one.
+
+The differences across structures are large. The conventional 2--2--2 composition of two
+Tanks, two Damage heroes, and two Supports accounts for <<SHARE222>> of teams in the sample and
+wins <<WR222>> of its matches. A 1--3--2 composition wins <<WR132>>, and 2--1--3 wins <<WR213>>.
+These are large differences before anything has been said about which particular Tank, Damage,
+or Support heroes fill the slots.
+
+I therefore include composition indicators directly. Each Tank--Damage--Support structure that
+appears at least <<MIN_SHAPE>> times receives its own coefficient, entered as the difference
+between the two teams<<POOLED_CLAUSE>>. This separates two sources of variation: composition
+coefficients compare role structures such as 2--2--2 and 1--3--2, while hero coefficients compare
+heroes within a role. Conditional on occupying a Tank slot, for example, <<T1>> is compared with
+the average Tank rather than being credited for the role structure around it.
+
+\section*{Specification}
+
+Each match is one observation and the outcome is whether side~0 wins. A hero enters as a signed
+contrast between the two teams: plus one if the hero starts on side~0, minus one if on side~1,
+and zero if on both or neither. The identifying variation for a hero coefficient is therefore
+the set of matches in which that hero appears on one side and not the other, compared after the
+other controls have been held fixed.
+
+The remaining regressors absorb the obvious differences in match environment. Each of the
+<<N_MAPS>> maps receives its own intercept, because side~0 wins between <<CAMP_LO>> and
+<<CAMP_HI>> of the time depending on the map. The pre-match rank-score difference between the
+teams controls for team strength. The composition contrasts described above and <<N_TEAMUPS>>
+designated team-up contrasts complete the specification. The model is an unpenalised logistic
+regression with HC1 heteroskedasticity-robust standard errors. Hero coefficients are normalised
+within role, for reasons given below, so every estimate is relative to the average hero of the
+same role.
 
 \FloatBarrier
-\section*{The annoying question: who gets credit when someone swaps?}
+\section*{Who gets credit when a player swaps?}
 
-Hero attribution is where an apparently minor coding decision starts to matter for
-identification. Suppose a player starts Hela, plays her for two minutes, swaps to Punisher, and
-spends the remaining eight minutes there. There are at least three obvious ways to encode that
-player. Under starting-hero attribution (W0), the match counts as 100\% Hela, and the question
-being asked is simply which hero the player started on. Under most-played-hero attribution
-(W2), the same match counts as 100\% Punisher, because Punisher received most of the player's
-minutes. Under play-time weighting (W1), the observation becomes 20\% Hela and 80\% Punisher.
-Figure~\ref{fig:swap} lays the three side by side.
+Hero identity is not fixed within a match. Suppose a player starts Hela, plays her for two
+minutes, swaps to Punisher, and spends the remaining eight minutes there. There are three natural
+ways to encode that player. Starting-hero attribution (W0) counts the match as 100\% Hela.
+Most-played-hero attribution (W2) counts it as 100\% Punisher. Play-time weighting (W1) counts
+it as 20\% Hela and 80\% Punisher. Figure~\ref{fig:swap} lays the three side by side.
 
 \begin{figure}[H]\centering
 \caption{Three ways to credit one player who swaps heroes (illustrative match)}
@@ -390,26 +391,20 @@ match begins.
 \end{minipage}
 \end{figure}
 
-Play-time weighting initially sounds like the sophisticated choice. The data record the exact
-time spent on each hero, so why throw information away? Unfortunately, the extra information
-is produced during the match. Players do not swap at random. They swap because they are losing
-a matchup, because the enemy composition changed, because a hero is not working, or because
-the match itself has revealed something that was unavailable at the start. Weighting by
-realised play time therefore lets the outcome-generating process help construct the
-explanatory variable, so that the match is partly being used to explain itself, and the
-wonderfully impressive coefficients this produces are the symptom rather than the achievement.
+Play-time weighting uses more information, but some of that information is generated after the
+match begins. Players swap because a matchup is going badly, because the opposing team changes
+composition, because a hero stops working, or because the state of the game reveals information
+that was unavailable at the start. Realised hero minutes are therefore endogenous to the course
+of the match. Weighting hero exposure by those minutes gives the regression information about
+events it is supposed to explain, so a better in-sample fit under that rule says little about
+identification.
 
-Figure~\ref{fig:ladder} shows what the choice does to the estimates. Moving from the least
-outcome-dependent rule to the most outcome-dependent one, the
-cross-hero standard deviation of the 55 APM estimates rises from <<SD0>> percentage points
-under starting-hero attribution to <<SD2>> under most-played-hero attribution and <<SD1>>
-under play-time weighting. <<EX_HERO>> is the extreme case, moving from <<EX0>> points to
-<<EX2>> and then <<EX1>> across the three rules. The rankings survive this reasonably well,
-with rank correlations against the starting-hero ranking of <<RHO2>> for the most-played rule
-and <<RHO1>> for play-time weighting, so what the rules mainly disagree about is magnitude. The
-more information from after the opening seconds is fed into attribution, the larger the hero
-effects become, which is exactly the pattern to expect if the additional accuracy is partly
-post-treatment information leaking into the regressors.
+The data show exactly this pattern (Figure~\ref{fig:ladder}). The cross-hero standard deviation
+of estimated APM rises from <<SD0>> percentage points using starting heroes to <<SD2>> using
+the most-played hero and <<SD1>> using play-time weights. <<EX_HERO>> moves from <<EX0>> to
+<<EX2>> to <<EX1>>. Yet the rankings remain fairly similar, with rank correlations of <<RHO2>>
+and <<RHO1>> against the starting-hero ranking. What changes most is not who looks good, but
+how large the estimated effects become.
 
 \begin{figure}[!htb]\centering
 \caption{The estimates expand as the attribution rule uses more post-start information}
@@ -446,81 +441,69 @@ play-time-weighted rules. Appendix Table~\ref{tab:attribcmp} lists every hero un
 \end{minipage}
 \end{figure}
 
-For the headline results I therefore use starting-hero attribution. The API records heroes
-chronologically by first appearance, so the first hero gives an assignment fixed before the
-rest of the match is known. If someone starts a hero and abandons it thirty seconds later,
-that hero still receives the match. This attenuates the estimates for heroes that players
-frequently abandon, which look less extreme than they do under play-time weighting, but
-abandonment is itself part of how a hero performs in practice, and the rule buys a cleaner
-interpretation of what happens after a player begins the match on the hero. That is an
-intention-to-treat object rather than a reconstruction, after the fact, of which hero deserves
-the result.
+For the headline specification I therefore use the starting hero, accepting some measurement
+error in exchange for avoiding post-start information. The API records heroes chronologically by
+first appearance, so the starting choice is fixed before subsequent match developments can affect
+attribution. A player who abandons a hero after thirty seconds still counts as having started that
+hero. The resulting coefficient may be attenuated, but it has a clean intention-to-treat
+interpretation: what happens after a player begins the match on this hero? Appendix
+Table~\ref{tab:attribcmp} reports every hero under all three rules.
 
 \FloatBarrier
-\section*{Why the comparison is within role}
+\section*{Why hero effects are identified within role}
 
-There is a second identification issue that is easy to miss, because the regression returns
-numbers whether or not it is handled. The number of Tanks, Damage heroes, and Supports on a
-team is itself part of the composition. If all hero coefficients are placed under one global
-normalisation, the hero block and the composition block share an almost exactly collinear
-direction corresponding to role counts. The model is then asked to decide whether having more
-Tanks matters because of Tank hero effects or because the team chose a different role
-structure. There is no good reason to make it arbitrate a distinction that can be imposed
-directly.
+Hero effects are identified within role rather than across roles, for a mechanical reason.
+Changing the number of Tanks, Damage heroes, or Supports changes the team's composition, so a global
+normalisation asks the hero coefficients and the composition coefficients to explain nearly the
+same role-count variation.
 
-The clean solution is to normalise within each role. Tank coefficients sum to zero across
-Tanks, Damage coefficients across Damage heroes, and Support coefficients across Supports.
-Composition effects are then left to the composition controls, and hero effects measure
-variation among heroes filling the same strategic slot. Re-estimating the model under this
-parameterisation barely changes the substantive ordering. The rank correlation with the
-earlier estimates is <<REPARAM_RHO>> and the mean absolute change in a coefficient is
-<<REPARAM_MAD>> percentage points, so the correction changes what the coefficients mean without
-materially changing the ranking.
+There is no useful question in deciding whether an extra Tank belongs to the Tank coefficients
+or to the composition coefficient, so I impose the distinction instead. Tank effects sum to zero
+across Tanks, Damage effects across Damage heroes, and Support effects across Supports.
+Composition coefficients then measure role structure, and hero coefficients measure which heroes
+perform better or worse within a role.
 
-\FloatBarrier
-\section*{What the model finds}
-
-There is substantial dispersion within all three roles (Table~\ref{tab:main}). Among Tanks,
-<<T1>> has the largest positive adjusted effect at <<T1V>> percentage points relative to the
-average Tank, followed by <<TREST>>. Among Damage heroes, <<D1>> leads at <<D1V>> points,
-followed by <<DREST>>. Among Supports, <<S1>> is the clear outlier at <<S1V>> points, followed
-by <<SREST>>.
-
-These numbers are marginal effects evaluated at a balanced match. <<T1>>'s <<T1V>> is the
-change in predicted win probability, at that evaluation point, from replacing an average Tank
-with <<T1>> while holding the model's controls fixed, rather than a promise that every team
-picking <<T1>> raises its observed win rate by that amount. <<N_NS>> of the 55 heroes cannot be statistically distinguished from
-their role average after Benjamini--Hochberg false-discovery-rate correction.
-
-Table~\ref{tab:main} also shows why raw win rate and adjusted value should not be treated as
-synonyms. Alongside the APM and its uncertainty it reports starts, pick share within the crawl,
-the raw play-time-weighted win rate, and the change produced by replacing starting-hero
-attribution with play-time weighting. Some heroes move substantially once the surrounding match
-is controlled for. Others move substantially when swaps are allowed to influence attribution.
-Those are different sources of distortion, and reporting both beside the APM lets a reader see
-which heroes' raw win rates are misleading and which heroes' estimates are sensitive to the
-attribution rule.
+Numerically, the correction changes very little. The resulting hero ranking has a
+<<REPARAM_RHO>> rank correlation with the estimates under a single global normalisation, and the
+mean coefficient changes by only <<REPARAM_MAD>> percentage points. The reason for the within-role
+normalisation is therefore interpretation rather than fit: role structure belongs in the
+composition coefficients, while hero coefficients compare heroes occupying the same role.
 
 \FloatBarrier
-\section*{Does any of this survive outside the sample?}
+\section*{Results}
 
-In-sample fit is a weak test here, particularly with <<K_PARAMS>> parameters and nearly half a
-million matches. The more informative question is whether the estimated structure survives a
-later week of data. I therefore fit the model on the <<N_TRAIN>> matches played before the final
-<<HOLD_DAYS>> days of the sample and evaluate it on the remaining <<N_HOLD>>. The split is
-chronological rather than random, so the holdout is genuinely later data and the meta drift
-that a random split would smuggle across the boundary stays on the test side.
+Table~\ref{tab:main} reports every hero. Dispersion within role is substantial. Among Tanks,
+<<T1>> has the largest adjusted effect at <<T1V>> percentage points relative to the average
+Tank, followed by <<TREST>>. Among Damage heroes, <<D1>> leads at <<D1V>> points, followed by
+<<DREST>>. Among Supports, <<S1>> stands apart at <<S1V>> points, followed by <<SREST>>.
+<<N_NS>> of the 55 heroes cannot be distinguished from their role average after
+Benjamini--Hochberg false-discovery-rate correction.
 
-Figure~\ref{fig:oos} evaluates the model in two ways. Panel~A groups holdout team-sides by the
-hero they started and compares each group's realised win rate with the model's average
-predicted win probability. If the model says that teams starting a given hero should win 53\%
-of the time, then in data it never saw those teams should win at roughly that rate, and across
-the 55 heroes they do: predicted and realised holdout win rates have a correlation of
-<<HG_CORR>> and a mean absolute gap of <<HG_GAP>> percentage points. Although map, rank score,
-composition, and team-ups explain some of the environments in which particular heroes appear,
-they do very little to reproduce the cross-hero pattern in the holdout week once the hero terms
-themselves are removed, and the correlation falls to <<HG_CORR0>>. Panel~B repeats the exercise for composition shapes and produces
-a correlation of <<SG_CORR>> with a mean absolute gap of <<SG_GAP>> points.
+These are marginal effects at a balanced match. <<T1>>'s <<T1V>> is the change in predicted win
+probability from replacing an average Tank with <<T1>>, holding the controls fixed, evaluated
+where the two teams are otherwise even. It is an adjusted association rather than the causal
+effect of the pick, for reasons taken up below.
+
+Alongside each APM the table reports the hero's starts and pick share within the crawl, its raw
+play-time-weighted win rate, and the change in the estimate when starting-hero attribution is
+replaced by play-time weighting. The raw win rate shows how far the adjustment moves each hero.
+The last column shows how far the attribution rule moves it. Those are different sources of
+distortion, and a reader can see which heroes are exposed to each.
+
+\FloatBarrier
+\section*{Does the structure survive out of sample?}
+
+With <<N_MATCHES>> observations and <<K_PARAMS>> parameters, in-sample fit says relatively
+little. I instead test whether the estimates survive a chronological holdout, estimating the
+model on the first <<N_TRAIN>> matches and evaluating it on the final <<N_HOLD>>, the last
+<<HOLD_DAYS>> days of the sample. A random split would make the test easier by mixing the same
+evolving meta across the training and test samples.
+
+The estimates hold up in the holdout week (Figure~\ref{fig:oos}). Across heroes, the predicted and realised holdout
+win rates of teams starting each hero have a correlation of <<HG_CORR>> and differ by <<HG_GAP>>
+percentage points on average. Removing the hero coefficients while keeping every other control
+reduces that correlation to <<HG_CORR0>>. Across composition structures, predicted and realised
+win rates have a correlation of <<SG_CORR>>.
 
 \begin{figure}[!htb]\centering
 \caption{Does the model predict outcomes it has not seen? Holdout week, by hero and by composition}
@@ -584,90 +567,77 @@ team-sides. Appendix Figure~\ref{fig:calib} gives the match-level calibration.
 \end{minipage}
 \end{figure}
 
-The model is also well calibrated at the match level (Appendix Figure~\ref{fig:calib}). Its
-holdout calibration slope is <<CAL_SLOPE>> with a standard error of <<CAL_SLOPE_SE>>. A slope
-of one would be ideal, and this one is <<SLOPE_VERDICT>>. Holdout log loss is <<LL_HOLD>>
-against <<LL_CONST>> for a constant prediction, and the area under the ROC curve is <<AUC>>.
-Adding the hero block to a specification that already includes map, rank score, and
-composition reduces holdout log loss from <<LL_PRE_HERO>> to <<LL_POST_HERO>>, and adding
-team-ups takes it to <<LL_HOLD>> (Appendix Table~\ref{tab:ladder}). The hero terms therefore
-carry predictive content for matches played later, beyond producing a ranking that fits the
-estimation sample.
+The holdout exercise is a persistence test, not an identification strategy. It shows that the hero
+coefficients retain information about later matches rather than merely fitting idiosyncrasies of
+the estimation sample.
 
-Several specification checks point the same way (Appendix Table~\ref{tab:checks}). Permuting
-hero assignments against outcomes destroys <<PLACEBO>> of the measured signal. The within-role
-restrictions hold to machine precision. Correcting the role-composition identification issue
-raises the rank correlation between APM and raw hero win rate from <<RAWWR_BEFORE>> to
-<<RAWWR_AFTER>>, while the within-role reparameterisation itself barely moves the estimates.
-Map-specific intercepts are retained because side-0 win rates vary from <<CAMP_LO>> to
-<<CAMP_HI>> across the <<N_MAPS>> maps. None of these checks establishes that the coefficients
-are causal, but together they make it difficult to maintain that the regression generates its
-hero rankings mechanically or by accident.
+The usual prediction diagnostics are consistent with the same result (Appendix
+Figure~\ref{fig:calib} and Table~\ref{tab:ladder}). Holdout log loss falls from <<LL_CONST>> for a
+constant forecast to <<LL_HOLD>> for the full model, and the calibration slope is <<CAL_SLOPE>>
+with a standard error of <<CAL_SLOPE_SE>>. Adding the hero block to map, rank, and composition
+controls reduces holdout log loss from <<LL_PRE_HERO>> to <<LL_POST_HERO>>, so the hero terms add
+predictive information for subsequent matches.
+
+Two further checks appear in Appendix Table~\ref{tab:checks}. Randomly permuting hero
+assignments against outcomes removes <<PLACEBO>> of the measured signal, so the estimates are
+not an artefact of the design matrix. Correcting the role-composition problem raises the rank
+correlation between APM and raw hero win rate from <<RAWWR_BEFORE>> to <<RAWWR_AFTER>>, which
+is the expected direction: the adjusted estimates should disagree with raw win rates where the
+match environment differs across heroes, not everywhere.
 
 \FloatBarrier
-\section*{Team-ups are an extra effect, not the whole pair}
+\section*{Team-ups}
 
-The team-up coefficients (Appendix Table~\ref{tab:teamups}) estimate a different object from
-the hero coefficients. They ask whether a designated pair performs better or worse than the two
-heroes' individual effects would predict. <<TU1A>> with <<TU1B>> carries an estimated <<TU1V>>
-percentage-point premium, <<TU2A>> with <<TU2B>> <<TU2V>>, <<TU3A>> with <<TU3B>> <<TU3V>>, and
-<<TU4A>> with <<TU4B>> <<TU4V>>. A premium is the increment beyond the two heroes' individual
-effects rather than the total value of the pair. A team fielding two individually strong heroes
-with a positive team-up coefficient gains both hero terms plus the premium, so <<TU1V>> is what
-<<TU1A>> and <<TU1B>> add together over and above what each already contributes alone, and
-reading it as the whole gain from fielding the pair would mislabel the object being measured.
+The team-up coefficients (Appendix Table~\ref{tab:teamups}) estimate a different object. They
+ask whether a designated pair performs better or worse than the two heroes' individual effects
+would predict. <<TU1A>> with <<TU1B>> carries a premium of <<TU1V>> percentage points, <<TU2A>>
+with <<TU2B>> <<TU2V>>, <<TU3A>> with <<TU3B>> <<TU3V>>, and <<TU4A>> with <<TU4B>> <<TU4V>>. A
+premium is the increment beyond the two individual effects, so a team fielding two strong heroes
+with a positive team-up coefficient gains both hero terms plus the premium. The premium should not be read as the total value of the pair.
 
 \FloatBarrier
-\section*{What this model does not prove}
+\section*{What the coefficients do and do not mean}
 
-There are several reasons to be more confident in the ordering of heroes than in the literal
-size of every coefficient. First, the exact
-magnitudes depend noticeably on how swaps are attributed. Under starting-hero attribution the
-cross-hero standard deviation is <<SD0>> points. It rises to <<SD2>> under most-played-hero
-attribution and <<SD1>> under play-time weighting, while the rankings retain correlations of
-<<RHO2>> and <<RHO1>> with the starting-hero ranking. The ordering is therefore considerably
-more robust than the size of the gaps, and the model gives a stable answer to which heroes
-consistently look strong or weak within their roles while giving a much less stable one to
-whether a particular hero is worth exactly <<EX0>> percentage points.
+The coefficient is not hero strength in any structural or causal sense. Three qualifications
+matter.
 
-Second, these are adjusted associations, not randomised treatment effects. Hero selection is
-endogenous. Rank score controls for general differences in player strength, but it does not
-say whether a player has five hundred hours on <<EX_HERO>> or picked the hero because someone
-in chat said it was S-tier. Hero-specific proficiency can therefore remain correlated with both
-hero selection and outcomes. Player-by-hero experience would be the obvious control, and it is
-not available in the current specification. The regression therefore removes several important
-sources of confounding while leaving hero-specific selection unresolved.
+First, magnitudes depend on the attribution rule. Rankings are fairly stable across the
+starting-hero, most-played, and play-time specifications, but the dispersion of the coefficients
+is not, at <<SD0>>, <<SD2>>, and <<SD1>> percentage points respectively. I therefore place
+substantially more confidence in statements such as ``<<EX_HERO>> looks strong relative to other
+<<EX_ROLE>> heroes'' than in statements such as ``<<EX_HERO>> is worth exactly <<EX0>>
+percentage points.''
 
-Third, the confidence intervals are probably too narrow. HC1 treats matches as the primary
-observations, but players recur across matches and each match contains twelve of them, so the
-true dependence structure is overlapping and cross-classified. A player-cluster bootstrap
-would address this properly, but the implementation as specified would need roughly
-<<BOOT_HOURS>> hours of computation at the current sample size. The point estimates are
-unaffected, but the uncertainty around them should be read more conservatively than the HC1
-intervals suggest.
+Second, hero choice remains endogenous. Rank score controls for broad differences in player
+strength, but not for hero-specific skill. A player with five hundred hours on <<EX_HERO>> is not
+observationally equivalent to a player selecting <<EX_HERO>> for the first time. Without
+player-by-hero proficiency, that source of selection remains in the coefficient.
 
-Finally, the tails of the data are thin in two ways. <<POOLED_SENTENCE>> The crawl also expands
-only through public profiles, and profile privacy rises sharply with rank score, reaching roughly
-<<PRIV_HI>> above 5{,}000. The sample is large enough that sampling noise is rarely the main
-concern, but it is systematically thinner at the very top of the ranked distribution because
-those players cannot be reached.
+Third, the reported standard errors are likely optimistic. HC1 treats matches as independent
+observations, while players recur across matches and twelve players appear in each match, so the
+dependence structure is cross-classified. The point estimates do not depend on this issue, but
+inference does. A player-cluster bootstrap would address it and has not yet been run, so the
+confidence intervals should be read accordingly.
+
+The data also thin out at the edges. <<POOLED_SENTENCE>> Profile privacy rises sharply with rank
+score, reaching roughly <<PRIV_HI>> above 5{,}000, and the crawl expands only through public
+profiles, so the very top of the ranked distribution is under-sampled. At this sample size, coverage at the top of the rank distribution is a more important
+limitation than ordinary sampling noise.
 
 \FloatBarrier
-\section*{What I would take from it}
+\section*{Conclusion}
 
-The safest interpretation is also the useful one. These estimates measure how starting a hero
-is associated with winning after accounting for observed differences in map, team strength,
-role structure, and designated team-ups. They are most naturally read within role. The rankings
-are substantially more robust than the exact coefficient magnitudes, and starting-hero
-attribution gives the headline estimates a cleaner intention-to-treat interpretation than any
-rule that uses information revealed after the match has begun.
+Raw win rates combine hero choice with the environment in which that choice is made. Adjusting
+for map, team strength, role composition, and designated team-ups changes those comparisons
+materially and leaves persistent differences across heroes within each role.
 
-The model should therefore be read as an answer to a narrower question than causal hero
-strength. Among otherwise comparable observed match environments, how does winning change when
-a team starts this hero rather than an average hero from the same role? Raw win rate mixes that
-effect together with who picks the hero, what composition surrounds it, which map is being
-played, and several other things that can be partially separated here. Across <<N_MATCHES>>
-matches, the answers differ across heroes by far more than their standard errors.
+I use starting-hero attribution because it avoids conditioning hero identity on information
+generated after the match begins. The estimates should therefore be read as intention-to-treat
+adjusted associations: conditional on the observed match environment, how does winning change
+when a team starts this hero rather than an average hero in the same role?
+
+I place more weight on the ranking than on the exact coefficient magnitudes. Rankings are
+comparatively stable across attribution rules, while the scale of the estimates is not.
 
 \begin{landscape}
 \begin{center}
@@ -844,9 +814,8 @@ percentage points. Moving from W0 toward W1 gives the regression progressively m
 about what happened after the match began. The coefficients become much larger, with cross-hero
 dispersion rising by a factor of <<SD_RATIO>>, while the broad hero ranking stays comparatively
 stable. The difference (W1$-$W0) is reported rather than a ratio because a ratio diverges for
-heroes whose starting-hero estimate is near zero. The better in-sample likelihood under W1,
-<<LL1>> against <<LL0>>, should not be read as evidence that W1 identifies hero strength
-better. Of course it predicts the match better. Part of the match has been placed inside the
+heroes whose starting-hero estimate is near zero. The better in-sample likelihood under W1, <<LL1>> against <<LL0>>, is not evidence that W1
+identifies hero strength better; part of the realised match has been placed inside the
 regressors.
 \end{minipage}
 \end{landscape}
@@ -890,6 +859,7 @@ subs = {
     "WR222": pct(CS.loc["2-2-2", "winrate"]), "WR132": pct(CS.loc["1-3-2", "winrate"]), "WR213": pct(CS.loc["2-1-3", "winrate"]),
     "MIN_SHAPE": str(MIN_SHAPE), "POOLED_SENTENCE": POOLED_SENTENCE, "POOLED_CLAUSE": POOLED_CLAUSE,
     "SD_RATIO": f"{SD['W1'] / SD['W0']:.1f}", "K_PARAMS": str(LAD[-1]["k"]),
+    "EX_ROLE": esc(EX["role"]),
     "TU1A": esc(TOP_TU.iloc[0].anchor), "TU1B": esc(TOP_TU.iloc[0].partner), "TU2A": esc(TOP_TU.iloc[1].anchor), "TU2B": esc(TOP_TU.iloc[1].partner),
     "TU3A": esc(TOP_TU.iloc[2].anchor), "TU3B": esc(TOP_TU.iloc[2].partner), "TU4A": esc(TOP_TU.iloc[3].anchor), "TU4B": esc(TOP_TU.iloc[3].partner),
     "SD0": f"{SD['W0']:.2f}", "SD2": f"{SD['W2']:.2f}", "SD1": f"{SD['W1']:.2f}",
