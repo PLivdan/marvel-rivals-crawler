@@ -1,0 +1,183 @@
+{
+ "n_matches": 477483,
+ "n_heroes": 55,
+ "same_team": {
+  "pairs": 1485,
+  "median": 4991.0,
+  "p10": 1584.4,
+  "p90": 21886.800000000007,
+  "ge_1000": 1446,
+  "ge_2500": 1112,
+  "ge_10000": 417,
+  "ge_40000": 45,
+  "share_of_instances_in_pairs_ge_2500": 0.9560803508040423
+ },
+ "cross_team": {
+  "pairs": 1485,
+  "median": 6220.0,
+  "p10": 2239.8,
+  "p90": 23726.800000000003,
+  "ge_1000": 1485,
+  "ge_2500": 1284,
+  "ge_10000": 490,
+  "ge_40000": 63,
+  "share_of_instances_in_pairs_ge_2500": 0.97562597542857
+ },
+ "se_pp_at": {
+  "500": 2.24,
+  "1000": 1.58,
+  "2500": 1.0,
+  "10000": 0.5,
+  "40000": 0.25
+ },
+ "examples": {
+  "black_panther_vs_thing": {
+   "n_matches": 7083,
+   "bp_side_winrate": 0.43442044331497953,
+   "n_without_thing": 57776,
+   "bp_side_winrate_without": 0.4904977845472168
+  },
+  "jeff_with_dino": {
+   "n_team_instances": 7075,
+   "winrate": 0.4809893992932862,
+   "n_without": 63767,
+   "winrate_without": 0.4804993178289711
+  }
+ },
+ "top_same": [
+  [
+   "Jubilee",
+   "The Hood",
+   153104
+  ],
+  [
+   "Cloak & Dagger",
+   "The Hood",
+   140455
+  ],
+  [
+   "Cloak & Dagger",
+   "Magneto",
+   129651
+  ],
+  [
+   "Magneto",
+   "The Hood",
+   123906
+  ],
+  [
+   "Magneto",
+   "Jubilee",
+   109211
+  ],
+  [
+   "Magneto",
+   "Winter Soldier",
+   99249
+  ],
+  [
+   "Magneto",
+   "Invisible Woman",
+   94387
+  ],
+  [
+   "Winter Soldier",
+   "The Hood",
+   91829
+  ],
+  [
+   "Magneto",
+   "Gambit",
+   90227
+  ],
+  [
+   "Invisible Woman",
+   "The Hood",
+   85208
+  ]
+ ],
+ "top_cross": [
+  [
+   "Magneto",
+   "The Hood",
+   152355
+  ],
+  [
+   "Cloak & Dagger",
+   "The Hood",
+   133923
+  ],
+  [
+   "Cloak & Dagger",
+   "Magneto",
+   129104
+  ],
+  [
+   "Jubilee",
+   "The Hood",
+   127143
+  ],
+  [
+   "Magneto",
+   "Jubilee",
+   112785
+  ],
+  [
+   "Magneto",
+   "Winter Soldier",
+   97305
+  ],
+  [
+   "Magneto",
+   "Invisible Woman",
+   96221
+  ],
+  [
+   "Winter Soldier",
+   "The Hood",
+   93724
+  ],
+  [
+   "Invisible Woman",
+   "The Hood",
+   93146
+  ],
+  [
+   "Cloak & Dagger",
+   "Jubilee",
+   90319
+  ]
+ ],
+ "same_team_by_role_pair": {
+  "Damage-Tank": {
+   "pairs": 405,
+   "median": 5239.0,
+   "ge_2500": 334
+  },
+  "Support-Tank": {
+   "pairs": 195,
+   "median": 10008.0,
+   "ge_2500": 177
+  },
+  "Tank-Tank": {
+   "pairs": 105,
+   "median": 3470.0,
+   "ge_2500": 65
+  },
+  "Damage-Damage": {
+   "pairs": 351,
+   "median": 2346.0,
+   "ge_2500": 163
+  },
+  "Damage-Support": {
+   "pairs": 351,
+   "median": 8629.0,
+   "ge_2500": 306
+  },
+  "Support-Support": {
+   "pairs": 78,
+   "median": 7583.0,
+   "ge_2500": 67
+  }
+ }
+}
