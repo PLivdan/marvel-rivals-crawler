@@ -189,7 +189,12 @@ def run_specification_a(conn, args):
     frame, exclusions = sample.build_sample(conn, args.forfeit_floor)
     if frame.empty:
         raise SystemExit("no matches survived the sample filters")
-    design = features.build_design(conn, frame, args.attribution)
+    design = features.build_design(
+        conn, frame, args.attribution,
+        min_shape_count=args.min_shape_count,
+        constraint=args.constraint,
+        map_intercepts=args.map_intercepts,
+    )
     design = _drop_zero_variance_extra_columns(design)
     fit = estimate.fit_logit(design)
 
@@ -211,7 +216,12 @@ def run_specification_a(conn, args):
             subset = subset.loc[
                 subset.index.repeat(subset["match_uid"].map(counts))
             ].reset_index(drop=True)
-            sub_design = features.build_design(conn, subset, args.attribution)
+            sub_design = features.build_design(
+                conn, subset, args.attribution,
+                min_shape_count=args.min_shape_count,
+                constraint=args.constraint,
+                map_intercepts=args.map_intercepts,
+            )
             sub_design = _drop_zero_variance_extra_columns(sub_design)
             return estimate.fit_logit(sub_design).hero_effects
 
@@ -240,8 +250,19 @@ def run_specification_a(conn, args):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db-path", default="data/rivals.db")
-    parser.add_argument("--attribution", default="W1",
+    parser.add_argument("--attribution", default="W0",
                         choices=list(attribution.RULES))
+    parser.add_argument("--constraint", default="within_role",
+                        choices=["global", "within_role"],
+                        help="Hero sum-to-zero constraint. within_role (default) uses "
+                             "one constraint per role, which removes the exact "
+                             "collinearity between the hero and shape blocks.")
+    parser.add_argument("--no-map-intercepts", dest="map_intercepts",
+                        action="store_false",
+                        help="Use one global intercept instead of one per map.")
+    parser.set_defaults(map_intercepts=True)
+    parser.add_argument("--min-shape-count", type=int, default=100,
+                        help="Composition shapes rarer than this pool into 'other'.")
     parser.add_argument("--forfeit-floor", type=int,
                         default=sample.DEFAULT_FORFEIT_FLOOR_SECONDS)
     parser.add_argument(

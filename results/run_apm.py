@@ -44,12 +44,13 @@ WRITE_BUSY_TIMEOUT_MS = 600_000  # 10 minutes; the crawler's commits are short
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--db-path", default="data/rivals.db")
-    ap.add_argument("--attribution", default="W1")
+    ap.add_argument("--attribution", default="W0")
     ap.add_argument("--forfeit-floor", type=int, default=240)
     ap.add_argument("--tag", default=None)
-    ap.add_argument("--constraint", default="global", choices=["global", "within_role"])
-    ap.add_argument("--map-intercepts", action="store_true")
-    ap.add_argument("--min-shape-count", type=int, default=500)
+    ap.add_argument("--constraint", default="within_role", choices=["global", "within_role"])
+    ap.add_argument("--no-map-intercepts", dest="map_intercepts", action="store_false")
+    ap.set_defaults(map_intercepts=True)
+    ap.add_argument("--min-shape-count", type=int, default=100)
     args = ap.parse_args()
     tag = args.tag or args.attribution
 

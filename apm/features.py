@@ -7,6 +7,7 @@ are reduced onto sum-to-zero bases; the recovered per-level effects come back
 via apm.contrasts.
 """
 
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
@@ -235,6 +236,14 @@ def build_design(conn, sample, attribution_rule="W1", min_shape_count=500,
         # these are plain indicators rather than contrasts.
         match_map = dict(conn.execute("SELECT match_uid, map_id FROM matches"))
         map_ids = sorted({match_map.get(uid) for uid in order} - {None})
+    if map_intercepts and not map_ids:
+        # No map recorded for any sampled match. Silently emitting a design
+        # with NO leading column would drop the side-advantage baseline
+        # entirely, so fall back to a single intercept and say so.
+        warnings.warn("map_intercepts requested but no match has a map_id; "
+                      "using a single intercept", RuntimeWarning)
+        map_intercepts = False
+    if map_intercepts:
         lead = np.zeros((n, len(map_ids)))
         pos = {m: j for j, m in enumerate(map_ids)}
         for row, uid in enumerate(order):

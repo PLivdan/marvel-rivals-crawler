@@ -30,8 +30,8 @@ def build_fixture(path, n_matches=400, n_short_matches=0):
     def insert_match(index, uid, duration):
         conn.execute(
             "INSERT INTO matches (match_uid, match_time_stamp,"
-            " match_play_duration) VALUES (?,?,?)",
-            (uid, 1_787_000_000 + index * 600, duration))
+            " match_play_duration, map_id) VALUES (?,?,?,?)",
+            (uid, 1_787_000_000 + index * 600, duration, 1231 + (index % 3)))
         pick0 = rng.choice(heroes, size=6, replace=False)
         pick1 = rng.choice(heroes, size=6, replace=False)
         win0 = int(rng.random() < 0.5)
@@ -240,3 +240,28 @@ def test_hero_adjusted_p_values_quarantines_a_degenerate_standard_error():
     assert np.isnan(adjusted_p[1033])
     assert np.isfinite(adjusted_p[1011])
     assert np.isfinite(adjusted_p[1022])
+
+
+def test_cli_defaults_to_the_identified_specification(tmp_path, monkeypatch):
+    """A bare `apm_main.py --db-path X` must produce the good spec, not the one
+    it superseded. Every default here was chosen from a measured result: W0 is
+    the only pre-outcome attribution; within_role removes an exact hero/shape
+    collinearity; map intercepts follow a measured 3.10pp spread across maps;
+    100 gives the rarer compositions their own dummy at 0.16% cost."""
+    seen = {}
+
+    def spy(conn, args):
+        seen.update(vars(args))
+        return 1
+
+    monkeypatch.setattr(apm_main, "run_specification_a", spy)
+    monkeypatch.setattr(apm_main.report, "hero_table",
+                        lambda conn, run_id: __import__("pandas").DataFrame())
+    path = str(tmp_path / "t.db")
+    build_fixture(path, n_matches=40)
+    apm_main.main(["--db-path", path])
+    assert seen["attribution"] == "W0"
+    assert seen["constraint"] == "within_role"
+    assert seen["map_intercepts"] is True
+    assert seen["min_shape_count"] == 100
+    assert seen["bootstrap_reps"] == 0
