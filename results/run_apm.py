@@ -47,6 +47,9 @@ def main():
     ap.add_argument("--attribution", default="W1")
     ap.add_argument("--forfeit-floor", type=int, default=240)
     ap.add_argument("--tag", default=None)
+    ap.add_argument("--constraint", default="global", choices=["global", "within_role"])
+    ap.add_argument("--map-intercepts", action="store_true")
+    ap.add_argument("--min-shape-count", type=int, default=500)
     args = ap.parse_args()
     tag = args.tag or args.attribution
 
@@ -57,7 +60,12 @@ def main():
     print(f"[{time.time()-t0:.0f}s] sample: {len(frame):,} matches", flush=True)
 
     t0 = time.time()
-    design = features.build_design(conn, frame, args.attribution)
+    design = features.build_design(
+        conn, frame, args.attribution,
+        min_shape_count=args.min_shape_count,
+        constraint=args.constraint,
+        map_intercepts=args.map_intercepts,
+    )
     before = design.X.shape[1]
     design = _drop_zero_variance_extra_columns(design)
     dropped = before - design.X.shape[1]
@@ -101,11 +109,17 @@ def main():
     hero_ids = list(fit.hero_ids)
     k = len(hero_ids)
     role_of = [roles.get(h) for h in hero_ids]
-    L = np.eye(k)
-    for i in range(k):
-        peers = [j for j in range(k) if role_of[j] == role_of[i]]
-        for j in peers:
-            L[i, j] -= 1.0 / len(peers)
+    if args.constraint == "within_role":
+        # beta already sums to zero within each role by construction, so a
+        # second projection would be a no-op at best. Identity keeps the
+        # reported columns comparable across both parameterisations.
+        L = np.eye(k)
+    else:
+        L = np.eye(k)
+        for i in range(k):
+            peers = [j for j in range(k) if role_of[j] == role_of[i]]
+            for j in peers:
+                L[i, j] -= 1.0 / len(peers)
     beta = np.array([fit.hero_effects[h] for h in hero_ids])
     beta_wr = L @ beta
     cov_wr = L @ fit.hero_cov @ L.T
@@ -178,6 +192,9 @@ def main():
         "intercept_logodds": float(fit.params[0]),
         "git_commit": _git_commit(),
         "interval_method": "analytic 1.96*HC1 SE (bootstrap infeasible at this scale)",
+        "constraint": args.constraint,
+        "map_intercepts": bool(args.map_intercepts),
+        "min_shape_count": args.min_shape_count,
     }
     with open(f"results/apm_run_meta_{tag}.json", "w") as fh:
         json.dump(meta, fh, indent=2)
