@@ -331,6 +331,46 @@ not reproduced here; they live in `results/fit_quality_W0_specAplus.json`,
 
 ---
 
+### 3.6 Specification E: pairwise interactions on starting lineups
+
+`results/run_pairwise.py` adds two blocks to Spec A+, one coefficient per unordered hero pair,
+built from the same starting lineups:
+
+- **synergy** `s_ab = 1[a,b both start on side 0] - 1[both on side 1]`
+- **counter** `c_ab = 1[a on side 0, b on side 1] - 1[b on side 0, a on side 1]` for `a < b`, so
+  `kappa_ab > 0` means A beats B.
+
+Pairs with fewer than 2,500 co-occurrences get no coefficient (deviation fixed at zero);
+designated team-ups are always synergy columns, and the separate team-up block is dropped because
+the synergy block contains it. On the 477,483-match sample, 1,112 of 1,485 same-team pairs and
+1,284 of 1,485 cross-team pairs clear the threshold (`results/interaction_feasibility.json`).
+
+**Identification.** Summing a hero's synergy contrasts over its five teammates equals five times
+its main-effect contrast, and summing its counter contrasts over six opponents equals six times
+it, so unconstrained interaction blocks contain the hero main effects exactly (the same trap as
+§2.10, one level up). Constraints, imposed by a null-space parametrisation:
+
+- per hero: `sum_b sigma_ab = 0` and `sum_b sgn(a,b) kappa_ab = 0`
+- per role pair (Tank-Tank, Tank-Damage, ...): `sum sigma_ab = 0`, because role-pair sums are
+  functions of composition shape and would otherwise be collinear with the shape block.
+
+Main effects then read as a hero's value averaged over the partners and opponents it actually
+faces; interactions are deviations from that average. Estimated by constrained Newton/IRLS with
+the base design dense and the interaction blocks sparse (about 66 non-zeros per match), HC1
+covariance mapped through the null-space basis, Benjamini-Hochberg across every interaction as
+one family. Checks: main effects against Spec A+ (should barely move), the chronological holdout
+ladder Spec A+ -> + synergies -> + counters, and the two folk examples (Black Panther vs The
+Thing, Jeff with Devil Dinosaur). Outputs: `results/apm_pairwise_{synergy,counter}_W0_specE.csv`,
+`results/apm_hero_table_pairwise_W0_specE.csv`, `results/pairwise_meta_W0_specE.json`; the
+report's team-up section and Appendix Tables on pairwise interactions read them.
+
+**Why this is not the play-time-weighting problem again.** The starting matchup is fixed before
+anything in the match happens, so counters are pre-start regressors. They measure the mechanism
+that makes realised play time endogenous (players swap in response to matchups) without using
+post-start information.
+
+---
+
 ## 4. Known limitations, ordered by severity
 
 ### 4.1 Composition control: 18 shapes, everything else pooled
