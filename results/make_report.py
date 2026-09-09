@@ -39,6 +39,9 @@ AUX = need("results/aux_stats.json", "json")
 CS  = need("results/comp_shapes.csv").set_index("shape")
 FQ  = need(f"results/fit_quality_{TAG}.json", "json")
 CAL = need(f"results/calibration_{TAG}.csv")
+HG  = need(f"results/holdout_groups_{TAG}.csv")
+if "groups" not in FQ:
+    raise SystemExit("fit_quality json lacks 'groups' -- rerun results/compute_fit_quality.py")
 
 for col in ("n_start", "pick_pct", "raw_wr", "within_role_p_adjusted", "within_role_significant"):
     if col not in H.columns:
@@ -137,6 +140,72 @@ _lo = min(CAL.mean_predicted.min(), (cal_h.mean_actual - 1.96 * cal_h.se).min())
 _hi = max(CAL.mean_predicted.max(), (cal_h.mean_actual + 1.96 * cal_h.se).max())
 CAL_LO, CAL_HI = np.floor(_lo * 20) / 20, np.ceil(_hi * 20) / 20
 LAD = FQ["ladder"]
+
+# out-of-sample scatter: one point per starting hero and per team composition
+hg_full = HG[(HG.level == "hero") & (HG.model == "full")].copy()
+hg_none = HG[(HG.level == "hero") & (HG.model == "no_hero")]
+sg_full = HG[(HG.level == "shape") & (HG.model == "full") & (HG.n >= 100)].copy()
+def xy_rows(d):
+    return "\n".join(f"{r.mean_predicted:.4f} {r.mean_realised:.4f}" for r in d.itertuples())
+def label_nodes(d, lo, hi, keys=None, obstacles=(), reserved=()):
+    """One \\node per labelled point. Near candidates sit diagonally next to the point
+    (default: the empty side of the 45-degree line). If every near candidate would
+    overlap another point or label, the label moves out along one of eight directions
+    and a thin leader line connects it to its point. Distances are axis-normalised and
+    stretched to the label's aspect ratio (a label is ~0.14 wide and ~0.05 tall)."""
+    span = hi - lo
+    norm = lambda x, y: ((x - lo) / span, (y - lo) / span)
+    back = lambda nx, ny: (lo + nx * span, lo + ny * span)
+    points = [norm(x, y) for x, y in obstacles] + [norm(r.mean_predicted, r.mean_realised) for r in d.itertuples()]
+    ANCHOR = {(-1, 1): "south east", (1, 1): "south west", (-1, -1): "north east", (1, -1): "north west",
+              (0, 1): "south", (0, -1): "north", (-1, 0): "east", (1, 0): "west"}
+    def centre(px, py, sx, sy):                      # approximate label centre given its anchor point
+        return px + sx * 0.07, py + sy * 0.025
+    def score(cx, cy, own):
+        # reserved rectangles (legend, corner annotation) in normalised axis units: (x0, x1, y0, y1)
+        if any(x0 - 0.07 <= cx <= x1 + 0.07 and y0 - 0.03 <= cy <= y1 + 0.03 for x0, x1, y0, y1 in reserved):
+            return 0.0
+        obs = [q for q in points if q != own] + placed
+        return min((((cx - qx) / 0.14) ** 2 + ((cy - qy) / 0.05) ** 2) ** 0.5 for qx, qy in obs) if obs else 9.0
+    placed, out = [], []
+    for r in d.sort_values("mean_predicted").itertuples():
+        if keys is not None and r.key not in keys:
+            continue
+        nx, ny = norm(r.mean_predicted, r.mean_realised)
+        own = (nx, ny)
+        cands = []                                    # (score, is_far, sx, sy, label anchor point)
+        for sx, sy in ((-1, 1), (1, -1), (1, 1), (-1, -1)):
+            px, py = nx + sx * 0.012, ny + sy * 0.008
+            cands.append((score(*centre(px, py, sx, sy), own), False, sx, sy, (px, py)))
+        default = cands[0] if ny >= nx else cands[1]
+        if default[0] >= 1.0:
+            best = default
+        else:
+            for radius in (0.10, 0.15):
+                for sx, sy in ANCHOR:
+                    px, py = nx + sx * radius, ny + sy * radius
+                    if not (0.02 < px < 0.98 and 0.02 < py < 0.98):
+                        continue
+                    cands.append((score(*centre(px, py, sx, sy), own), True, sx, sy, (px, py)))
+            best = max(cands, key=lambda c: (min(c[0], 1.3), not c[1]))   # good enough near beats far
+        sc, far, sx, sy, (px, py) = best
+        placed.append(centre(px, py, sx, sy))
+        lx, ly = back(px, py)
+        if far:
+            out.append(rf"\draw[very thin] (axis cs:{r.mean_predicted:.4f},{r.mean_realised:.4f}) -- (axis cs:{lx:.4f},{ly:.4f});")
+        out.append(rf"\node[font=\tiny, anchor={ANCHOR[(sx, sy)]}, inner sep=0.6pt, fill=white, fill opacity=0.85, text opacity=1] "
+                   rf"at (axis cs:{lx:.4f},{ly:.4f}) {{{esc(r.key)}}};")
+    return "\n".join(out)
+hg_full["resid"] = hg_full.mean_realised - hg_full.mean_predicted
+HG_LABELS = set(hg_full.sort_values("resid", key=abs, ascending=False).head(2).key)
+HG_LABELS |= {hg_full.loc[hg_full.mean_predicted.idxmax(), "key"], hg_full.loc[hg_full.mean_predicted.idxmin(), "key"]}
+def bounds(*ds, pad=0.01, step=0.05):
+    lo = min(min(d.mean_predicted.min(), d.mean_realised.min()) for d in ds) - pad
+    hi = max(max(d.mean_predicted.max(), d.mean_realised.max()) for d in ds) + pad
+    return np.floor(lo / step) * step, np.ceil(hi / step) * step
+HG_LO, HG_HI = bounds(hg_full, hg_none)
+SG_LO, SG_HI = bounds(sg_full)
+G = FQ["groups"]
 LADDER_ROWS = "\n".join(
     f"{esc(r['model'])} & {r['k']} & {ll(r['loglik_train'])} & {r['logloss_train']:.4f} & {r['logloss_holdout']:.4f} \\\\"
     for r in LAD)
@@ -361,11 +430,18 @@ leaves the coefficients essentially unchanged. Map-specific intercepts are retai
 because absolute camp-0 win rates vary from <<CAMP_LO>> to <<CAMP_HI>> across the
 <<N_MAPS>> maps.
 
-The model also predicts well out of sample. Fitted on every match except those from the
-final <<HOLD_DAYS>> days and evaluated on the <<N_HOLD>> matches of that week, it is
-well calibrated (Figure~\ref{fig:calib}): across <<CAL_BINS>> equal-count bins of
-predicted win probability, the realised win frequency tracks the $45^\circ$~line, and
-the calibration slope is <<CAL_SLOPE>> (standard error <<CAL_SLOPE_SE>>), <<SLOPE_VERDICT>>.
+The model also predicts well out of sample. It was fitted on every match except those
+from the final <<HOLD_DAYS>> days and evaluated on the <<N_HOLD>> matches of that week,
+which it had never seen. Figure~\ref{fig:oos} asks whether it reproduces the win rates of
+groups of teams in that week. For each hero, the realised win rate of holdout teams that
+started the hero is plotted against the model's average prediction for those same teams:
+the points lie along the $45^\circ$~line, with a correlation of <<HG_CORR>> and a mean
+absolute gap of <<HG_GAP>> percentage points, whereas a model with every control except
+the hero terms spreads its predictions across heroes with a standard deviation of only
+<<HG_SD0>> points against <<HG_SD1>> for the full model. The same holds by team
+composition (Panel~B). The model is also well calibrated across the whole range of
+predicted probabilities (Appendix Figure~\ref{fig:calib}): the calibration slope is
+<<CAL_SLOPE>> (standard error <<CAL_SLOPE_SE>>), <<SLOPE_VERDICT>>.
 The holdout log loss is <<LL_HOLD>>, compared
 with <<LL_CONST>> for a constant prediction, and the area under the ROC curve is
 <<AUC>>. Appendix Table~\ref{tab:ladder} shows how much each block of the model
@@ -374,55 +450,65 @@ holds map, rank score, and composition fixed lowers the holdout log loss from
 <<LL_PRE_HERO>> to <<LL_POST_HERO>>.
 
 \begin{figure}[t!]\centering
-\caption{Out-of-sample calibration of the headline model}\label{fig:calib}
+\caption{Does the model predict outcomes it has not seen? Holdout week, by hero and by composition}
+\label{fig:oos}
 \vspace{2pt}
 \begin{tikzpicture}
 \begin{axis}[
-  width=10.2cm, height=10.2cm, axis lines=left, tick style={draw=none},
-  xmin=<<CAL_LO>>, xmax=<<CAL_HI>>, ymin=<<CAL_LO>>, ymax=<<CAL_HI>>,
-  xlabel={Predicted probability that side 0 wins}, ylabel={Realised frequency of side-0 wins},
-  label style={font=\small}, tick label style={font=\footnotesize},
-  legend style={at={(0.03,0.97)}, anchor=north west, font=\footnotesize, draw=none, fill=none, cells={anchor=west}},
-  clip=false,
+  width=7.9cm, height=7.9cm, axis lines=left, tick style={draw=none}, clip=false,
+  xmin=<<HG_LO>>, xmax=<<HG_HI>>, ymin=<<HG_LO>>, ymax=<<HG_HI>>,
+  title={\small Panel A: by starting hero (55 heroes)}, title style={yshift=-3pt},
+  xlabel={Predicted win rate of teams starting the hero}, ylabel={Realised win rate in the holdout week},
+  label style={font=\footnotesize}, tick label style={font=\scriptsize},
+  legend style={at={(0.03,0.97)}, anchor=north west, font=\scriptsize, draw=none, fill=none, cells={anchor=west}},
 ]
-\addplot[dashed, thin, domain=<<CAL_LO>>:<<CAL_HI>>, samples=2] {x};
-\addlegendentry{$45^\circ$ line: perfect calibration}
-\addplot[only marks, mark=*, mark size=1.9pt, error bars/.cd, y dir=both, y explicit,
-         error bar style={thin}, error mark options={rotate=90, mark size=1.3pt}]
-  table[x=p, y=a, y error=e] {
-p a e
-<<CAL_HOLD_ROWS>>
-};
-\addlegendentry{Holdout, <<CAL_BINS>> equal-count bins (95\% bars)}
-\addplot[only marks, mark=o, mark size=1.9pt] table[x=p, y=a] {
+\addplot[dashed, thin, domain=<<HG_LO>>:<<HG_HI>>, samples=2] {x};
+\addplot[only marks, mark=o, mark size=1.3pt] table[x=p, y=a] {
 p a
-<<CAL_IN_ROWS>>
+<<HG_NOHERO_ROWS>>
 };
-\addlegendentry{In-sample, same bins}
-\node[anchor=south east, align=left, font=\footnotesize, draw, inner sep=5pt, fill=white]
-  at (rel axis cs:0.97,0.03) {%
-  \emph{Holdout, last <<HOLD_DAYS>> days, $N=<<N_HOLD>>$}\\[1pt]
-  Log loss \hfill <<LL_HOLD>>\\
-  \quad constant prediction \hfill <<LL_CONST>>\\
-  Brier score \hfill <<BRIER>>\\
-  AUC \hfill <<AUC>>\\
-  Calibration slope \hfill <<CAL_SLOPE>> (<<CAL_SLOPE_SE>>)\\
-  Calibration intercept \hfill <<CAL_INT>> (<<CAL_INT_SE>>)};
+\addplot[only marks, mark=*, mark size=1.7pt] table[x=p, y=a] {
+p a
+<<HG_FULL_ROWS>>
+};
+\legend{$45^\circ$ line, Model without hero terms, Full model}
+<<HG_LABEL_NODES>>
+\node[anchor=south east, align=right, font=\scriptsize] at (rel axis cs:0.98,0.02)
+  {Full model: corr.\ <<HG_CORR>>, mean $|$gap$|$ <<HG_GAP>> pp\\ Without hero terms: corr.\ <<HG_CORR0>>};
+\end{axis}
+\end{tikzpicture}\hfill
+\begin{tikzpicture}
+\begin{axis}[
+  width=7.9cm, height=7.9cm, axis lines=left, tick style={draw=none}, clip=false,
+  xmin=<<SG_LO>>, xmax=<<SG_HI>>, ymin=<<SG_LO>>, ymax=<<SG_HI>>,
+  title={\small Panel B: by team composition (<<SG_N>> shapes)}, title style={yshift=-3pt},
+  xlabel={Predicted win rate of teams with the composition}, ylabel={Realised win rate in the holdout week},
+  label style={font=\footnotesize}, tick label style={font=\scriptsize},
+  legend style={at={(0.03,0.97)}, anchor=north west, font=\scriptsize, draw=none, fill=none, cells={anchor=west}},
+]
+\addplot[dashed, thin, domain=<<SG_LO>>:<<SG_HI>>, samples=2] {x};
+\addplot[only marks, mark=*, mark size=1.7pt] table[x=p, y=a] {
+p a
+<<SG_ROWS>>
+};
+\legend{$45^\circ$ line, Full model}
+<<SG_LABEL_NODES>>
+\node[anchor=south east, align=right, font=\scriptsize] at (rel axis cs:0.98,0.02)
+  {corr.\ <<SG_CORR>>, mean $|$gap$|$ <<SG_GAP>> pp};
 \end{axis}
 \end{tikzpicture}
 
-\begin{minipage}{0.92\linewidth}\footnotesize\vspace{4pt}
-\emph{Notes.} The model is fitted on the <<N_TRAIN>> matches played before the final
-<<HOLD_DAYS>> days of the sample and evaluated on the <<N_HOLD>> matches played during
-them; a random split would leak meta drift. Matches are sorted by predicted probability
-into <<CAL_BINS>> equal-count bins of about <<CAL_BIN_N>> matches; each filled circle is one
-bin's mean prediction against its realised win frequency, with a 95\% binomial interval; open
-circles repeat the construction in-sample on all <<N_MATCHES>> matches. The calibration slope and
-intercept are from a logit of the realised outcome on the log-odds of the prediction
-(ideal: 1 and 0). A constant prediction at the training base rate gives the log loss
-shown for comparison. Predicted probabilities fall between <<P_MIN>> and <<P_MAX>>, and
-<<SHARE_MID>> of holdout matches are predicted between 35\% and 65\%: the model
-separates unbalanced matches well and, as it should, treats balanced ones as coin flips.
+\begin{minipage}{0.95\linewidth}\footnotesize\vspace{4pt}
+\emph{Notes.} The model is fitted on the <<N_TRAIN>> matches before the final <<HOLD_DAYS>>
+days and evaluated on the <<N_HOLD>> matches of that week. Each holdout match contributes
+two team-sides. Panel~A groups team-sides by each hero they started: the horizontal axis is
+the model's mean predicted win probability for those team-sides, the vertical axis the share
+that actually won. Filled circles use the full model; open circles use the same model with
+the hero contrasts removed, so their horizontal spread is only what map, rank score,
+composition, and team-ups can explain about a hero's teams. Labels mark the two heroes farthest
+from the line and the two extremes. Panel~B groups team-sides by composition shape
+(Tanks--Damage--Supports), showing every shape with at least 100 holdout team-sides.
+Appendix Figure~\ref{fig:calib} gives the match-level calibration.
 \end{minipage}
 \end{figure}
 
@@ -520,6 +606,8 @@ attribution rules.
 \section*{Appendix}
 \renewcommand{\thetable}{A\arabic{table}}
 \setcounter{table}{0}
+\renewcommand{\thefigure}{A\arabic{figure}}
+\setcounter{figure}{0}
 
 \begin{center}\small
 \begin{threeparttable}
@@ -565,6 +653,60 @@ prediction at the training base rate gives a holdout log loss of <<LL_CONST>>; t
 in-sample column shows how little of the improvement is overfitting.
 \end{tablenotes}
 \end{threeparttable}
+\end{center}
+
+\begin{center}
+\captionof{figure}{Out-of-sample calibration of the headline model}\label{fig:calib}
+\vspace{2pt}
+\begin{minipage}[c]{9.4cm}\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=7.8cm, height=7.8cm, axis lines=left, tick style={draw=none},
+  xmin=<<CAL_LO>>, xmax=<<CAL_HI>>, ymin=<<CAL_LO>>, ymax=<<CAL_HI>>,
+  xlabel={Predicted probability that side 0 wins}, ylabel={Realised frequency of side-0 wins},
+  label style={font=\small}, tick label style={font=\footnotesize},
+  legend style={at={(0.03,0.97)}, anchor=north west, font=\scriptsize, draw=none, fill=none, cells={anchor=west}},
+  clip=false,
+]
+\addplot[dashed, thin, domain=<<CAL_LO>>:<<CAL_HI>>, samples=2] {x};
+\addlegendentry{$45^\circ$ line: perfect calibration}
+\addplot[only marks, mark=*, mark size=1.9pt, error bars/.cd, y dir=both, y explicit,
+         error bar style={thin}, error mark options={rotate=90, mark size=1.3pt}]
+  table[x=p, y=a, y error=e] {
+p a e
+<<CAL_HOLD_ROWS>>
+};
+\addlegendentry{Holdout bins, 95\% bars}
+\addplot[only marks, mark=o, mark size=1.9pt] table[x=p, y=a] {
+p a
+<<CAL_IN_ROWS>>
+};
+\addlegendentry{In-sample bins}
+\end{axis}
+\end{tikzpicture}
+\end{minipage}\hfill
+\begin{minipage}[c]{7.2cm}\scriptsize
+\begin{tabular}{@{}l r@{}}
+\multicolumn{2}{@{}l}{\emph{Holdout, last <<HOLD_DAYS>> days, $N=<<N_HOLD>>$}}\\[2pt]
+Log loss & <<LL_HOLD>>\\
+\quad constant prediction & <<LL_CONST>>\\
+Brier score & <<BRIER>>\\
+AUC & <<AUC>>\\
+Calibration slope (s.e.) & <<CAL_SLOPE>> (<<CAL_SLOPE_SE>>)\\
+Calibration intercept (s.e.) & <<CAL_INT>> (<<CAL_INT_SE>>)\\
+\end{tabular}\\[8pt]
+\emph{Notes.} The model is fitted on the <<N_TRAIN>> matches played before the final
+<<HOLD_DAYS>> days of the sample and evaluated on the <<N_HOLD>> matches played during
+them; a random split would leak meta drift. Matches are sorted by predicted probability
+into <<CAL_BINS>> equal-count bins of about <<CAL_BIN_N>> matches; each filled circle is one
+bin's mean prediction against its realised win frequency, with a 95\% binomial interval; open
+circles repeat the construction in-sample on all <<N_MATCHES>> matches. The calibration slope and
+intercept are from a logit of the realised outcome on the log-odds of the prediction
+(ideal: 1 and 0). A constant prediction at the training base rate gives the log loss
+shown for comparison. Predicted probabilities fall between <<P_MIN>> and <<P_MAX>>, and
+<<SHARE_MID>> of holdout matches are predicted between 35\% and 65\%: the model
+separates unbalanced matches well and, as it should, treats balanced ones as coin flips.
+\end{minipage}
 \end{center}
 
 \begin{landscape}
@@ -669,7 +811,16 @@ subs = {
     "CAL_HOLD_ROWS": cal_rows(cal_h), "CAL_IN_ROWS": cal_rows(cal_i, err=False),
     "P_MIN": pct(100 * FQ["p_holdout_min"], 0), "P_MAX": pct(100 * FQ["p_holdout_max"], 0),
     "SHARE_MID": pct(100 * FQ["share_holdout_between_35_65"], 0),
-    "SLOPE_VERDICT": SLOPE_VERDICT, "LL_PRE_HERO": f"{LL_PRE_HERO:.4f}", "LL_POST_HERO": f"{LL_POST_HERO:.4f}", "LADDER_ROWS": LADDER_ROWS,
+    "SLOPE_VERDICT": SLOPE_VERDICT, "LL_PRE_HERO": f"{LL_PRE_HERO:.4f}",
+    "HG_LO": f"{HG_LO:.2f}", "HG_HI": f"{HG_HI:.2f}", "SG_LO": f"{SG_LO:.2f}", "SG_HI": f"{SG_HI:.2f}",
+    "HG_FULL_ROWS": xy_rows(hg_full), "HG_NOHERO_ROWS": xy_rows(hg_none), "SG_ROWS": xy_rows(sg_full),
+    "HG_LABEL_NODES": label_nodes(hg_full, HG_LO, HG_HI, HG_LABELS, obstacles=list(zip(hg_none.mean_predicted, hg_none.mean_realised)),
+                                  reserved=[(0.0, 0.58, 0.80, 1.0), (0.40, 1.0, 0.0, 0.13)]),
+    "SG_LABEL_NODES": label_nodes(sg_full, SG_LO, SG_HI, reserved=[(0.0, 0.40, 0.86, 1.0), (0.45, 1.0, 0.0, 0.08)]),
+    "HG_CORR": f"{G['hero_full']['corr']:.3f}", "HG_CORR0": f"{G['hero_no_hero']['corr']:.3f}",
+    "HG_GAP": f"{G['hero_full']['mean_abs_gap_pp']:.2f}",
+    "HG_SD0": f"{G['hero_no_hero']['sd_predicted_pp']:.2f}", "HG_SD1": f"{G['hero_full']['sd_predicted_pp']:.2f}",
+    "SG_N": str(len(sg_full)), "SG_CORR": f"{G['shape_full']['corr']:.3f}", "SG_GAP": f"{G['shape_full']['mean_abs_gap_pp']:.2f}", "LL_POST_HERO": f"{LL_POST_HERO:.4f}", "LADDER_ROWS": LADDER_ROWS,
     "HERO_HDR": HERO_HDR, "HERO_BODY": HERO_BODY, "ATTR_HDR": ATTR_HDR, "ATTR_BODY": ATTR_BODY,
     "TU_HDR": TU_HDR, "TU_BODY": TU_BODY,
 }

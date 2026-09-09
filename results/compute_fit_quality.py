@@ -27,6 +27,8 @@ frame, _ = sample.build_sample(conn, 240)
 train, test = sample.temporal_holdout(frame, HOLDOUT_DAYS)
 print(f"[{time.time()-t0:.0f}s] sample {len(frame):,}: train {len(train):,}, holdout {len(test):,} "
       f"(last {HOLDOUT_DAYS} days)", flush=True)
+from apm.features import _lineup_rosters
+HERO = {h: (n, r) for h, n, r in conn.execute("SELECT hero_id, name, role FROM hero_info")}
 design = _drop_zero_variance_extra_columns(
     features.build_design(conn, frame, "W0", min_shape_count=100, constraint="within_role", map_intercepts=True))
 X, y, names = design.X.astype(float), design.y.astype(float), list(design.column_names)
@@ -47,6 +49,8 @@ for label, pref in LADDER:
     cols = sorted(set(cols) | set(block(pref)))
     b, info = fit_logit_weighted(X[:, cols], y, w_train)
     p = expit(X[:, cols] @ b)
+    if label.startswith("+ team-composition"):
+        p_nohero = p.copy()
     ladder.append({"model": label, "k": len(cols), "converged": bool(info["converged"]),
                    "loglik_train": info["loglike"],
                    "logloss_train": log_loss(y[~is_test], p[~is_test]),
@@ -54,6 +58,49 @@ for label, pref in LADDER:
     print(f"[{time.time()-t0:.0f}s] {label:28s} k={len(cols):4d} holdout log loss {ladder[-1]['logloss_holdout']:.5f}", flush=True)
 assert cols == list(range(X.shape[1])), "ladder did not exhaust the design columns"
 p_hold, y_hold = p[is_test], y[is_test]
+
+# --- out-of-sample aggregates by starting hero and by team composition -------
+# Each holdout match contributes two team-sides. A side's predicted win
+# probability is p (camp 0) or 1-p (camp 1); realised is y or 1-y. Every
+# starting hero on that side (duplicates count twice) and the side's shape
+# receive that pair. The no-hero model (maps + skill + shapes) is the benchmark.
+hold_uids = [u for u, t in zip(design.match_uids, is_test) if t]
+rosters = _lineup_rosters(conn, hold_uids, "W0")
+p_by, pn_by, y_by = ({u: v for u, v in zip(design.match_uids, arr)} for arr in (p, p_nohero, y))
+acc = {}
+def add(level, key, model, pred, real):
+    a = acc.setdefault((level, key, model), [0, 0.0, 0.0]); a[0] += 1; a[1] += pred; a[2] += real
+for (uid, camp), heroes in rosters.items():
+    sgn = 1 if camp == 0 else -1
+    pairs = {"full": (0.5 + sgn * (p_by[uid] - 0.5), 0.5 + sgn * (y_by[uid] - 0.5)),
+             "no_hero": (0.5 + sgn * (pn_by[uid] - 0.5), 0.5 + sgn * (y_by[uid] - 0.5))}
+    counts = {"Tank": 0, "Damage": 0, "Support": 0}
+    for h in heroes:
+        role = HERO.get(h, (None, None))[1]
+        if role in counts:
+            counts[role] += 1
+        for model, (pr, re_) in pairs.items():
+            add("hero", h, model, pr, re_)
+    shape = f"{counts['Tank']}-{counts['Damage']}-{counts['Support']}"
+    for model, (pr, re_) in pairs.items():
+        add("shape", shape, model, pr, re_)
+rows = []
+for (level, key, model), (n, sp, sr) in acc.items():
+    a = sr / n
+    rows.append({"level": level, "key": HERO[key][0] if level == "hero" else key,
+                 "role": HERO[key][1] if level == "hero" else None, "model": model, "n": n,
+                 "mean_predicted": sp / n, "mean_realised": a, "se_realised": np.sqrt(max(a * (1 - a), 1e-12) / n)})
+grp = pd.DataFrame(rows).sort_values(["level", "model", "n"], ascending=[True, True, False])
+grp.to_csv(f"results/holdout_groups_{TAG}.csv", index=False)
+def summary(level, model, min_n=1):
+    d = grp[(grp.level == level) & (grp.model == model) & (grp.n >= min_n)]
+    return {"n_groups": int(len(d)), "corr": float(np.corrcoef(d.mean_predicted, d.mean_realised)[0, 1]),
+            "mean_abs_gap_pp": float(100 * (d.mean_predicted - d.mean_realised).abs().mean()),
+            "sd_predicted_pp": float(100 * d.mean_predicted.std()), "sd_realised_pp": float(100 * d.mean_realised.std())}
+group_summary = {"hero_full": summary("hero", "full"), "hero_no_hero": summary("hero", "no_hero"),
+                 "shape_full": summary("shape", "full", 100), "shape_no_hero": summary("shape", "no_hero", 100)}
+print(f"[{time.time()-t0:.0f}s] hero-level holdout: full corr {group_summary['hero_full']['corr']:.3f} "
+      f"(no-hero {group_summary['hero_no_hero']['corr']:.3f}); mean |gap| {group_summary['hero_full']['mean_abs_gap_pp']:.2f}pp", flush=True)
 
 def quantile_bins(p, y, bins):
     order = np.argsort(p); groups = np.array_split(order, bins); rows = []
@@ -83,7 +130,7 @@ out = {"tag": TAG, "holdout_days": HOLDOUT_DAYS, "n_train": int((~is_test).sum()
        "calibration_slope": float(bc[1]), "calibration_slope_se": float(np.sqrt(V[1, 1])),
        "holdout_base_rate": float(y_hold.mean()), "p_holdout_min": float(p_hold.min()), "p_holdout_max": float(p_hold.max()),
        "share_holdout_between_35_65": float(np.mean((p_hold > .35) & (p_hold < .65))),
-       "bins": BINS, "ladder": ladder}
+       "bins": BINS, "ladder": ladder, "groups": group_summary}
 json.dump(out, open(f"results/fit_quality_{TAG}.json", "w"), indent=2)
 print(f"[{time.time()-t0:.0f}s] done. holdout log loss {out['logloss_holdout']:.5f} vs constant "
       f"{out['logloss_holdout_constant']:.5f}; AUC {auc:.4f}; calibration slope {bc[1]:.3f} ({np.sqrt(V[1,1]):.3f})", flush=True)
