@@ -123,3 +123,81 @@ def fit_absorbed_lpm(X, y, groups, hero_ids, hero_basis, hero_slice,
     return FitResult(params=params, cov=cov, column_names=column_names,
                      hero_effects=effects, hero_cov=hero_cov,
                      hero_ids=list(hero_ids), loglike=float("nan"), n=n)
+
+
+def _weighted_loglike(X, y, w, beta):
+    """Weighted Bernoulli log-likelihood via logaddexp (never exp(-eta)).
+
+    Zero-weight rows are zeroed out before multiplying by w, not after, so a
+    row with an extreme eta (0/1 saturated probability) can never turn into a
+    0 * (+/-inf) NaN just because it happens to carry zero weight.
+    """
+    eta = X @ beta
+    ll_i = y * eta - np.logaddexp(0.0, eta)
+    contrib = np.where(w > 0, w * ll_i, 0.0)
+    return float(np.sum(contrib))
+
+
+def fit_logit_weighted(X, y, weights, beta0=None, max_iter=25, tol=1e-8):
+    """Frequency-weighted logistic regression by IRLS.
+
+    X: (n, k) float array. y: (n,) 0/1. weights: (n,) non-negative; a zero
+    weight drops the row; weights need not be integers. beta0: warm start,
+    (k,); zeros if None. Returns (beta, info) where info is a dict with keys
+    'converged' (bool), 'n_iter' (int), 'loglike' (weighted log-likelihood at
+    the solution).
+
+    Built for the player-cluster bootstrap: the design (X, y) is fixed and
+    built once, and each replication supplies its own frequency-weight
+    vector over the same rows (weight 3 = "this match was drawn three
+    times"), warm-started from the full-sample solution so IRLS converges in
+    a handful of iterations instead of the ~10-20 a cold start needs.
+    """
+    X = np.asarray(X, dtype=float)
+    y = np.asarray(y, dtype=float)
+    w = np.asarray(weights, dtype=float)
+    n, k = X.shape
+
+    beta = np.zeros(k) if beta0 is None else np.array(beta0, dtype=float, copy=True)
+
+    loglike = _weighted_loglike(X, y, w, beta)
+    converged = False
+    singular = False
+    n_iter = 0
+
+    for it in range(1, max_iter + 1):
+        n_iter = it
+        eta = X @ beta
+        p = expit(eta)
+        W = w * p * (1.0 - p)
+        r = w * (y - p)
+
+        # X' W X via a single weighted matrix product -- scale X by W once
+        # (n, k) and matrix-multiply, rather than materialising an (n, n)
+        # diagonal weight matrix. Essential at n ~= 500,000.
+        XtWX = X.T @ (X * W[:, None])
+        Xtr = X.T @ r
+
+        try:
+            delta = np.linalg.solve(XtWX, Xtr)
+        except np.linalg.LinAlgError:
+            delta, *_ = np.linalg.lstsq(XtWX, Xtr, rcond=None)
+            singular = True
+
+        beta = beta + delta
+        new_loglike = _weighted_loglike(X, y, w, beta)
+        max_change = float(np.max(np.abs(delta))) if delta.size else 0.0
+        ll_improved = abs(new_loglike - loglike)
+        loglike = new_loglike
+
+        if max_change < tol or ll_improved < tol:
+            converged = True
+            break
+
+    info = {
+        "converged": converged,
+        "n_iter": n_iter,
+        "loglike": loglike,
+        "singular": singular,
+    }
+    return beta, info
