@@ -166,6 +166,44 @@ Confirm the player graph is one component.
 
 ────────
 
+### Result of the §3 feasibility spike (8 Sep 2026)
+
+One fit at λ=1 on 477,483 matches with 879,317 player effects, L-BFGS.
+
+| | |
+|---|---|
+| design build | 657 s |
+| optimisation | 1,068 s, **did not converge** (2,000-iteration ceiling) |
+| log-likelihood | −320,068 (A+) → −142,970 — overfitting at this λ, not fit |
+| hero effects | sd 2.60 → 4.06, Spearman 0.989 with A+ |
+
+The uniform inflation is the logit-scale artifact — adding variance-absorbing
+regressors rescales every coefficient — not confounding removal. **Dividing C by
+the sd ratio (1.558) leaves a mean absolute shift of 0.26 pp; 48 of 55 heroes are
+within ±0.5 pp of A+.** Only Deadpool (Duelist) moves materially (−0.67 → −2.31).
+
+**Reading.** The "+a" step of the §5 A→C decomposition is small: general player
+skill beyond the rank-score differential is not a first-order confounder here.
+This is what §4 predicted — `a_i` cannot touch hero-specific skill `b_ih`, and
+that is the confounder that would matter. With the §4 proficiency fetch declined,
+Spec C's marginal value is lower than this plan assumed: it is a robustness
+table confirming A+, not a correction to it.
+
+**If C is built anyway**, three things the spike settles: λ=1 is far too weak
+and must come from the temporal CV the plan specifies; L-BFGS needs either the
+LPM-for-the-λ-grid route the plan already names or ~5× more iterations
+(≈ 90 min per converged fit); and A-vs-C must be compared on average partial
+effects or standardised contrasts, never on raw β, or the scale artifact will be
+read as a finding.
+
+**Recommended reprioritisation.** The report's most-cited limitation is that the
+intervals ignore cross-classified player dependence. Making the bootstrap
+feasible (§6: build the design once, row-replicate) fixes a stated weakness of
+the headline table. Spec C confirms something we now already know. Bootstrap
+first; C as a later appendix.
+
+────────
+
 ## 4. The specialist control
 
 **The problem, exactly.** In Spec A, β_h = hero value + `E[b_ih | i plays h]`,
