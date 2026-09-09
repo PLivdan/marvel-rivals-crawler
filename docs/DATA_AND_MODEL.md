@@ -364,31 +364,36 @@ Thing, Jeff with Devil Dinosaur). Outputs: `results/apm_pairwise_{synergy,counte
 `results/apm_hero_table_pairwise_W0_specE.csv`, `results/pairwise_meta_W0_specE.json`; the
 report's team-up section and Appendix Tables on pairwise interactions read them.
 
-**Result (9 Sep 2026, `results/pairwise_meta_W0_specE.json`).** 1,112 synergy and 1,284
-counter columns (1,144 and 1,230 free after constraints; 2,374 free interaction parameters in
-total). Converged in 3 Newton steps from the Spec A+ warm start. After BH across all 2,396
-interactions, 52 counters and 74 synergies are significant at q<0.05; of the synergies, 32 of the
-100 designated team-ups and 42 of 1,015 other pairs. The five largest synergies are all
-designated team-ups (Moon Knight-Blade +8.1, Ultron-Adam Warlock +7.7, Squirrel Girl-Iron Man
-+7.2, Iron Fist-White Fox +6.8, Gambit-Rogue +6.5 pp). Largest counters: Black Widow over Ultron
-+4.8, Ultron over White Fox +4.7, Venom over Squirrel Girl +3.8, Thor over Black Panther +3.7,
-Spider-man over Iron Man +3.3, Black Widow over Iron Man +3.2 pp. Black Panther vs The Thing:
--2.2 pp (SE 0.75, q=0.054), so most of the raw -5.6 pp gap is The Thing's own strength. Jeff with
-Devil Dinosaur: +1.9 pp (SE 0.82, q=0.18).
+**Result (9 Sep 2026, `results/pairwise_meta_W0_specE.json`, team-up columns free).** 1,115
+synergy columns (100 designated team-ups free + 1,015 other pairs, 1,057 free after constraints)
+and 1,284 counter columns (1,230 free); 2,374 free interaction parameters. Converged in 3 Newton
+steps from the Spec A+ warm start. After BH across all 2,399 interactions, 51 counters and 68
+synergies are significant at q<0.05: 30 of the 100 team-ups and 38 of the 1,015 other pairs (14
+positive, 24 negative). Team-up premiums agree with the Spec A+ block (Spearman 0.89, mean |diff|
+0.56 pp); the largest are Ultron-Adam Warlock +8.8, Moon Knight-Blade +8.5, Squirrel Girl-Iron
+Man +8.0, Iron Fist-White Fox +7.0, Gambit-Rogue +6.8. Largest non-team-up synergies: Adam
+Warlock-Jubilee +3.9, Loki-Devil Dinosaur +3.5, Adam Warlock-Invisible Woman +3.3, Cloak &
+Dagger-Adam Warlock +3.2, Gambit-Deadpool (Duelist) +3.2. Largest negative: Rocket Raccoon with
+Jeff (-3.5), Invisible Woman (-3.3), Gambit (-3.1); the negatives cluster on common Support duos
+and Tank duos (Doctor Strange-Magneto -2.4). Counters: Black Widow over Ultron +4.8, Ultron over
+White Fox +4.7, Venom over Squirrel Girl +3.8, Thor over Black Panther +3.7, Spider-man over
+Iron Man +3.3. Black Panther vs The Thing -2.2 pp (SE 0.75, q=0.054), so most of the raw -5.6
+gap is The Thing's own strength. Jeff with Devil Dinosaur +1.9 (SE 0.86, q=0.21).
 
-**Holdout ladder (same 7-day split):** Spec A+ 0.66743 -> + synergies 0.66773 -> + counters
-0.66816. The interaction blocks do NOT improve out-of-sample prediction; in aggregate they add
-more noise than signal despite many precisely estimated individual pairs. The headline therefore
-keeps the parsimonious team-up block; Spec E is reported descriptively (report: team-up section,
-Appendix ladder and top-30 table).
+**Holdout ladder (same 7-day split):** Spec A+ 0.66743 -> + synergies 0.66768 -> + counters
+0.66812. The interaction blocks do NOT improve out-of-sample prediction. The headline keeps the
+parsimonious team-up block; Spec E is reported descriptively (report: team-up section, Appendix
+ladder and top-30 table, whose synergy column omits designated team-ups).
 
-**Main effects move by definition, not evidence.** Spearman 0.869 with Spec A+, mean |change|
-1.07 pp, max 2.95 pp. Under Spec A+ a hero's coefficient is net of its designated team-up
-premiums; under Spec E it averages over all observed partners (team-ups included), so heroes
-with strong team-ups rise (Star-lord +2.6, Cyclops +2.6, Peni Parker +2.2) and heroes without
-fall (Daredevil -3.0, Magik -2.6, The Thing -2.3). Correlation of the change with the sum of a
-hero's positive team-up premiums: 0.45. Team-up premiums themselves: Spearman 0.88 with the old
-block, mean |diff| 0.54 pp.
+**Main effects move by definition, not evidence.** Spearman 0.87 with Spec A+, mean |change|
+0.98 pp, max 3.16 pp, uncorrelated with team-up exposure (0.14) once team-ups are free. Cause:
+the per-hero sum-to-zero is equal-weighted across a hero's included pairs, so the Spec E main
+effect refers to an equal-weighted mix of partners/opponents rather than the mix the hero actually
+gets. Heroes whose common pairings carry negative deviations rise (Cyclops +3.2, Star-lord +2.1),
+heroes whose common pairings carry positive deviations fall (Daredevil -2.4, Magik -2.0, The
+Thing -1.9). An earlier variant that also constrained the team-up columns folded team-up premiums
+into the main effects (shift correlated 0.45 with team-up exposure) and made heroes with strong
+team-ups show negative synergies with everyone else; superseded, kept in git history (25dfad8).
 
 **Why this is not the play-time-weighting problem again.** The starting matchup is fixed before
 anything in the match happens, so counters are pre-start regressors. They measure the mechanism

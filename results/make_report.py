@@ -234,7 +234,13 @@ def pw_row(r, counter):
     return f"{label} & {eff:+.2f}{stars(r.q)} & ({r.se_pp:.2f}) & {int(r.n_cooccur):,}"
 PW_TOPN = 30
 ctr_sig = PWC[PWC.q < .05].assign(a=lambda d: d.effect_pp.abs()).sort_values("a", ascending=False).head(PW_TOPN)
-syn_sig = PWS[PWS.q < .05].assign(a=lambda d: d.effect_pp.abs()).sort_values("a", ascending=False).head(PW_TOPN)
+syn_sig = PWS[(PWS.q < .05) & ~PWS.is_teamup].assign(a=lambda d: d.effect_pp.abs()).sort_values("a", ascending=False).head(PW_TOPN)
+_nt = PWS[(PWS.q < .05) & ~PWS.is_teamup]
+PW_NT_POS = int((_nt.effect_pp > 0).sum()); PW_NT_NEG = int((_nt.effect_pp < 0).sum())
+PW_TOP_SYN_NT = oxford(f"{esc(r.hero_a)} with {esc(r.hero_b)} ({r.effect_pp:+.1f})" for r in _nt.sort_values("effect_pp", ascending=False).head(3).itertuples())
+PW_NEG_SYN_NT = oxford(f"{esc(r.hero_a)} with {esc(r.hero_b)} ({r.effect_pp:+.1f})" for r in _nt.sort_values("effect_pp").head(3).itertuples())
+_tu_sig = PWS[(PWS.q < .05) & PWS.is_teamup].sort_values("effect_pp", ascending=False)
+PW_TOP_SYN_TU = oxford(f"{esc(r.hero_a)} with {esc(r.hero_b)} ({r.effect_pp:+.1f})" for r in _tu_sig.head(3).itertuples())
 PW_BODY = side_by_side([[pw_row(r, True) for r in ctr_sig.itertuples()], [pw_row(r, False) for r in syn_sig.itertuples()]], 4)
 def pw_phrase(r, counter):
     if counter:
@@ -671,26 +677,33 @@ times (a counter, <<PW_N_CTR>> pairs), on the same starting lineups as the headl
 blocks need constraints to be identified at all. Summing a hero's synergy contrasts over its
 five teammates gives five times its own contrast, and summing its counter contrasts over six
 opponents gives six times it, so without restrictions the interaction blocks contain the main
-effects exactly. Each hero's synergies are therefore constrained to sum to zero across partners
-and its counters to sum to zero across opponents, with a further sum-to-zero within each role
-pair so that composition stays in the composition block. The main effect then reads as a hero's
-value averaged over the partners and opponents it actually faces, and each interaction is a
-deviation from that average.
+effects exactly. Each hero's synergies are therefore constrained to sum to zero across its
+partners other than designated team-ups, which stay free exactly as in the headline model, and
+its counters to sum to zero across opponents, with a further sum-to-zero within each role pair
+so that composition stays in the composition block. Each interaction is then a deviation from
+the hero's typical partner or opponent.
 
 The main effects change definition rather than evidence. Under the headline specification a
-hero's coefficient is net of its designated team-up premiums; here it averages over every
-partner the hero actually starts with, team-ups included. The rank correlation with the headline
-estimates is <<PW_RHO_MAIN>> and the mean absolute change <<PW_MAD_MAIN>> percentage points, and
-the changes track team-up exposure (correlation <<PW_EXP_CORR>> with the sum of a hero's positive
-team-up premiums): <<PW_MOVERS_UP>> gain, while <<PW_MOVERS_DOWN>> lose. Neither version is
-wrong. They answer different questions about the same hero.
+hero's coefficient is its value over the partners and opponents it actually gets, weighted by
+how often it gets them. Here the deviations sum to zero with equal weight across a hero's
+included pairs, so the main effect refers to an equal-weighted mix of partners and opponents
+instead. The rank correlation with the headline estimates is <<PW_RHO_MAIN>> and the mean
+absolute change <<PW_MAD_MAIN>> percentage points. Heroes whose most common pairings carry
+negative deviations rise, as for <<PW_MOVERS_UP>>, and heroes whose common pairings carry
+positive deviations fall, as for <<PW_MOVERS_DOWN>>. Neither version is wrong. They answer
+different questions about the same hero, and the headline version answers the one a player
+choosing a hero actually faces.
 
 After false-discovery-rate correction across all <<PW_N_ALL>> interactions, <<PW_SIG_CTR>>
 counters and <<PW_SIG_SYN>> synergies are distinguishable from zero. The largest synergies are
-<<PW_TOP_SYN>><<PW_SYN_TU_CLAUSE>>. Of the <<PW_N_TU_COLS>> designated team-ups, <<PW_SIG_SYN_TU>>
-are significant, against <<PW_SIG_SYN_OTHER>> of the <<PW_N_OTHER_COLS>> other pairs, which is
-the pattern one would expect if the game's designed synergies are the main synergies. The largest
-counters are <<PW_TOP_CTR>>. Two folk beliefs can be checked directly. Black Panther against a
+the designated team-ups, led by <<PW_TOP_SYN_TU>>, and <<PW_SIG_SYN_TU>> of the <<PW_N_TU_COLS>>
+team-ups are significant against <<PW_SIG_SYN_OTHER>> of the <<PW_N_OTHER_COLS>> other pairs,
+which is the pattern one would expect if the game's designed synergies are the main synergies.
+Beyond them, <<PW_NT_POS>> pairs do better together than their individual effects predict, led by
+<<PW_TOP_SYN_NT>>, and <<PW_NT_NEG>> do worse, led by <<PW_NEG_SYN_NT>>. The negative pairs are
+concentrated among Support duos and Tank duos, several of them among the most common pairings in
+the sample, which is consistent with genuine redundancy and equally with default duos being
+fielded by less coordinated teams. The largest counters are <<PW_TOP_CTR>>. Two folk beliefs can be checked directly. Black Panther against a
 starting Thing is <<PW_BP_THING>>, so most of the raw <<PW_BP_RAW>>-point gap in Black Panther's
 win rate when a Thing is on the other side is The Thing's own strength rather than a specific
 counter. Jeff starting alongside Devil Dinosaur is <<PW_JEFF_DINO>>. On the chronological holdout
@@ -948,7 +961,7 @@ regressors.
 \captionof{table}{Strongest pairwise interactions on starting lineups}\label{tab:pairwise}
 \begin{tabular}{l r r r @{\hspace{2.5em}} l r r r}
 \toprule
-\multicolumn{4}{l}{\emph{Counters: A over B}} & \multicolumn{4}{l}{\emph{Synergies: A with B}} \\
+\multicolumn{4}{l}{\emph{Counters: A over B}} & \multicolumn{4}{l}{\emph{Synergies beyond designated team-ups: A with B}} \\
 Matchup & \multicolumn{1}{c}{Effect} & \multicolumn{1}{c}{S.E.} & \multicolumn{1}{c}{Matches} &
 Pair & \multicolumn{1}{c}{Effect} & \multicolumn{1}{c}{S.E.} & \multicolumn{1}{c}{Teams} \\
 \midrule
@@ -959,9 +972,12 @@ Pair & \multicolumn{1}{c}{Effect} & \multicolumn{1}{c}{S.E.} & \multicolumn{1}{c
 \end{center}
 \vspace{-2pt}
 \noindent\begin{minipage}{\linewidth}\footnotesize
-\emph{Notes.} The <<PW_TOPN>> largest counters and the <<PW_TOPN>> largest synergies among
-those significant at $q<0.05$ after Benjamini--Hochberg correction across all <<PW_N_ALL>>
-interactions (<<PW_SIG_CTR>> counters and <<PW_SIG_SYN>> synergies are significant in total).
+\emph{Notes.} The <<PW_TOPN>> largest counters and the <<PW_TOPN>> largest synergies, by
+absolute size, among those significant at $q<0.05$ after Benjamini--Hochberg correction across
+all <<PW_N_ALL>> interactions (<<PW_SIG_CTR>> counters and <<PW_SIG_SYN>> synergies are
+significant in total, <<PW_SIG_SYN_TU>> of the latter designated team-ups, which are listed in
+Table~\ref{tab:teamups} and omitted here). Negative synergies are pairs that do worse together
+than their individual effects predict.
 A counter of $+x$ means that when A starts against B, A's side wins $x$ percentage points more
 often than the two heroes' individual effects predict, at a balanced match. A synergy of $+x$
 means a team starting both A and B wins $x$ points more than their individual effects predict.
@@ -1025,7 +1041,9 @@ subs = {
     "PW_MOVERS_UP": PW_MOVERS_UP, "PW_MOVERS_DOWN": PW_MOVERS_DOWN,
     "PW_SIG_SYN_TU": str(PW_SIG_SYN_TU), "PW_SIG_SYN_OTHER": str(PW_SIG_SYN_OTHER),
     "PW_N_TU_COLS": str(PW_N_TU_COLS), "PW_N_OTHER_COLS": num(PW_N_OTHER_COLS), "PW_BP_RAW": PW_BP_RAW,
-    "PW_SYN_TU_CLAUSE": ", all of them designated team-ups" if PW_TOP_SYN_ALL_TU else "",
+        "PW_SYN_TU_CLAUSE": ", all of them designated team-ups" if PW_TOP_SYN_ALL_TU else "",
+    "PW_TOP_SYN_NT": PW_TOP_SYN_NT, "PW_NEG_SYN_NT": PW_NEG_SYN_NT, "PW_TOP_SYN_TU": PW_TOP_SYN_TU,
+    "PW_NT_POS": str(PW_NT_POS), "PW_NT_NEG": str(PW_NT_NEG),
     "TU1A": esc(TOP_TU.iloc[0].anchor), "TU1B": esc(TOP_TU.iloc[0].partner), "TU2A": esc(TOP_TU.iloc[1].anchor), "TU2B": esc(TOP_TU.iloc[1].partner),
     "TU3A": esc(TOP_TU.iloc[2].anchor), "TU3B": esc(TOP_TU.iloc[2].partner), "TU4A": esc(TOP_TU.iloc[3].anchor), "TU4B": esc(TOP_TU.iloc[3].partner),
     "SD0": f"{SD['W0']:.2f}", "SD2": f"{SD['W2']:.2f}", "SD1": f"{SD['W1']:.2f}",

@@ -9,11 +9,14 @@ because it is a subset of the synergy block.
 
 Identification. Summing a hero's synergy contrasts over its five teammates equals 5x its main-effect
 contrast, and its counter contrasts over six opponents equals 6x, so unconstrained blocks contain the
-hero main effects exactly. Constraints imposed (null-space parametrisation):
-  per hero:      sum_b sigma_ab = 0            sum_b sgn(a,b) kappa_ab = 0
+hero main effects exactly. Constraints imposed (null-space parametrisation), over NON-team-up pairs:
+  per hero:      sum_b sigma_ab = 0            sum_b sgn(a,b) kappa_ab = 0   (counters: all pairs)
   per role pair: sum_{ab in RR'} sigma_ab = 0   (role-pair sums are functions of composition shape)
-Main effects then read "value averaged over the hero's observed partners and opponents"; interactions
-are deviations from it. Fitted by constrained Newton/IRLS with the base design dense and the
+Designated team-up columns are left free, exactly as in Spec A+, so the main effects keep the
+headline definition (net of team-up premiums) and a non-team-up synergy reads as the deviation from
+the hero's typical non-team-up partner. (An earlier variant constrained team-ups too; that redefined
+the main effects as averages over all partners and made heroes with strong team-ups show negative
+synergies with everyone else. See the ledger.) Fitted by constrained Newton/IRLS with the base design dense and the
 interaction blocks sparse; HC1 covariance mapped through the null-space basis.
 
 Outputs (results/): apm_pairwise_synergy_<tag>.csv, apm_pairwise_counter_<tag>.csv,
@@ -106,6 +109,8 @@ log(f"S nnz {S.nnz:,}, C nnz {C.nnz:,}")
 def role_pair(a, b): return "-".join(sorted([hrole[a], hrole[b]]))
 A_s = np.zeros((K + 6, Ps)); rp_types = sorted({role_pair(a, b) for a, b in syn_pairs}); rp_idx = {t: i for i, t in enumerate(rp_types)}
 for j, (a, b) in enumerate(syn_pairs):
+    if (a, b) in tu_pairs:
+        continue                                   # designated team-ups stay unconstrained
     A_s[a, j] = 1; A_s[b, j] = 1; A_s[K + rp_idx[role_pair(a, b)], j] = 1
 A_c = np.zeros((K, Pc))
 for j, (a, b) in enumerate(ctr_pairs):
