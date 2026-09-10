@@ -1,0 +1,31 @@
+{
+ "folds": [
+  {
+   "fold": 0,
+   "n_train": 270722,
+   "n_val": 58656,
+   "logloss": 0.6705896680219519,
+   "converged": true
+  },
+  {
+   "fold": 1,
+   "n_train": 329378,
+   "n_val": 63169,
+   "logloss": 0.670819972996653,
+   "converged": true
+  },
+  {
+   "fold": 2,
+   "n_train": 392547,
+   "n_val": 58657,
+   "logloss": 0.6689611500077514,
+   "converged": true
+  }
+ ],
+ "mean_val_logloss": 0.6701235970087854,
+ "n_dev": 451204,
+ "n_conf": 19804,
+ "loglike_dev": -302644.4746985939,
+ "converged": true,
+ "k": 187
+}
