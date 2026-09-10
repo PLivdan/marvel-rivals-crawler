@@ -4,7 +4,7 @@
 \titleformat{\section}{\large\bfseries}{}{0pt}{}
 \titlespacing*{\section}{0pt}{16pt plus 4pt minus 2pt}{6pt}
 \pagestyle{fancy}\fancyhf{}\renewcommand{\headrulewidth}{0pt}
-\fancyfoot[C]{\thepage}\fancyfoot[R]{\scriptsize build \texttt{1303b879}}
+\fancyfoot[C]{\thepage}\fancyfoot[R]{\scriptsize build \texttt{3f473c63}}
 \usepackage[colorlinks=true,linkcolor=black,urlcolor=black]{hyperref}
 \captionsetup{font=small,labelfont=bf,skip=6pt}
 \setlength{\tabcolsep}{5pt}
@@ -18,7 +18,7 @@
 {\normalsize Clocktock (Philip Livdan)}\\[2pt]
 {\small McCombs School of Business, The University of Texas at Austin}\\
 {\small\texttt{plivdan@utexas.edu}}\\[8pt]
-{\small Season 9.5, PC ranked, balance regime 7 August to 11 September 2026. Development snapshot frozen 2026-09-09. Report build \texttt{1303b879}.}
+{\small Season 9.5, PC ranked, balance regime 7 August to 11 September 2026. Development snapshot frozen 2026-09-09. Report build \texttt{3f473c63}.}
 \end{center}
 
 \vspace{4pt}
@@ -117,13 +117,13 @@ $\lambda_1,\lambda_2,\lambda_3,\lambda_4,\lambda_5$ & Mean validation log loss &
 \end{tabular}
 \end{table}
 
-\begin{table}[H]\centering\small
+\begin{table}[H]\centering\footnotesize
 \caption{Development ladder: genuine reduced fits at the selected penalties}\label{tab:ladder}
 \begin{tabular}{l r r r r r r}
 \toprule
 Model & Free parameters & Fold 1 & Fold 2 & Fold 3 & Mean & Cal.\ slope \\
 \midrule
-Headline specification, refitted on development rows & 187 & 0.67059 & 0.67082 & 0.66896 & 0.67012 & --- \\
+Headline spec., refitted on development rows & 187 & 0.67059 & 0.67082 & 0.66896 & 0.67012 & --- \\
 Heroes, composition, maps, rank imbalance & 96 & 0.67230 & 0.67197 & 0.67030 & 0.67152 & 1.009 \\
 + rank slopes and hero-by-map & 984 & 0.67159 & 0.67118 & 0.66964 & 0.67080 & 1.001 \\
 + allied and opposing pairs (no pair slopes) & 3,842 & 0.66924 & 0.66814 & 0.66690 & 0.66809 & 1.002 \\
@@ -142,7 +142,7 @@ development rows.
 
 \section*{Hero values}
 
-Table~\ref{tab:hero} reports three things per hero from the selected fit. The coefficient $\beta_h$ is the
+The tables that follow come from the selected development fit, estimated on the 451,204 development matches only. Table~\ref{tab:hero} reports three things per hero. The coefficient $\beta_h$ is the
 within-role log-odds contrast at the median lobby rank, reported with its slope per standard deviation of
 rank, so a reader can place it anywhere in the supported range. The replacement scores are exact predicted probability differences, in percentage points, from placing the
 hero into a starting slot in place of another hero of the same role, recomputing all five allied and six
@@ -188,15 +188,15 @@ The locked evaluation compares the candidate and the refitted headline model on 
 \FloatBarrier
 \begin{landscape}
 \begin{center}
-{\scriptsize\setlength{\tabcolsep}{2.4pt}\renewcommand{\arraystretch}{1.05}
-\captionof{table}{Hero coefficients by lobby rank and same-slot replacement values from the selected fit}\label{tab:hero}
-\begin{tabular}{l r r r r r r r r @{\hspace{1.1em}} l r r r r r r r r}
+{\scriptsize\setlength{\tabcolsep}{1.9pt}\renewcommand{\arraystretch}{1.05}
+\captionof{table}{Hero coefficients by lobby rank and same-slot replacement values from the selected development fit}\label{tab:hero}
+\begin{tabular}{l r r r r r r r r @{\hspace{0.8em}} l r r r r r r r r}
 \toprule
 & \multicolumn{2}{c}{Coefficient} & \multicolumn{2}{c}{Replacement, pp} & \multicolumn{3}{c}{Obs.\ meta by third} & &
 & \multicolumn{2}{c}{Coefficient} & \multicolumn{2}{c}{Replacement, pp} & \multicolumn{3}{c}{Obs.\ meta by third} & \\
 \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-8}\cmidrule(lr){11-12}\cmidrule(lr){13-14}\cmidrule(lr){15-17}
-& $\beta_h$ & slope & Obs.\ meta & Common ref. & Low & Mid & High & Cov.\ \% &
-& $\beta_h$ & slope & Obs.\ meta & Common ref. & Low & Mid & High & Cov.\ \% \\
+& $\beta_h$ & slope & Obs.\ meta & Common & Low & Mid & High & Cov. &
+& $\beta_h$ & slope & Obs.\ meta & Common & Low & Mid & High & Cov. \\
 \midrule
 \multicolumn{9}{l}{\emph{Panel A: Tank (15 heroes)}} & \multicolumn{9}{l}{\emph{Panel B: Damage (27 heroes)}} \\
 The Thing & +0.177 & -0.011 & +4.13 & +5.02 & +4.72 & +4.20 & +3.56 & 51 & Magik & +0.103 & -0.017 & +4.07 & +4.37 & +4.91 & +4.09 & +3.25 & 62 \\

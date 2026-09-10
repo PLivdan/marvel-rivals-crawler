@@ -61,7 +61,7 @@ PARAMS = {"Heroes, composition, maps, rank imbalance": _base, "+ rank slopes and
           "+ allied and opposing pairs (no pair slopes)": _base + N_SLOPES + FREE["heromap"] + N_PAIRS,
           "+ pair rank slopes (selected fit)": _base + N_SLOPES + FREE["heromap"] + 2 * N_PAIRS}
 def ladder_rows():
-    rows = [rf"Headline specification, refitted on development rows & {BASE['k']} & " + " & ".join(f"{f['logloss']:.5f}" for f in BASE["folds"]) + rf" & {BASE_MEAN:.5f} & --- \\"]
+    rows = [rf"Headline spec., refitted on development rows & {BASE['k']} & " + " & ".join(f"{f['logloss']:.5f}" for f in BASE["folds"]) + rf" & {BASE_MEAN:.5f} & --- \\"]
     for label, e in LADDER:
         rows.append(rf"{esc(label)} & {num(PARAMS[label])} & " + " & ".join(f"{f['logloss']:.5f}" for f in e["folds"]) + rf" & {e['mean_val_logloss']:.5f} & {e['mean_cal_slope']:.3f} \\")
     return "\n".join(rows)
@@ -246,7 +246,7 @@ $\lambda_1,\lambda_2,\lambda_3,\lambda_4,\lambda_5$ & Mean validation log loss &
 \end{tabular}
 \end{table}
 
-\begin{table}[H]\centering\small
+\begin{table}[H]\centering\footnotesize
 \caption{Development ladder: genuine reduced fits at the selected penalties}\label{tab:ladder}
 \begin{tabular}{l r r r r r r}
 \toprule
@@ -267,7 +267,7 @@ development rows.
 
 \section*{Hero values}
 
-Table~\ref{tab:hero} reports three things per hero from the selected fit. The coefficient $\beta_h$ is the
+<<FIT_SENTENCE>> Table~\ref{tab:hero} reports three things per hero. The coefficient $\beta_h$ is the
 within-role log-odds contrast at the median lobby rank, reported with its slope per standard deviation of
 rank, so a reader can place it anywhere in the supported range. The replacement scores are exact predicted probability differences, in percentage points, from placing the
 hero into a starting slot in place of another hero of the same role, recomputing all five allied and six
@@ -313,15 +313,15 @@ adaptation follows; it is not the effect of an opponent switching to the counter
 \FloatBarrier
 \begin{landscape}
 \begin{center}
-{\scriptsize\setlength{\tabcolsep}{2.4pt}\renewcommand{\arraystretch}{1.05}
-\captionof{table}{Hero coefficients by lobby rank and same-slot replacement values from the selected fit}\label{tab:hero}
-\begin{tabular}{l r r r r r r r r @{\hspace{1.1em}} l r r r r r r r r}
+{\scriptsize\setlength{\tabcolsep}{1.9pt}\renewcommand{\arraystretch}{1.05}
+\captionof{table}{Hero coefficients by lobby rank and same-slot replacement values from the <<FIT_LABEL>>}\label{tab:hero}
+\begin{tabular}{l r r r r r r r r @{\hspace{0.8em}} l r r r r r r r r}
 \toprule
 & \multicolumn{2}{c}{Coefficient} & \multicolumn{2}{c}{Replacement, pp} & \multicolumn{3}{c}{Obs.\ meta by third} & &
 & \multicolumn{2}{c}{Coefficient} & \multicolumn{2}{c}{Replacement, pp} & \multicolumn{3}{c}{Obs.\ meta by third} & \\
 \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-8}\cmidrule(lr){11-12}\cmidrule(lr){13-14}\cmidrule(lr){15-17}
-& $\beta_h$ & slope & Obs.\ meta & Common ref. & Low & Mid & High & Cov.\ \% &
-& $\beta_h$ & slope & Obs.\ meta & Common ref. & Low & Mid & High & Cov.\ \% \\
+& $\beta_h$ & slope & Obs.\ meta & Common & Low & Mid & High & Cov. &
+& $\beta_h$ & slope & Obs.\ meta & Common & Low & Mid & High & Cov. \\
 \midrule
 <<HERO_BODY>>
 \bottomrule
@@ -414,7 +414,12 @@ followed.
 """
 
 subs = {
-    "STATUS_LINE": "Provisional development results, confirmation locked" if STATUS == "provisional" else "Confirmed results",
+        "STATUS_LINE": "Provisional development results, confirmation locked" if STATUS == "provisional" else "Confirmed results",
+    "FIT_LABEL": "published fit" if prefix.endswith("published") else "selected development fit",
+    "FIT_SENTENCE": ("The tables that follow come from the published fit: the locked specification and penalties refitted on all "
+                     "<<N_DESIGN>> legal matches, development and confirmation slice together, after the confirmation below was passed. "
+                     "The confirmation itself refers to the development-row fit." if prefix.endswith("published") else
+                     "The tables that follow come from the selected development fit, estimated on the <<N_DEV>> development matches only."),
     "SEASON": SNAP["season_label"], "FROZEN": SNAP["frozen_at_utc"][:10],
     "N_SNAP": num(SNAP["n_matches"]), "PLAY_MIN": SNAP["play_time_min_utc"][:16].replace("T", " "), "PLAY_MAX": SNAP["play_time_max_utc"][:16].replace("T", " "),
     "N_ILLEGAL": num(DS["n_excluded_duplicate_starters"]), "N_DESIGN": num(DS["n"]),
