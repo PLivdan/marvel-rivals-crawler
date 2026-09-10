@@ -455,8 +455,13 @@ Authorised by the user as a full rebuild; protocol in `results/confirmation_prot
 - **Stability** (`results/lineup_bootstrap.py`): player-multiplicity resampling at fixed penalties,
   weights w_m = sum of the twelve players' draw counts rescaled to mean 1; reported as stability
   conditional on the selected specification, not as confidence intervals.
-- **Report:** `results/make_lineup_report.py` -> `results/lineup_report.pdf` (provisional until the
-  locked confirmation is run). The published headline model stays in place until the candidate passes.
+- **Result (10 Sep 2026):** penalties tuned on Colab, lambda = (10, 900, 1000, 1000, 30000); development
+  ladder 0.67152 (base) -> 0.67080 (+slopes, hero-map) -> 0.66809 (+pairs) -> 0.66809 (+pair slopes, no gain) vs
+  0.67012 for the refitted headline. Locked confirmation on the 19,804-match slice: D = +0.00184 (player-
+  multiplicity bootstrap CI +0.00151 to +0.00217), calibration slope 1.062, all predeclared criteria met ->
+  **PROMOTE**. The unified model is now the published model (`results/lineup_report.pdf`); the locked
+  penalties are refitted on all 471,008 legal matches for the published tables (`results/lineup_published.npz`).
+  The Spec A+ report (`results/apm_report.pdf`) remains as the earlier headline document.
 
 ## 4. Known limitations, ordered by severity
 
