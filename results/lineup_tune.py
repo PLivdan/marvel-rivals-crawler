@@ -12,8 +12,10 @@ results/lineup_tuning.json so the run can resume. Usage:
 """
 import json, os, sys, time
 import numpy as np
+from multiprocessing import get_context
 sys.path.insert(0, ".")
 from lineup.fit import LineupDesign, GROUPS
+WORKERS = int(os.environ.get("LINEUP_WORKERS", "1"))      # folds fitted in parallel processes (fork); ~4 GB RAM each
 
 T_CONF = 1788519632                                  # 2026-09-04T11:00:32Z, see results/confirmation_protocol.json
 LOG = "results/lineup_tuning.json"
@@ -28,27 +30,37 @@ state = json.load(open(LOG)) if os.path.exists(LOG) else {"evaluations": [], "wa
 def save(): json.dump(state, open(LOG, "w"), indent=1)
 def key(lams): return ",".join(f"{l:g}" for l in lams)
 WARM = {}                                            # in-memory warm starts per fold: key -> phi
+def _fit_fold(args):
+    """One fold: fit at lams with optional training subsample and warm start; returns (phi, fold record)."""
+    f, lams, sub, max_iter, phi0 = args
+    tr, va = FOLDS[f]
+    w = np.zeros(d.n); w[tr] = 1.0
+    if sub < 1.0:
+        rng = np.random.default_rng(f); drop = rng.random(len(tr)) > sub; w[tr[drop]] = 0.0
+    fit = d.fit(lams, w, phi0=phi0, max_iter=max_iter, verbose=False)
+    ev = d.evaluate(fit, va); ev.pop("loss_vector")
+    thirds = np.digitize(d.lobby[va], np.quantile(d.lobby[dev], [1/3, 2/3]))
+    by_third = []
+    for t in range(3):
+        rows = va[thirds == t]; e = d.evaluate(fit, rows); e.pop("loss_vector"); by_third.append({k2: round(v, 4) if isinstance(v, float) else v for k2, v in e.items()})
+    rec = {"fold": f, "n_train": fit["n_train"], "n_iter": fit["n_iter"], "converged": fit["converged"], "seconds": round(fit["seconds"]),
+           **{k2: round(v, 5) if isinstance(v, float) else v for k2, v in ev.items()}, "by_third": by_third}
+    return fit["phi"], rec
+
 def evaluate(lams, sub=1.0, max_iter=6, tag=""):
     k = key(lams)
     done = [e for e in state["evaluations"] if e["key"] == k and e["sub"] == sub]
     if done: return done[0]["mean_val_logloss"]
     res = {"key": k, "lams": list(lams), "sub": sub, "tag": tag, "folds": []}
     t0 = time.time()
-    for f, (tr, va) in enumerate(FOLDS):
-        w = np.zeros(d.n); w[tr] = 1.0
-        if sub < 1.0:
-            rng = np.random.default_rng(f); drop = rng.random(len(tr)) > sub; w[tr[drop]] = 0.0
-        phi0 = WARM.get(f)
-        fit = d.fit(lams, w, phi0=phi0, max_iter=max_iter, verbose=False)
-        WARM[f] = fit["phi"]
-        ev = d.evaluate(fit, va); ev.pop("loss_vector")
-        # calibration by supported rank third of the validation rows (dev-sample tercile boundaries on lobby mean)
-        thirds = np.digitize(d.lobby[va], np.quantile(d.lobby[dev], [1/3, 2/3]))
-        by_third = []
-        for t in range(3):
-            rows = va[thirds == t]; e = d.evaluate(fit, rows); e.pop("loss_vector"); by_third.append({k2: round(v, 4) if isinstance(v, float) else v for k2, v in e.items()})
-        res["folds"].append({"fold": f, "n_train": fit["n_train"], "n_iter": fit["n_iter"], "converged": fit["converged"], "seconds": round(fit["seconds"]),
-                             **{k2: round(v, 5) if isinstance(v, float) else v for k2, v in ev.items()}, "by_third": by_third})
+    jobs = [(f, list(lams), sub, max_iter, WARM.get(f)) for f in range(len(FOLDS))]
+    if WORKERS > 1:
+        with get_context("fork").Pool(min(WORKERS, len(FOLDS))) as pool:
+            outs = pool.map(_fit_fold, jobs)
+    else:
+        outs = [_fit_fold(j) for j in jobs]
+    for f, (phi, rec) in enumerate(outs):
+        WARM[f] = phi; res["folds"].append(rec)
     res["mean_val_logloss"] = float(np.mean([f["logloss"] for f in res["folds"]]))
     res["mean_cal_slope"] = float(np.mean([f["cal_slope"] for f in res["folds"]]))
     res["seconds"] = round(time.time() - t0)
@@ -79,6 +91,13 @@ elif mode in ("coarse", "fine"):
         state["best_lams"] = best; state["best_val_logloss"] = base; save()
         print(f"pass {pas} best {key(best)} -> {base:.5f}", flush=True)
         if not improved: break
+elif mode == "final":
+    # the selected penalties refitted on ALL development rows, converged, for the summaries and the lock
+    best = state["best_lams"]; w = np.zeros(d.n); w[dev] = 1.0
+    fit = d.fit(best, w, max_iter=10)
+    np.savez("results/lineup_selected.npz", phi=fit["phi"], lams=np.array(best), scalers=json.dumps(fit["scalers"]))
+    state["final"] = {"lams": best, "loglik": fit["loglik"], "n_iter": fit["n_iter"], "converged": fit["converged"], "n_train": fit["n_train"]}; save()
+    print("final fit saved: results/lineup_selected.npz", state["final"], flush=True)
 elif mode == "reduced":
     best = state["best_lams"]; BIG = 1e9
     variants = {"selected": best,

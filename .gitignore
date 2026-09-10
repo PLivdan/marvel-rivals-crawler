@@ -17,3 +17,5 @@ results/aux_stats.json
 results/lineup_design/*
 !results/lineup_design/summary.json
 results/lineup_design_test/
+results/lineup_design_cache/
+results/lineup_design_cache.tar.gz
