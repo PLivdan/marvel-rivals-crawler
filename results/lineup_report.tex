@@ -1,0 +1,414 @@
+\documentclass[11pt]{article}
+\usepackage[margin=0.85in]{geometry}
+\usepackage{booktabs,caption,amsmath,microtype,pdflscape,makecell,titlesec,fancyhdr,float,placeins}
+\titleformat{\section}{\large\bfseries}{}{0pt}{}
+\titlespacing*{\section}{0pt}{16pt plus 4pt minus 2pt}{6pt}
+\pagestyle{fancy}\fancyhf{}\renewcommand{\headrulewidth}{0pt}
+\fancyfoot[C]{\thepage}\fancyfoot[R]{\scriptsize build \texttt{1303b879}}
+\usepackage[colorlinks=true,linkcolor=black,urlcolor=black]{hyperref}
+\captionsetup{font=small,labelfont=bf,skip=6pt}
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.05}
+\widowpenalty=10000 \clubpenalty=10000
+\begin{document}
+
+\begin{center}
+{\Large\bfseries A Unified Starting-Lineup Model for \emph{Marvel Rivals}}\\[4pt]
+{\large Confirmed results}\\[10pt]
+{\normalsize Clocktock (Philip Livdan)}\\[2pt]
+{\small McCombs School of Business, The University of Texas at Austin}\\
+{\small\texttt{plivdan@utexas.edu}}\\[8pt]
+{\small Season 9.5, PC ranked, balance regime 7 August to 11 September 2026. Development snapshot frozen 2026-09-09. Report build \texttt{1303b879}.}
+\end{center}
+
+\vspace{4pt}
+\noindent This report estimates one penalized match-level model of the probability that side~0 wins,
+conditional on the recorded starting lineups and pre-match information, and derives every reported
+quantity from that single fit. It replaces separate treatment of designated team-ups, rank bands, and
+pairwise interactions with one specification in which hero effects, composition effects, hero-by-map
+deviations, allied pairs, and opposing pairs are estimated jointly, each with a pooled rank slope, under
+five ridge penalties tuned on chronological development folds. The estimand is an adjusted
+starting-lineup association: what happens after a team starts a hero, including whatever swaps and
+responses follow, in the sampled competitive environment. It is not the effect of a hero's abilities
+in uninterrupted play, and starting attribution alone does not make it a causal estimate.
+
+\section*{Sample, regime, and protocol}
+
+The development snapshot holds 477,483 competitive PC ranked matches played between
+2026-08-07 11:12 and 2026-09-08 11:00 UTC, after the published filters (twelve players, six per side, no draws,
+scores present, every player with positive play time, at least 240 seconds). The starting record must
+also be legal: 6,475 matches in which two teammates share the same first-appearance hero are
+excluded, because a shared start cannot be simultaneous and the record is unverifiable. That leaves
+471,008 matches. The official patch record places the whole snapshot inside one balance regime,
+from the Season 9.5 patch of 7 August to the Season 10 patch of 11 September; the five intermediate
+updates were cosmetic. A weekly win-rate check flags only The Hood, released on 7 August, whose drift
+is a learning curve rather than a patch signature.
+
+Collection was stopped at the user's instruction, so the locked confirmation sample is internal: the
+19,804 matches played in the final four days of the snapshot, after 2026-09-04 11:00 UTC. The remaining
+451,204 development matches feed every design build, fold, tuning run, and table below. The
+confirmation outcomes are read once, after the candidate is locked, against a predeclared criterion.
+Because the published headline model was estimated on the whole snapshot, the baseline for that
+comparison is the identical headline specification refitted on the development rows.
+
+Lobby rank, the mean pre-match score of the twelve starters, runs from 4,141 at the 5th percentile
+to 4,944 at the 95th, with a median of 4,548. Rank-dependent quantities are evaluated inside
+that range and no claim is made above 5{,}200. 14,722 matches have a lobby mean above 5{,}000,
+and no individual player in the sample scores above 5{,}750, so the top of the ranked ladder is outside
+the data. That is direct coverage evidence.
+
+\section*{Specification}
+
+Let $A_{mh}$ and $B_{mh}$ indicate whether hero $h$ starts on side~0 or side~1 of match $m$, $r_m$ the
+standardized lobby rank, $\Delta R_m$ the standardized difference in team mean pre-match score, $v_m$ the
+map, and $c(\cdot)$ the composition (Tank--Damage--Support counts). With
+$x_{mh}=A_{mh}-B_{mh}$, $z_{mhk}=A_{mh}A_{mk}-B_{mh}B_{mk}$ and $w_{mhk}=A_{mh}B_{mk}-A_{mk}B_{mh}$ for $h<k$,
+\begin{align*}
+\operatorname{logit}p_m ={}& \alpha_{v_m}+(\theta_0+\theta_1 r_m)\Delta R_m
+ +(\gamma_0+\gamma_1 r_m)^\top[c(A_m)-c(B_m)]
+ +\sum_h(\beta_h+d_h r_m+u_{h,v_m})\,x_{mh}\\
+&+\sum_{h<k}(S_{hk}+T_{hk}r_m)\,z_{mhk}+\sum_{h<k}(C_{hk}+D_{hk}r_m)\,w_{mhk}.
+\end{align*}
+Every block uses the same starting record. The allied block is symmetric and the opposing block
+antisymmetric, so swapping the two camps negates every feature except the map intercept, which the
+implementation checks numerically. Every observed composition shape receives its own coefficient, every
+observed allied and opposing pair its own coefficient, and every hero its own deviation on every map;
+nothing is removed by a frequency threshold. The blocks are then aliased with each other in known ways:
+summing a hero's allied features over its five teammates gives five times its own contrast, summing its
+opposing features over six opponents gives six times it, summing allied features within a role pair gives
+a function of the composition contrast, and summing hero-by-map deviations over maps gives the hero
+contrast again. Each candidate centering direction was tested against the data and imposed only when
+its image lies exactly in the span of the lower-order blocks; 187 of 187
+candidates did, with the largest residual at 7.4e-15. The reduced design has 6,700 free
+coefficients.
+
+Five ridge groups shrink the coefficients on their native scale: hero and composition averages
+($\lambda_1$), allied averages ($\lambda_2$), opposing averages ($\lambda_3$), hero rank slopes,
+composition rank slopes and hero-by-map deviations ($\lambda_4$), and pair rank slopes ($\lambda_5$).
+Map intercepts and the two rank-imbalance terms are unpenalized. The rank basis and $\Delta R$ are
+scaled with training rows only. Designated team-ups are labels attached after estimation; they receive
+no separate regressors, constraints, or penalties.
+
+\section*{Tuning}
+
+Penalties were tuned on three chronological development folds, training on the first 60, 73 and 87 per
+cent of development matches by play time and validating on the following slice of about 60{,}000
+matches each. A bounded coordinate search on $\log_{10}\lambda$ with warm starts ran 39
+evaluations. The selected penalties are
+$\lambda=(10, 900, 1000, 1000, 30000)$, with mean validation log loss 0.66809 and mean calibration slope
+1.002, against 0.67012 for the refitted headline specification on the same folds, a gain of
++0.00204. Calibration by supported rank third is 0.984, 1.022, and 0.997.
+
+\begin{table}[H]\centering\footnotesize
+\caption{Best evaluations of the penalty search (lowest validation log loss first)}
+\begin{tabular}{l r r r}
+\toprule
+$\lambda_1,\lambda_2,\lambda_3,\lambda_4,\lambda_5$ & Mean validation log loss & Mean calibration slope & Converged \\
+\midrule
+10,900,1000,1000,30000 & 0.66809 & 1.002 & yes \\
+3.33333,900,1000,1000,30000 & 0.66809 & 1.000 & yes \\
+30,900,1000,1000,30000 & 0.66809 & 1.004 & yes \\
+10,900,1000,1000,90000 & 0.66809 & 1.002 & yes \\
+10,900,1000,1000,1e+09 & 0.66809 & 1.002 & yes \\
+10,900,1000,1000,10000 & 0.66811 & 0.999 & yes \\
+10,900,1000,3000,30000 & 0.66814 & 1.010 & yes \\
+10,900,1000,3000,90000 & 0.66814 & 1.010 & yes \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]\centering\small
+\caption{Development ladder: genuine reduced fits at the selected penalties}\label{tab:ladder}
+\begin{tabular}{l r r r r r r}
+\toprule
+Model & Free parameters & Fold 1 & Fold 2 & Fold 3 & Mean & Cal.\ slope \\
+\midrule
+Headline specification, refitted on development rows & 187 & 0.67059 & 0.67082 & 0.66896 & 0.67012 & --- \\
+Heroes, composition, maps, rank imbalance & 96 & 0.67230 & 0.67197 & 0.67030 & 0.67152 & 1.009 \\
++ rank slopes and hero-by-map & 984 & 0.67159 & 0.67118 & 0.66964 & 0.67080 & 1.001 \\
++ allied and opposing pairs (no pair slopes) & 3,842 & 0.66924 & 0.66814 & 0.66690 & 0.66809 & 1.002 \\
++ pair rank slopes (selected fit) & 6,700 & 0.66923 & 0.66814 & 0.66689 & 0.66809 & 1.002 \\
+\bottomrule
+\end{tabular}
+\par\vspace{4pt}
+\begin{minipage}{\linewidth}\footnotesize
+\emph{Notes.} Validation log loss on the same three chronological folds. Reduced fits set the omitted
+blocks' penalties to $10^9$, which drives those coefficients to zero, so each row is a genuine reduced
+model rather than a post-hoc zeroing. The headline row is the published specification (187 parameters,
+starting-hero attribution, within-role constraint, map intercepts, designated team-ups) refitted on the
+development rows.
+\end{minipage}
+\end{table}
+
+\section*{Hero values}
+
+Table~\ref{tab:hero} reports three things per hero from the selected fit. The coefficient $\beta_h$ is the
+within-role log-odds contrast at the median lobby rank, reported with its slope per standard deviation of
+rank, so a reader can place it anywhere in the supported range. The replacement scores are exact predicted probability differences, in percentage points, from placing the
+hero into a starting slot in place of another hero of the same role, recomputing all five allied and six
+opposing relationships, the hero-by-map deviation, and the rank slope, and keeping the slot's player,
+rank, map, side, and the other eleven starters fixed. Two references are declared. The observed-meta
+score replaces the hero that actually started in the slot, averaged over 120,000 development matches.
+The common-reference score compares the hero with the average legal same-role hero in the same slot, so
+every hero of a role is scored on the same context pool. Legality respects bans and hero uniqueness;
+coverage is the share of same-role slots in which the hero was a legal replacement, with a median of
+88\%.
+
+By the common reference, the strongest Tanks are The Thing (+5.0), Peni Parker (+2.3), and The Hood (+2.1), the strongest Damage heroes
+Magik (+4.4), Black Cat (+4.2), and Storm (+3.0), and the strongest Supports Mantis (+6.2), Rocket Raccoon (+3.9), and Ultron (+3.5). The observed-meta scores by rank third show
+which heroes' values move with the environment: Elsa Bloodstone (-1.9 to +0.2), Wolverine (-1.2 to +0.6), and Mantis (+5.8 to +7.2) gain the most from the bottom to the top
+third, while Black Panther (+0.0 to -2.3), and Cloak \& Dagger (+1.5 to -0.9) lose the most. These are pooled slopes evaluated at observed contexts, not
+separate rank models.
+
+\section*{Pairs}
+
+Pair effects are reported as four-lineup contrasts on the log-odds scale: the pair's coefficient minus the
+average coefficient of each member with the same-role alternatives to the other, plus the average over
+alternative pairs. This cancels the hero main effects and each hero's other relationships and does not
+depend on where additive hero content is placed. Pairs are shown only with at least 500
+identifying matches, that is, distinct development matches in which the signed feature is nonzero.
+Designated team-ups are labelled; the largest by contrast are Gambit with Rogue (+0.21), Iron Fist with White Fox (+0.20), and Moon Knight with Blade (+0.16). Among pairs that are not
+designated team-ups, the largest positive contrasts are Gambit with Deadpool (Duelist) (+0.10), Luna Snow with Daredevil (+0.06), and Black Panther with Deadpool (Vanguard) (+0.06) and the largest negative Spider-man with Angela (-0.08), Mantis with Deadpool (Strategist) (-0.07), and Hela with Iron Man (-0.06).
+The largest opposing matchups are The Thing over Magik (+0.11), Gambit over Angela (+0.08), Phoenix over Elsa Bloodstone (+0.07), and Cloak \& Dagger over Venom (+0.07). The standard deviation of the contrasts is 0.050 across
+team-up-eligible pairs, 0.020 across other allied pairs, and 0.022 across opposing pairs.
+
+A team-up-eligible pair's coefficient combines ordinary kit complementarity, any mechanic actually used,
+player selection, coordination, and subsequent decisions; the data do not record activation. A
+starting-matchup coefficient compares matches that begin with that configuration and includes whatever
+adaptation follows; it is not the effect of an opponent switching to the counter mid-match.
+
+\section*{Stability}
+
+The bootstrap stability analysis has not been run for this fit; no stability claim is made.
+
+\section*{Confirmation}
+
+The locked evaluation compares the candidate and the refitted headline model on the same 19,804 eligible confirmation matches. The paired log-loss improvement is +0.00184 (player-multiplicity bootstrap 95\% interval +0.00151 to +0.00217), the candidate's calibration slope is 1.062 overall, and by rank third 0.908, 1.038, and 1.116. Verdict under the predeclared criterion: PROMOTE.
+
+\FloatBarrier
+\begin{landscape}
+\begin{center}
+{\scriptsize\setlength{\tabcolsep}{2.4pt}\renewcommand{\arraystretch}{1.05}
+\captionof{table}{Hero coefficients by lobby rank and same-slot replacement values from the selected fit}\label{tab:hero}
+\begin{tabular}{l r r r r r r r r @{\hspace{1.1em}} l r r r r r r r r}
+\toprule
+& \multicolumn{2}{c}{Coefficient} & \multicolumn{2}{c}{Replacement, pp} & \multicolumn{3}{c}{Obs.\ meta by third} & &
+& \multicolumn{2}{c}{Coefficient} & \multicolumn{2}{c}{Replacement, pp} & \multicolumn{3}{c}{Obs.\ meta by third} & \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-8}\cmidrule(lr){11-12}\cmidrule(lr){13-14}\cmidrule(lr){15-17}
+& $\beta_h$ & slope & Obs.\ meta & Common ref. & Low & Mid & High & Cov.\ \% &
+& $\beta_h$ & slope & Obs.\ meta & Common ref. & Low & Mid & High & Cov.\ \% \\
+\midrule
+\multicolumn{9}{l}{\emph{Panel A: Tank (15 heroes)}} & \multicolumn{9}{l}{\emph{Panel B: Damage (27 heroes)}} \\
+The Thing & +0.177 & -0.011 & +4.13 & +5.02 & +4.72 & +4.20 & +3.56 & 51 & Magik & +0.103 & -0.017 & +4.07 & +4.37 & +4.91 & +4.09 & +3.25 & 62 \\
+Peni Parker & +0.096 & +0.001 & +0.95 & +2.25 & +1.16 & +0.97 & +0.81 & 57 & Black Cat & +0.128 & -0.010 & +3.88 & +4.17 & +4.09 & +3.65 & +3.39 & 29 \\
+The Hood & +0.052 & +0.021 & +1.15 & +2.11 & +1.05 & +1.19 & +1.22 & 41 & Storm & +0.131 & -0.002 & +2.42 & +3.03 & +2.68 & +2.40 & +2.17 & 95 \\
+Magneto & +0.081 & +0.026 & +0.81 & +1.87 & +0.55 & +0.84 & +1.15 & 41 & Daredevil & +0.039 & +0.004 & +1.95 & +2.51 & +1.84 & +1.92 & +2.13 & 82 \\
+Angela & +0.042 & -0.009 & +0.14 & +1.49 & +0.73 & +0.09 & -0.38 & 94 & Mister Fantastic & +0.088 & -0.007 & +1.88 & +2.51 & +2.06 & +1.85 & +1.74 & 95 \\
+Hulk & +0.073 & -0.007 & +0.06 & +1.42 & +0.75 & +0.08 & -0.65 & 90 & Iron Fist & +0.055 & +0.012 & +1.17 & +1.76 & +0.92 & +1.13 & +1.47 & 88 \\
+Thor & +0.049 & +0.016 & -0.15 & +1.21 & -0.44 & -0.17 & +0.14 & 90 & Hela & +0.087 & +0.020 & +0.70 & +1.33 & +0.50 & +0.75 & +0.87 & 74 \\
+Doctor Strange & -0.025 & -0.009 & -1.41 & +0.06 & -0.68 & -1.42 & -2.10 & 85 & Iron Man & +0.083 & -0.020 & +0.60 & +1.25 & +1.52 & +0.61 & -0.32 & 93 \\
+Devil Dinosaur & -0.013 & +0.006 & -1.45 & -0.01 & -1.21 & -1.46 & -1.65 & 90 & Winter Soldier & +0.045 & -0.015 & +0.42 & +1.01 & +1.01 & +0.36 & -0.27 & 56 \\
+Groot & -0.032 & +0.006 & -1.96 & -0.49 & -1.84 & -1.96 & -2.04 & 83 & Moon Knight & +0.040 & +0.012 & +0.29 & +0.95 & +0.26 & +0.29 & +0.31 & 93 \\
+Venom & -0.040 & -0.009 & -2.34 & -0.83 & -1.84 & -2.35 & -2.77 & 64 & Human Torch & -0.004 & -0.020 & +0.05 & +0.71 & +0.83 & +0.04 & -0.76 & 93 \\
+Captain America & -0.070 & -0.010 & -2.28 & -0.87 & -1.82 & -2.30 & -2.71 & 96 & Spider-man & -0.003 & +0.012 & -0.32 & +0.41 & -0.59 & -0.34 & -0.07 & 59 \\
+Emma Frost & -0.098 & -0.000 & -3.25 & -1.55 & -2.97 & -3.27 & -3.49 & 78 & Wolverine & -0.028 & +0.036 & -0.35 & +0.32 & -1.24 & -0.34 & +0.59 & 94 \\
+Rogue & -0.075 & +0.008 & -2.97 & -1.57 & -2.95 & -2.99 & -2.96 & 94 & Blade & -0.028 & -0.021 & -0.78 & -0.09 & -0.04 & -0.82 & -1.46 & 94 \\
+Deadpool (Vanguard) & -0.218 & -0.031 & -6.60 & -5.06 & -5.45 & -6.57 & -7.71 & 95 & Black Widow & -0.001 & +0.012 & -0.91 & -0.21 & -1.17 & -0.92 & -0.59 & 86 \\
+\multicolumn{9}{l}{\emph{Panel C: Support (13 heroes)}} & Black Panther & -0.009 & -0.036 & -1.47 & -0.66 & +0.03 & -1.26 & -2.33 & 48 \\
+Mantis & +0.267 & +0.032 & +6.44 & +6.21 & +5.81 & +6.59 & +7.19 & 75 & Elsa Bloodstone & -0.002 & +0.040 & -1.24 & -0.68 & -1.92 & -0.78 & +0.23 & 45 \\
+Rocket Raccoon & +0.175 & -0.004 & +3.87 & +3.89 & +4.52 & +3.92 & +3.13 & 77 & Psylocke & -0.018 & +0.017 & -1.48 & -0.77 & -1.86 & -1.49 & -1.06 & 94 \\
+Ultron & +0.151 & -0.023 & +3.06 & +3.49 & +4.11 & +3.14 & +1.91 & 95 & Hawkeye & -0.052 & -0.013 & -1.49 & -0.79 & -0.96 & -1.50 & -2.03 & 95 \\
+Adam Warlock & +0.101 & -0.033 & +1.96 & +2.40 & +2.95 & +1.95 & +0.95 & 95 & The Punisher & -0.042 & -0.005 & -1.77 & -1.03 & -1.54 & -1.78 & -1.98 & 74 \\
+Cloak \& Dagger & +0.010 & -0.019 & +0.29 & +0.82 & +1.48 & +0.47 & -0.88 & 32 & Namor & -0.028 & -0.015 & -1.81 & -1.07 & -1.03 & -1.74 & -2.42 & 68 \\
+Loki & +0.022 & +0.035 & +0.21 & +0.69 & -0.40 & +0.30 & +0.77 & 94 & Deadpool (Duelist) & -0.062 & +0.001 & -1.86 & -1.13 & -1.76 & -1.87 & -1.95 & 93 \\
+Gambit & +0.030 & +0.019 & -0.71 & -0.31 & -1.15 & -0.52 & -0.10 & 40 & Star-lord & -0.041 & -0.006 & -2.25 & -1.53 & -2.15 & -2.27 & -2.33 & 94 \\
+Jubilee & -0.066 & -0.007 & -2.09 & -1.26 & -1.57 & -1.95 & -2.65 & 67 & Scarlet Witch & -0.078 & -0.002 & -2.64 & -1.90 & -2.25 & -2.60 & -3.04 & 94 \\
+Invisible Woman & -0.070 & +0.022 & -2.12 & -1.32 & -2.38 & -2.08 & -1.89 & 74 & Squirrel Girl & -0.146 & +0.001 & -3.86 & -3.12 & -3.60 & -3.86 & -4.12 & 95 \\
+Jeff The Land Shark & -0.099 & +0.018 & -2.42 & -1.79 & -2.52 & -2.36 & -2.40 & 92 & Phoenix & -0.129 & +0.025 & -3.98 & -3.21 & -4.54 & -4.00 & -3.42 & 93 \\
+Luna Snow & -0.119 & +0.003 & -3.70 & -2.73 & -3.42 & -3.65 & -4.03 & 78 & Cyclops & -0.128 & -0.004 & -5.11 & -4.12 & -4.87 & -5.11 & -5.33 & 85 \\
+White Fox & -0.123 & -0.016 & -3.60 & -2.86 & -3.01 & -3.56 & -4.19 & 89 &  &  &  &  &  &  &  &  &  \\
+Deadpool (Strategist) & -0.279 & -0.026 & -7.17 & -6.37 & -6.14 & -7.15 & -8.23 & 93 &  &  &  &  &  &  &  &  &  \\
+\bottomrule
+\end{tabular}
+}
+\end{center}
+\vspace{-2pt}
+\noindent\begin{minipage}{\linewidth}\scriptsize
+\emph{Notes.} $\beta_h$ is the within-role log-odds contrast at the median lobby score of 4,548, and
+\emph{slope} its change per standard deviation of lobby rank (252 points), so the coefficient at the 25th
+and 75th percentiles is $\beta_h \mp$ about $0.67\times$slope. Replacement values are exact predicted probability differences in percentage points over
+120,000 development matches: observed meta replaces the actual same-role incumbent, common reference
+compares with the average legal same-role hero in the same slot. Rank thirds are split at lobby scores
+4,437 and 4,642. Coverage is the share of same-role slots where the hero was legal (not on
+that side already, not banned). Heroes are sorted by the common-reference score within role. Cells with
+fewer than 200 legal contexts are blank.
+\end{minipage}
+\end{landscape}
+
+\begin{landscape}
+\begin{center}
+{\tiny\setlength{\tabcolsep}{3pt}\renewcommand{\arraystretch}{1.0}
+\captionof{table}{Team-up-eligible starting pairs from the selected fit}\label{tab:teamups}
+\begin{tabular}{l r r r r @{\hspace{1.5em}} l r r r r}
+\toprule
+Pair & Coef. & Contrast & Matches & Top third \% & Pair & Coef. & Contrast & Matches & Top third \% \\
+\midrule
+Gambit $\times$ Rogue & +0.184 & +0.209 & 22,920 & 34 & Loki $\times$ Angela & +0.029 & +0.028 & 3,104 & 39 \\
+Iron Fist $\times$ White Fox & +0.188 & +0.203 & 14,182 & 31 & Captain America $\times$ Winter Soldier & +0.030 & +0.027 & 7,579 & 33 \\
+Moon Knight $\times$ Blade & +0.152 & +0.163 & 4,063 & 21 & The Thing $\times$ Iron Fist & +0.021 & +0.025 & 14,162 & 40 \\
+Squirrel Girl $\times$ Iron Man & +0.129 & +0.139 & 3,180 & 13 & Human Torch $\times$ Invisible Woman & +0.025 & +0.024 & 14,581 & 38 \\
+The Punisher $\times$ Rocket Raccoon & +0.125 & +0.132 & 22,765 & 32 & Hulk $\times$ Captain America & +0.022 & +0.023 & 2,810 & 36 \\
+Mantis $\times$ Star-lord & +0.114 & +0.131 & 16,889 & 40 & Jeff The Land Shark $\times$ Devil Dinosaur & +0.026 & +0.023 & 6,651 & 24 \\
+Magik $\times$ The Hood & +0.099 & +0.109 & 59,539 & 34 & Wolverine $\times$ Cyclops & +0.026 & +0.021 & 3,675 & 28 \\
+Human Torch $\times$ Jubilee & +0.099 & +0.108 & 20,113 & 34 & Captain America $\times$ Blade & +0.015 & +0.021 & 3,137 & 26 \\
+Ultron $\times$ Adam Warlock & +0.140 & +0.107 & 5,927 & 41 & Magneto $\times$ Gambit & +0.032 & +0.020 & 62,728 & 33 \\
+Luna Snow $\times$ White Fox & +0.100 & +0.106 & 16,956 & 28 & Ultron $\times$ Iron Man & +0.018 & +0.018 & 4,055 & 23 \\
+Hulk $\times$ Doctor Strange & +0.072 & +0.096 & 8,175 & 36 & Luna Snow $\times$ Emma Frost & +0.017 & +0.016 & 34,932 & 33 \\
+Storm $\times$ Jeff The Land Shark & +0.087 & +0.096 & 7,545 & 31 & Star-lord $\times$ Angela & +0.015 & +0.015 & 2,782 & 34 \\
+Cloak \& Dagger $\times$ The Hood & +0.076 & +0.092 & 94,581 & 32 & Hulk $\times$ Namor & +0.027 & +0.015 & 9,394 & 30 \\
+Doctor Strange $\times$ Invisible Woman & +0.091 & +0.092 & 40,971 & 32 & Gambit $\times$ Jubilee & -0.006 & +0.015 & 32,597 & 28 \\
+Loki $\times$ Mantis & +0.083 & +0.090 & 6,996 & 48 & Cloak \& Dagger $\times$ Luna Snow & -0.004 & +0.014 & 35,050 & 33 \\
+Jubilee $\times$ The Hood & +0.081 & +0.086 & 114,785 & 30 & Phoenix $\times$ Rogue & +0.014 & +0.013 & 2,444 & 26 \\
+Rocket Raccoon $\times$ Peni Parker & +0.074 & +0.083 & 13,302 & 32 & Psylocke $\times$ White Fox & +0.008 & +0.013 & 4,989 & 25 \\
+Mantis $\times$ Groot & +0.053 & +0.071 & 13,159 & 40 & Luna Snow $\times$ Namor & +0.004 & +0.012 & 14,262 & 30 \\
+Phoenix $\times$ Cyclops & +0.069 & +0.068 & 8,596 & 22 & Black Panther $\times$ Peni Parker & +0.003 & +0.010 & 2,557 & 35 \\
+Scarlet Witch $\times$ Jubilee & +0.060 & +0.067 & 16,017 & 14 & Loki $\times$ Hela & +0.001 & +0.010 & 5,953 & 47 \\
+Winter Soldier $\times$ Elsa Bloodstone & +0.058 & +0.063 & 16,804 & 33 & Hela $\times$ Namor & +0.007 & +0.009 & 10,547 & 28 \\
+Storm $\times$ Adam Warlock & +0.040 & +0.052 & 2,124 & 39 & Captain America $\times$ Thor & +0.011 & +0.007 & 2,437 & 24 \\
+Mantis $\times$ Emma Frost & +0.043 & +0.052 & 28,531 & 39 & Mister Fantastic $\times$ The Thing & -0.005 & +0.006 & 5,027 & 31 \\
+Spider-man $\times$ Peni Parker & +0.045 & +0.050 & 5,978 & 33 & Cloak \& Dagger $\times$ Psylocke & +0.006 & +0.003 & 15,160 & 33 \\
+Cloak \& Dagger $\times$ Moon Knight & +0.049 & +0.046 & 19,222 & 20 & Groot $\times$ Jeff The Land Shark & +0.005 & +0.002 & 4,413 & 29 \\
+White Fox $\times$ Black Cat & +0.044 & +0.046 & 9,483 & 18 & The Punisher $\times$ Winter Soldier & -0.002 & +0.000 & 10,666 & 34 \\
+Venom $\times$ Phoenix & +0.045 & +0.045 & 10,303 & 28 & Rocket Raccoon $\times$ Squirrel Girl & +0.008 & -0.002 & 6,010 & 17 \\
+Elsa Bloodstone $\times$ Devil Dinosaur & +0.037 & +0.045 & 9,421 & 25 & The Punisher $\times$ Devil Dinosaur & -0.004 & -0.004 & 6,134 & 21 \\
+Iron Man $\times$ Thor & +0.034 & +0.044 & 6,839 & 24 & Human Torch $\times$ The Thing & -0.004 & -0.004 & 11,499 & 36 \\
+Magneto $\times$ Rogue & +0.028 & +0.044 & 15,160 & 38 & Venom $\times$ Spider-man & -0.003 & -0.004 & 19,990 & 36 \\
+Hela $\times$ Thor & +0.039 & +0.043 & 10,438 & 36 & Black Panther $\times$ Black Cat & +0.000 & -0.005 & 2,662 & 26 \\
+Wolverine $\times$ Gambit & +0.038 & +0.041 & 10,108 & 42 & Moon Knight $\times$ Elsa Bloodstone & -0.004 & -0.006 & 3,089 & 18 \\
+Hela $\times$ Venom & +0.038 & +0.041 & 9,967 & 41 & Mister Fantastic $\times$ Invisible Woman & -0.006 & -0.007 & 9,144 & 30 \\
+Hawkeye $\times$ Psylocke & +0.037 & +0.039 & 3,584 & 27 & Psylocke $\times$ Emma Frost & -0.012 & -0.010 & 8,548 & 32 \\
+Rocket Raccoon $\times$ Mister Fantastic & +0.042 & +0.039 & 10,499 & 29 & Venom $\times$ Blade & -0.014 & -0.010 & 5,306 & 26 \\
+Venom $\times$ Jeff The Land Shark & +0.033 & +0.039 & 8,644 & 28 & Magneto $\times$ Emma Frost & -0.027 & -0.013 & 36,898 & 37 \\
+Invisible Woman $\times$ The Thing & +0.050 & +0.039 & 29,386 & 38 & Rocket Raccoon $\times$ Groot & -0.012 & -0.016 & 13,270 & 32 \\
+Hela $\times$ Phoenix & +0.039 & +0.037 & 4,617 & 36 & Thor $\times$ Angela & -0.011 & -0.017 & 2,685 & 32 \\
+Doctor Strange $\times$ Magik & +0.042 & +0.037 & 24,603 & 33 & Hulk $\times$ Wolverine & -0.020 & -0.017 & 4,536 & 43 \\
+Mantis $\times$ Adam Warlock & +0.069 & +0.035 & 4,275 & 46 & Magneto $\times$ Scarlet Witch & -0.008 & -0.018 & 18,147 & 18 \\
+Squirrel Girl $\times$ Spider-man & +0.030 & +0.035 & 3,125 & 20 & Blade $\times$ Jubilee & -0.016 & -0.019 & 14,149 & 22 \\
+The Punisher $\times$ Daredevil & +0.030 & +0.034 & 3,862 & 39 & Luna Snow $\times$ Adam Warlock & +0.009 & -0.029 & 5,084 & 44 \\
+Hawkeye $\times$ Cloak \& Dagger & +0.041 & +0.033 & 13,883 & 25 & Hawkeye $\times$ Black Widow & -0.028 & -0.029 & 2,174 & 31 \\
+Groot $\times$ Star-lord & +0.033 & +0.033 & 5,188 & 33 & Storm $\times$ Human Torch & -0.032 & -0.030 & 2,461 & 34 \\
+Doctor Strange $\times$ Scarlet Witch & +0.038 & +0.033 & 8,960 & 16 & Gambit $\times$ Cyclops & -0.034 & -0.030 & 20,331 & 27 \\
+Black Widow $\times$ Phoenix & +0.032 & +0.032 & 4,041 & 35 & Storm $\times$ Thor & -0.029 & -0.031 & 5,756 & 27 \\
+Storm $\times$ Black Panther & +0.033 & +0.031 & 2,787 & 32 & Hulk $\times$ Iron Man & -0.033 & -0.032 & 4,611 & 27 \\
+Black Widow $\times$ Daredevil & +0.027 & +0.030 & 5,429 & 50 & Iron Fist $\times$ Daredevil & -0.049 & -0.046 & 5,253 & 42 \\
+Ultron $\times$ Peni Parker & +0.015 & +0.029 & 2,422 & 29 & Black Panther $\times$ Magik & -0.047 & -0.049 & 6,568 & 39 \\
+Star-lord $\times$ Adam Warlock & +0.015 & +0.029 & 2,006 & 35 & Spider-man $\times$ Black Cat & -0.054 & -0.057 & 7,537 & 24 \\
+\bottomrule
+\end{tabular}
+}
+\end{center}
+\vspace{-2pt}
+\noindent\begin{minipage}{\linewidth}\footnotesize
+\emph{Notes.} Allied pairs designated as team-ups in the Season 9.5 catalogue, with at least
+500 identifying matches, sorted by contrast. \emph{Coef.} is $S_{hk}(r)$ at the median lobby
+rank under the uniform centering convention (each hero's allied deviations sum to zero across its
+partners and within each role pair). \emph{Contrast} is the four-lineup log-odds contrast against
+same-role alternatives. \emph{Matches} counts distinct development matches with a nonzero signed
+feature; \emph{Top third \%} is the share of those matches in the top lobby-rank third. Read as the
+synergy of a team-up-eligible starting pair.
+\end{minipage}
+\end{landscape}
+
+\begin{landscape}
+\begin{center}
+{\scriptsize\setlength{\tabcolsep}{3.5pt}\renewcommand{\arraystretch}{1.0}
+\captionof{table}{Other allied pairs: largest positive and negative contrasts}\label{tab:allied}
+\begin{tabular}{l r r r r @{\hspace{1.5em}} l r r r r}
+\toprule
+\multicolumn{5}{l}{\emph{Largest positive}} & \multicolumn{5}{l}{\emph{Largest negative}} \\
+Pair & Coef. & Contrast & Matches & Top third \% & Pair & Coef. & Contrast & Matches & Top third \% \\
+\midrule
+Gambit $\times$ Deadpool (Duelist) & +0.090 & +0.103 & 13,919 & 37 & Spider-man $\times$ Angela & -0.067 & -0.075 & 6,072 & 38 \\
+Luna Snow $\times$ Daredevil & +0.055 & +0.059 & 14,834 & 46 & Mantis $\times$ Deadpool (Strategist) & -0.046 & -0.071 & 3,888 & 36 \\
+Black Panther $\times$ Deadpool (Vanguard) & +0.047 & +0.058 & 2,435 & 30 & Hela $\times$ Iron Man & -0.052 & -0.060 & 2,659 & 29 \\
+Mister Fantastic $\times$ Rogue & +0.044 & +0.057 & 1,897 & 28 & Doctor Strange $\times$ Magneto & -0.076 & -0.059 & 22,879 & 37 \\
+Groot $\times$ Emma Frost & +0.043 & +0.056 & 4,985 & 31 & Doctor Strange $\times$ Mister Fantastic & -0.053 & -0.057 & 4,850 & 27 \\
+Angela $\times$ The Hood & +0.052 & +0.053 & 10,573 & 35 & Ultron $\times$ Devil Dinosaur & -0.056 & -0.056 & 2,440 & 22 \\
+Jeff The Land Shark $\times$ Deadpool (Strategist) & +0.043 & +0.052 & 2,990 & 23 & Star-lord $\times$ Invisible Woman & -0.052 & -0.056 & 9,848 & 34 \\
+Jeff The Land Shark $\times$ Invisible Woman & +0.026 & +0.050 & 9,018 & 30 & Human Torch $\times$ White Fox & -0.045 & -0.055 & 3,889 & 26 \\
+The Punisher $\times$ Invisible Woman & +0.044 & +0.049 & 15,011 & 33 & Emma Frost $\times$ Gambit & -0.035 & -0.053 & 26,315 & 32 \\
+Hulk $\times$ Deadpool (Strategist) & +0.038 & +0.049 & 5,149 & 33 & Jubilee $\times$ Rogue & -0.038 & -0.051 & 11,643 & 25 \\
+Storm $\times$ Devil Dinosaur & +0.039 & +0.046 & 2,855 & 25 & Adam Warlock $\times$ Deadpool (Strategist) & -0.006 & -0.051 & 1,187 & 30 \\
+Loki $\times$ Psylocke & +0.035 & +0.046 & 2,088 & 44 & Loki $\times$ Adam Warlock & -0.011 & -0.050 & 818 & 46 \\
+Loki $\times$ Gambit & +0.028 & +0.046 & 6,326 & 45 & Hela $\times$ Ultron & -0.053 & -0.049 & 3,179 & 37 \\
+Luna Snow $\times$ Psylocke & +0.037 & +0.046 & 8,908 & 40 & Magik $\times$ The Thing & -0.043 & -0.049 & 14,601 & 38 \\
+Magneto $\times$ Wolverine & +0.039 & +0.046 & 16,482 & 48 & Namor $\times$ Gambit & -0.049 & -0.049 & 13,436 & 29 \\
+Loki $\times$ Cloak \& Dagger & +0.021 & +0.046 & 8,641 & 37 & Wolverine $\times$ The Thing & -0.052 & -0.048 & 4,489 & 45 \\
+Magik $\times$ Star-lord & +0.035 & +0.045 & 4,706 & 35 & Peni Parker $\times$ Gambit & -0.035 & -0.047 & 6,877 & 32 \\
+Venom $\times$ Elsa Bloodstone & +0.040 & +0.045 & 6,936 & 32 & Mantis $\times$ Devil Dinosaur & -0.046 & -0.047 & 7,705 & 34 \\
+Jeff The Land Shark $\times$ Deadpool (Duelist) & +0.036 & +0.044 & 4,462 & 28 & Human Torch $\times$ Jeff The Land Shark & -0.039 & -0.047 & 3,374 & 32 \\
+Mantis $\times$ Elsa Bloodstone & +0.036 & +0.043 & 10,927 & 39 & Daredevil $\times$ Rogue & -0.043 & -0.045 & 3,897 & 40 \\
+Angela $\times$ Devil Dinosaur & +0.037 & +0.042 & 1,461 & 28 & Loki $\times$ Ultron & -0.018 & -0.045 & 651 & 33 \\
+Captain America $\times$ Hela & +0.040 & +0.042 & 2,843 & 37 & Iron Fist $\times$ Jubilee & -0.034 & -0.045 & 21,512 & 33 \\
+Namor $\times$ Invisible Woman & +0.031 & +0.042 & 15,997 & 28 & The Punisher $\times$ Loki & -0.041 & -0.044 & 3,226 & 38 \\
+Devil Dinosaur $\times$ Deadpool (Strategist) & +0.037 & +0.042 & 4,645 & 20 & Adam Warlock $\times$ White Fox & +0.005 & -0.043 & 1,735 & 23 \\
+Magik $\times$ Deadpool (Strategist) & +0.043 & +0.041 & 9,146 & 29 & Squirrel Girl $\times$ Cyclops & -0.035 & -0.043 & 2,385 & 11 \\
+\bottomrule
+\end{tabular}
+}
+\end{center}
+\vspace{-2pt}
+\noindent\begin{minipage}{\linewidth}\footnotesize
+\emph{Notes.} Allied pairs that are not designated team-ups, with at least 500 identifying
+matches. Columns as in Table~\ref{tab:teamups}. A negative contrast means the pair does worse together
+than its members' other pairings predict.
+\end{minipage}
+\end{landscape}
+
+\begin{landscape}
+\begin{center}
+{\scriptsize\setlength{\tabcolsep}{3.5pt}\renewcommand{\arraystretch}{1.0}
+\captionof{table}{Opposing matchups: largest contrasts}\label{tab:opposing}
+\begin{tabular}{l r r r r @{\hspace{1.5em}} l r r r r}
+\toprule
+Matchup & Coef. & Contrast & Matches & Top third \% & Matchup & Coef. & Contrast & Matches & Top third \% \\
+\midrule
+The Thing over Magik & +0.085 & +0.106 & 16,054 & 38 & Black Panther over Mantis & +0.053 & +0.053 & 9,327 & 46 \\
+Gambit over Angela & +0.066 & +0.075 & 8,342 & 36 & Mister Fantastic over Black Widow & +0.048 & +0.053 & 2,976 & 35 \\
+Phoenix over Elsa Bloodstone & +0.065 & +0.071 & 3,643 & 24 & Rocket Raccoon over Squirrel Girl & +0.045 & +0.052 & 6,015 & 17 \\
+Cloak \& Dagger over Venom & +0.057 & +0.069 & 28,213 & 31 & Namor over Gambit & +0.044 & +0.052 & 13,764 & 29 \\
+Wolverine over Cloak \& Dagger & +0.051 & +0.067 & 12,632 & 38 & Gambit over Daredevil & +0.047 & +0.051 & 13,091 & 41 \\
+Spider-man over Iron Man & +0.064 & +0.066 & 5,705 & 26 & Mister Fantastic over Black Cat & +0.047 & +0.051 & 2,967 & 21 \\
+Black Widow over Iron Man & +0.063 & +0.065 & 3,873 & 29 & Black Widow over Hela & +0.045 & +0.051 & 9,464 & 48 \\
+The Thing over Deadpool (Duelist) & +0.056 & +0.063 & 6,190 & 36 & Captain America over Invisible Woman & +0.049 & +0.050 & 7,080 & 31 \\
+Magik over The Hood & +0.063 & +0.063 & 53,481 & 34 & Peni Parker over Magik & +0.033 & +0.050 & 5,887 & 32 \\
+Namor over Spider-man & +0.061 & +0.063 & 8,682 & 32 & The Thing over Rogue & +0.054 & +0.050 & 5,708 & 34 \\
+Magik over Devil Dinosaur & +0.065 & +0.062 & 10,315 & 27 & Iron Fist over Black Widow & +0.042 & +0.050 & 7,097 & 46 \\
+Black Widow over Ultron & +0.060 & +0.061 & 2,983 & 38 & Mister Fantastic over Magneto & +0.038 & +0.050 & 14,966 & 34 \\
+The Punisher over The Thing & +0.057 & +0.061 & 8,725 & 34 & Winter Soldier over Hulk & +0.038 & +0.048 & 17,460 & 43 \\
+Ultron over Magik & +0.049 & +0.061 & 5,854 & 32 & Spider-man over Rocket Raccoon & +0.043 & +0.048 & 26,191 & 37 \\
+Deadpool (Duelist) over Invisible Woman & +0.055 & +0.060 & 12,725 & 35 & Spider-man over Human Torch & +0.046 & +0.048 & 7,436 & 40 \\
+Iron Fist over Rocket Raccoon & +0.053 & +0.060 & 16,582 & 40 & Hulk over Wolverine & +0.040 & +0.048 & 3,531 & 47 \\
+Storm over Iron Fist & +0.060 & +0.060 & 3,805 & 38 & The Thing over Mister Fantastic & +0.038 & +0.048 & 4,781 & 31 \\
+Black Cat over Mantis & +0.052 & +0.058 & 7,919 & 28 & Psylocke over Moon Knight & +0.045 & +0.048 & 2,397 & 23 \\
+Venom over Squirrel Girl & +0.050 & +0.056 & 3,247 & 15 & Iron Fist over Invisible Woman & +0.037 & +0.048 & 18,123 & 40 \\
+Daredevil over Black Cat & +0.049 & +0.056 & 4,371 & 30 & Daredevil over Rocket Raccoon & +0.043 & +0.047 & 14,532 & 45 \\
+Hawkeye over Storm & +0.048 & +0.055 & 1,684 & 29 & The Hood over The Punisher & +0.045 & +0.047 & 28,208 & 31 \\
+Daredevil over Invisible Woman & +0.044 & +0.054 & 16,320 & 44 & Emma Frost over Black Widow & +0.046 & +0.047 & 13,188 & 38 \\
+Invisible Woman over Winter Soldier & +0.049 & +0.054 & 47,155 & 40 & Devil Dinosaur over Gambit & +0.041 & +0.047 & 12,794 & 27 \\
+Captain America over Spider-man & +0.050 & +0.054 & 4,608 & 32 & Jubilee over Iron Fist & +0.039 & +0.047 & 23,217 & 32 \\
+Magneto over Hela & +0.059 & +0.053 & 40,218 & 46 & Gambit over Jeff The Land Shark & +0.033 & +0.047 & 12,936 & 27 \\
+\bottomrule
+\end{tabular}
+}
+\end{center}
+\vspace{-2pt}
+\noindent\begin{minipage}{\linewidth}\footnotesize
+\emph{Notes.} \emph{A over B} means A's side wins more often when the two start on opposite sides than
+the two heroes' other matchups predict; the coefficient and contrast are oriented so that both are
+positive for A. At least 500 identifying matches. Starting matchups include whatever adaptation
+followed.
+\end{minipage}
+\end{landscape}
+
+\end{document}

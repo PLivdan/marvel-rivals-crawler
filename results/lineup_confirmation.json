@@ -1,0 +1,54 @@
+{
+ "n": 19804,
+ "D": 0.0018383481669994723,
+ "se_iid": 0.0006091348504242226,
+ "ci_iid": [
+  0.000644443860167996,
+  0.0030322524738309485
+ ],
+ "ci_boot": [
+  0.0015092056880704307,
+  0.0021749791447818927
+ ],
+ "logloss_candidate": 0.6636050167539526,
+ "logloss_baseline": 0.6654433649209519,
+ "cal_intercept": 0.031249745527395505,
+ "cal_slope": 1.0618158737966585,
+ "cal_slope_thirds": [
+  0.9080062060673292,
+  1.0384024692763254,
+  1.116318750327811
+ ],
+ "by_third": [
+  {
+   "third": 0,
+   "n": 3374,
+   "D": 0.0026276933171707783,
+   "cal_intercept": -0.0014691492608202863,
+   "cal_slope": 0.9080062060673292
+  },
+  {
+   "third": 1,
+   "n": 5677,
+   "D": -0.0009106374448357691,
+   "cal_intercept": 0.027654043806062262,
+   "cal_slope": 1.0384024692763254
+  },
+  {
+   "third": 2,
+   "n": 10753,
+   "D": 0.0030419881541389375,
+   "cal_intercept": 0.044000016987612425,
+   "cal_slope": 1.116318750327811
+  }
+ ],
+ "criteria": {
+  "D_positive_and_boot_ci_excludes_zero": true,
+  "calibration_overall": true,
+  "calibration_by_third": true,
+  "no_third_worse_than_minus_0.001": true,
+  "sample_at_least_10000": true
+ },
+ "verdict": "PROMOTE",
+ "evaluated_at_utc": "2026-09-10T03:35:39Z"
+}

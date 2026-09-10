@@ -55,10 +55,15 @@ for name, label in (("no_pairs_no_slopes_no_heromap", "Heroes, composition, maps
     e = ev_for(RED.get(name, "")) if RED else None
     if e: LADDER.append((label, e))
 BASE_MEAN = BASE["mean_val_logloss"]
+FREE = DS["free"]; N_PAIRS = FREE["allied"] + FREE["opposing"]; N_SLOPES = FREE["hero"] + FREE["shape"]
+_base = FREE["maps"] + 2 + FREE["hero"] + FREE["shape"]
+PARAMS = {"Heroes, composition, maps, rank imbalance": _base, "+ rank slopes and hero-by-map": _base + N_SLOPES + FREE["heromap"],
+          "+ allied and opposing pairs (no pair slopes)": _base + N_SLOPES + FREE["heromap"] + N_PAIRS,
+          "+ pair rank slopes (selected fit)": _base + N_SLOPES + FREE["heromap"] + 2 * N_PAIRS}
 def ladder_rows():
     rows = [rf"Headline specification, refitted on development rows & {BASE['k']} & " + " & ".join(f"{f['logloss']:.5f}" for f in BASE["folds"]) + rf" & {BASE_MEAN:.5f} & --- \\"]
     for label, e in LADDER:
-        rows.append(rf"{esc(label)} & --- & " + " & ".join(f"{f['logloss']:.5f}" for f in e["folds"]) + rf" & {e['mean_val_logloss']:.5f} & {e['mean_cal_slope']:.3f} \\")
+        rows.append(rf"{esc(label)} & {num(PARAMS[label])} & " + " & ".join(f"{f['logloss']:.5f}" for f in e["folds"]) + rf" & {e['mean_val_logloss']:.5f} & {e['mean_cal_slope']:.3f} \\")
     return "\n".join(rows)
 # tuning table: best evaluation and its neighbours (same sub as the selection)
 def tuning_rows(k=8):
@@ -70,14 +75,14 @@ sel_third_slopes = [np.mean([f["by_third"][t]["cal_slope"] for f in sel["folds"]
 
 # ---- hero tables -------------------------------------------------------------------------------------
 lob = SM["lobby_at"]; thirds = SM["thirds"]
-R = R.merge(H[["hero_id", "beta_p25", "beta_p50", "beta_p75"]], on="hero_id")
+R = R.merge(H[["hero_id", "beta_p25", "beta_p50", "beta_p75", "slope"]], on="hero_id")
 def hero_row(r):
-    return (f"{esc(r['name'])} & {f3(r.beta_p25)} & {f3(r.beta_p50)} & {f3(r.beta_p75)} & {f2(r.obs_meta_pp)} & {f2(r.common_ref_pp)} & "
+    return (f"{esc(r['name'])} & {f3(r.beta_p50)} & {f3(r.slope)} & {f2(r.obs_meta_pp)} & {f2(r.common_ref_pp)} & "
             f"{f2(r.obs_meta_pp_third0)} & {f2(r.obs_meta_pp_third1)} & {f2(r.obs_meta_pp_third2)} & {100*r.coverage:.0f}")
 def role_block(role, letter):
     d = R[R.role == role].sort_values("common_ref_pp", ascending=False)
-    return [panel(f"Panel {letter}: {role} ({len(d)} heroes)", 10)] + [hero_row(r) for _, r in d.iterrows()]
-HERO_BODY = side_by_side([role_block("Tank", "A") + role_block("Support", "C"), role_block("Damage", "B")], 10)
+    return [panel(f"Panel {letter}: {role} ({len(d)} heroes)", 9)] + [hero_row(r) for _, r in d.iterrows()]
+HERO_BODY = side_by_side([role_block("Tank", "A") + role_block("Support", "C"), role_block("Damage", "B")], 9)
 top = {ro: R[R.role == ro].sort_values("common_ref_pp", ascending=False) for ro in ("Tank", "Damage", "Support")}
 def top_phrase(ro, k=3): return oxford(f"{esc(r['name'])} ({r.common_ref_pp:+.1f})" for _, r in top[ro].head(k).iterrows())
 GRAD = R.assign(g=R.obs_meta_pp_third2 - R.obs_meta_pp_third0).dropna(subset=["g"]).sort_values("g")
@@ -97,7 +102,7 @@ def pair_row(r, opp=False):
         label = f"{esc(a)} over {esc(b)}"
     else:
         label = f"{esc(r.hero_a)} $\\times$ {esc(r.hero_b)}"; c, dd = r.coef, r.did
-    return f"{label} & {c:+.3f} & {dd:+.3f} & {num(r.support_dev)} & {num(r.support_third0)}/{num(r.support_third1)}/{num(r.support_third2)}"
+    return f"{label} & {c:+.3f} & {dd:+.3f} & {num(r.support_dev)} & {100*r.support_third2/max(r.support_dev,1):.0f}"
 TU_ROWS = side_by_side([[pair_row(r) for r in TU.iloc[:(len(TU) + 1) // 2].itertuples()], [pair_row(r) for r in TU.iloc[(len(TU) + 1) // 2:].itertuples()]], 5)
 NT_POS = NT.sort_values("did", ascending=False).head(25); NT_NEG = NT.sort_values("did").head(25)
 NT_ROWS = side_by_side([[pair_row(r) for r in NT_POS.itertuples()], [pair_row(r) for r in NT_NEG.itertuples()]], 5)
@@ -230,7 +235,8 @@ $\lambda=(<<LAMS>>)$, with mean validation log loss <<SEL_LL>> and mean calibrat
 <<SEL_SLOPE>>, against <<BASE_LL>> for the refitted headline specification on the same folds, a gain of
 <<GAIN>>. Calibration by supported rank third is <<SEL_THIRDS>>.
 
-\begin{center}\small
+\begin{table}[H]\centering\footnotesize
+\caption{Best evaluations of the penalty search (lowest validation log loss first)}
 \begin{tabular}{l r r r}
 \toprule
 $\lambda_1,\lambda_2,\lambda_3,\lambda_4,\lambda_5$ & Mean validation log loss & Mean calibration slope & Converged \\
@@ -238,32 +244,32 @@ $\lambda_1,\lambda_2,\lambda_3,\lambda_4,\lambda_5$ & Mean validation log loss &
 <<TUNING_ROWS>>
 \bottomrule
 \end{tabular}
-\captionof{table}{Best evaluations of the penalty search (lowest validation log loss first)}
-\end{center}
+\end{table}
 
-\begin{center}\small
+\begin{table}[H]\centering\small
+\caption{Development ladder: genuine reduced fits at the selected penalties}\label{tab:ladder}
 \begin{tabular}{l r r r r r r}
 \toprule
-Model & Parameters & Fold 1 & Fold 2 & Fold 3 & Mean & Cal.\ slope \\
+Model & Free parameters & Fold 1 & Fold 2 & Fold 3 & Mean & Cal.\ slope \\
 \midrule
 <<LADDER_ROWS>>
 \bottomrule
 \end{tabular}
-\captionof{table}{Development ladder: genuine reduced fits at the selected penalties}\label{tab:ladder}
-\end{center}
-\noindent\begin{minipage}{\linewidth}\footnotesize
+\par\vspace{4pt}
+\begin{minipage}{\linewidth}\footnotesize
 \emph{Notes.} Validation log loss on the same three chronological folds. Reduced fits set the omitted
 blocks' penalties to $10^9$, which drives those coefficients to zero, so each row is a genuine reduced
 model rather than a post-hoc zeroing. The headline row is the published specification (187 parameters,
 starting-hero attribution, within-role constraint, map intercepts, designated team-ups) refitted on the
 development rows.
 \end{minipage}
+\end{table}
 
 \section*{Hero values}
 
-Table~\ref{tab:hero} reports three things per hero from the selected fit. The coefficient $\beta_h(r)$ is
-the within-role log-odds contrast evaluated at the 25th, 50th and 75th percentiles of lobby rank. The
-replacement scores are exact predicted probability differences, in percentage points, from placing the
+Table~\ref{tab:hero} reports three things per hero from the selected fit. The coefficient $\beta_h$ is the
+within-role log-odds contrast at the median lobby rank, reported with its slope per standard deviation of
+rank, so a reader can place it anywhere in the supported range. The replacement scores are exact predicted probability differences, in percentage points, from placing the
 hero into a starting slot in place of another hero of the same role, recomputing all five allied and six
 opposing relationships, the hero-by-map deviation, and the rank slope, and keeping the slot's player,
 rank, map, side, and the other eleven starters fixed. Two references are declared. The observed-meta
@@ -307,15 +313,15 @@ adaptation follows; it is not the effect of an opponent switching to the counter
 \FloatBarrier
 \begin{landscape}
 \begin{center}
-{\scriptsize\setlength{\tabcolsep}{3pt}\renewcommand{\arraystretch}{1.05}
+{\scriptsize\setlength{\tabcolsep}{2.4pt}\renewcommand{\arraystretch}{1.05}
 \captionof{table}{Hero coefficients by lobby rank and same-slot replacement values from the selected fit}\label{tab:hero}
-\begin{tabular}{l r r r r r r r r r @{\hspace{1.4em}} l r r r r r r r r r}
+\begin{tabular}{l r r r r r r r r @{\hspace{1.1em}} l r r r r r r r r}
 \toprule
-& \multicolumn{3}{c}{$\beta_h(r)$ at lobby-rank percentile} & \multicolumn{2}{c}{Replacement, pp} & \multicolumn{3}{c}{Observed meta by third} & &
-& \multicolumn{3}{c}{$\beta_h(r)$ at lobby-rank percentile} & \multicolumn{2}{c}{Replacement, pp} & \multicolumn{3}{c}{Observed meta by third} & \\
-\cmidrule(lr){2-4}\cmidrule(lr){5-6}\cmidrule(lr){7-9}\cmidrule(lr){12-14}\cmidrule(lr){15-16}\cmidrule(lr){17-19}
-& 25th & 50th & 75th & Obs.\ meta & Common ref. & Low & Mid & High & Cov.\ \% &
-& 25th & 50th & 75th & Obs.\ meta & Common ref. & Low & Mid & High & Cov.\ \% \\
+& \multicolumn{2}{c}{Coefficient} & \multicolumn{2}{c}{Replacement, pp} & \multicolumn{3}{c}{Obs.\ meta by third} & &
+& \multicolumn{2}{c}{Coefficient} & \multicolumn{2}{c}{Replacement, pp} & \multicolumn{3}{c}{Obs.\ meta by third} & \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-8}\cmidrule(lr){11-12}\cmidrule(lr){13-14}\cmidrule(lr){15-17}
+& $\beta_h$ & slope & Obs.\ meta & Common ref. & Low & Mid & High & Cov.\ \% &
+& $\beta_h$ & slope & Obs.\ meta & Common ref. & Low & Mid & High & Cov.\ \% \\
 \midrule
 <<HERO_BODY>>
 \bottomrule
@@ -324,8 +330,9 @@ adaptation follows; it is not the effect of an opponent switching to the counter
 \end{center}
 \vspace{-2pt}
 \noindent\begin{minipage}{\linewidth}\scriptsize
-\emph{Notes.} Coefficients are within-role log-odds contrasts at lobby scores of <<LOB_P25>>, <<LOB_P50>>
-and <<LOB_P75>>. Replacement values are exact predicted probability differences in percentage points over
+\emph{Notes.} $\beta_h$ is the within-role log-odds contrast at the median lobby score of <<LOB_P50>>, and
+\emph{slope} its change per standard deviation of lobby rank (<<R_SD>> points), so the coefficient at the 25th
+and 75th percentiles is $\beta_h \mp$ about $0.67\times$slope. Replacement values are exact predicted probability differences in percentage points over
 <<POOL_N>> development matches: observed meta replaces the actual same-role incumbent, common reference
 compares with the average legal same-role hero in the same slot. Rank thirds are split at lobby scores
 <<THIRD_LO>> and <<THIRD_HI>>. Coverage is the share of same-role slots where the hero was legal (not on
@@ -336,11 +343,11 @@ fewer than 200 legal contexts are blank.
 
 \begin{landscape}
 \begin{center}
-{\scriptsize\setlength{\tabcolsep}{3.5pt}\renewcommand{\arraystretch}{1.0}
+{\tiny\setlength{\tabcolsep}{3pt}\renewcommand{\arraystretch}{1.0}
 \captionof{table}{Team-up-eligible starting pairs from the selected fit}\label{tab:teamups}
 \begin{tabular}{l r r r r @{\hspace{1.5em}} l r r r r}
 \toprule
-Pair & Coef. & Contrast & Matches & By third & Pair & Coef. & Contrast & Matches & By third \\
+Pair & Coef. & Contrast & Matches & Top third \% & Pair & Coef. & Contrast & Matches & Top third \% \\
 \midrule
 <<TU_ROWS>>
 \bottomrule
@@ -354,7 +361,8 @@ Pair & Coef. & Contrast & Matches & By third & Pair & Coef. & Contrast & Matches
 rank under the uniform centering convention (each hero's allied deviations sum to zero across its
 partners and within each role pair). \emph{Contrast} is the four-lineup log-odds contrast against
 same-role alternatives. \emph{Matches} counts distinct development matches with a nonzero signed
-feature, split by lobby-rank third. Read as the synergy of a team-up-eligible starting pair.
+feature; \emph{Top third \%} is the share of those matches in the top lobby-rank third. Read as the
+synergy of a team-up-eligible starting pair.
 \end{minipage}
 \end{landscape}
 
@@ -365,7 +373,7 @@ feature, split by lobby-rank third. Read as the synergy of a team-up-eligible st
 \begin{tabular}{l r r r r @{\hspace{1.5em}} l r r r r}
 \toprule
 \multicolumn{5}{l}{\emph{Largest positive}} & \multicolumn{5}{l}{\emph{Largest negative}} \\
-Pair & Coef. & Contrast & Matches & By third & Pair & Coef. & Contrast & Matches & By third \\
+Pair & Coef. & Contrast & Matches & Top third \% & Pair & Coef. & Contrast & Matches & Top third \% \\
 \midrule
 <<NT_ROWS>>
 \bottomrule
@@ -386,7 +394,7 @@ than its members' other pairings predict.
 \captionof{table}{Opposing matchups: largest contrasts}\label{tab:opposing}
 \begin{tabular}{l r r r r @{\hspace{1.5em}} l r r r r}
 \toprule
-Matchup & Coef. & Contrast & Matches & By third & Matchup & Coef. & Contrast & Matches & By third \\
+Matchup & Coef. & Contrast & Matches & Top third \% & Matchup & Coef. & Contrast & Matches & Top third \% \\
 \midrule
 <<O_ROWS>>
 \bottomrule
@@ -412,7 +420,7 @@ subs = {
     "N_ILLEGAL": num(DS["n_excluded_duplicate_starters"]), "N_DESIGN": num(DS["n"]),
     "N_CONF": num(BASE["n_conf"]), "N_DEV": num(BASE["n_dev"]), "CONF_CUT": "2026-09-04 11:00",
     "LOB_P5": f"{COV['lobby_mean_quantiles']['0.05']:,.0f}", "LOB_P95": f"{COV['lobby_mean_quantiles']['0.95']:,.0f}", "LOB_P50": f"{COV['lobby_mean_quantiles']['0.5']:,.0f}",
-    "LOB_P25": f"{lob['p25']:,.0f}", "LOB_P75": f"{lob['p75']:,.0f}", "N_ABOVE_5000": num(COV["matches_with_lobby_mean_above"]["5000"]),
+        "LOB_P25": f"{lob['p25']:,.0f}", "LOB_P75": f"{lob['p75']:,.0f}", "R_SD": f"{SM['scalers']['r_sd']:,.0f}", "N_ABOVE_5000": num(COV["matches_with_lobby_mean_above"]["5000"]),
     "N_CONSTRAINTS": str(sum(v["imposed"] for v in DS["constraints"].values())), "N_CANDIDATES": str(sum(v["candidates"] for v in DS["constraints"].values())),
     "MAX_RESID": f"{max(v['max_residual_imposed'] for v in DS['constraints'].values()):.1e}",
     "N_FREE": num(sum(DS["free"].values()) + DS["free"]["hero"] + DS["free"]["shape"] + DS["free"]["allied"] + DS["free"]["opposing"] + 1),
