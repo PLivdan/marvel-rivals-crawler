@@ -1,0 +1,189 @@
+\begin{tikzpicture}
+\begin{axis}[
+  width=372.0pt, height=534.0pt, scale only axis, axis lines=left, tick style={draw=none}, y axis line style={draw=none}, clip=false,
+  label style={font=\small}, tick label style={font=\footnotesize}, yticklabel style={font=\footnotesize},
+  legend style={draw=none, fill=none, font=\footnotesize, cells={anchor=west}}, legend cell align=left,
+  xmin=-9, xmax=9, ymin=0, ymax=57.80, xtick={-8,-6,...,8},
+  xlabel={Observed-incumbent replacement value, percentage points},
+  ytick={57.00,56.00,55.00,54.00,53.00,52.00,51.00,50.00,49.00,48.00,47.00,46.00,45.00,44.00,43.00,41.20,40.20,39.20,38.20,37.20,36.20,35.20,34.20,33.20,32.20,31.20,30.20,29.20,28.20,27.20,26.20,25.20,24.20,23.20,22.20,21.20,20.20,19.20,18.20,17.20,16.20,15.20,13.40,12.40,11.40,10.40,9.40,8.40,7.40,6.40,5.40,4.40,3.40,2.40,1.40}, yticklabels={{Magneto},{Thor},{The Hood},{Rogue},{Groot},{Peni Parker},{Devil Dinosaur},{Emma Frost},{Captain America},{Venom},{Angela},{The Thing},{Hulk},{Doctor Strange},{Deadpool (Vanguard)},{Elsa Bloodstone},{Wolverine},{Phoenix},{Psylocke},{Black Widow},{Iron Fist},{Spider-man},{Hela},{Daredevil},{Moon Knight},{Star-lord},{Deadpool (Duelist)},{Mister Fantastic},{The Punisher},{Cyclops},{Storm},{Squirrel Girl},{Black Cat},{Scarlet Witch},{Hawkeye},{Winter Soldier},{Namor},{Blade},{Human Torch},{Magik},{Iron Man},{Black Panther},{Mantis},{Loki},{Gambit},{Invisible Woman},{Jeff The Land Shark},{Luna Snow},{Jubilee},{White Fox},{Rocket Raccoon},{Adam Warlock},{Deadpool (Strategist)},{Ultron},{Cloak \& Dagger}},
+  legend style={at={(0.985,0.99)}, anchor=north east},
+]
+\draw[dashed, thin] (axis cs:0,0) -- (axis cs:0,57.80);
+\draw[black!35, thin] (axis cs:-9,42.00) -- (axis cs:9,42.00);
+\draw[black!35, thin] (axis cs:-9,14.20) -- (axis cs:9,14.20);
+\draw[thin] (axis cs:0.551,57.00) -- (axis cs:1.151,57.00);
+\draw[thin] (axis cs:-0.442,56.00) -- (axis cs:0.145,56.00);
+\draw[thin] (axis cs:1.049,55.00) -- (axis cs:1.218,55.00);
+\draw[thin] (axis cs:-2.955,54.00) -- (axis cs:-2.960,54.00);
+\draw[thin] (axis cs:-1.839,53.00) -- (axis cs:-2.044,53.00);
+\draw[thin] (axis cs:1.159,52.00) -- (axis cs:0.806,52.00);
+\draw[thin] (axis cs:-1.209,51.00) -- (axis cs:-1.650,51.00);
+\draw[thin] (axis cs:-2.969,50.00) -- (axis cs:-3.487,50.00);
+\draw[thin] (axis cs:-1.824,49.00) -- (axis cs:-2.711,49.00);
+\draw[thin] (axis cs:-1.841,48.00) -- (axis cs:-2.766,48.00);
+\draw[thin] (axis cs:0.726,47.00) -- (axis cs:-0.379,47.00);
+\draw[thin] (axis cs:4.718,46.00) -- (axis cs:3.555,46.00);
+\draw[thin] (axis cs:0.751,45.00) -- (axis cs:-0.645,45.00);
+\draw[thin] (axis cs:-0.677,44.00) -- (axis cs:-2.095,44.00);
+\draw[thin] (axis cs:-5.450,43.00) -- (axis cs:-7.706,43.00);
+\draw[thin] (axis cs:-1.922,41.20) -- (axis cs:0.233,41.20);
+\draw[thin] (axis cs:-1.242,40.20) -- (axis cs:0.592,40.20);
+\draw[thin] (axis cs:-4.535,39.20) -- (axis cs:-3.419,39.20);
+\draw[thin] (axis cs:-1.864,38.20) -- (axis cs:-1.058,38.20);
+\draw[thin] (axis cs:-1.165,37.20) -- (axis cs:-0.588,37.20);
+\draw[thin] (axis cs:0.922,36.20) -- (axis cs:1.467,36.20);
+\draw[thin] (axis cs:-0.593,35.20) -- (axis cs:-0.068,35.20);
+\draw[thin] (axis cs:0.497,34.20) -- (axis cs:0.869,34.20);
+\draw[thin] (axis cs:1.839,33.20) -- (axis cs:2.127,33.20);
+\draw[thin] (axis cs:0.257,32.20) -- (axis cs:0.311,32.20);
+\draw[thin] (axis cs:-2.149,31.20) -- (axis cs:-2.334,31.20);
+\draw[thin] (axis cs:-1.755,30.20) -- (axis cs:-1.949,30.20);
+\draw[thin] (axis cs:2.057,29.20) -- (axis cs:1.737,29.20);
+\draw[thin] (axis cs:-1.537,28.20) -- (axis cs:-1.981,28.20);
+\draw[thin] (axis cs:-4.874,27.20) -- (axis cs:-5.335,27.20);
+\draw[thin] (axis cs:2.681,26.20) -- (axis cs:2.166,26.20);
+\draw[thin] (axis cs:-3.596,25.20) -- (axis cs:-4.120,25.20);
+\draw[thin] (axis cs:4.092,24.20) -- (axis cs:3.391,24.20);
+\draw[thin] (axis cs:-2.251,23.20) -- (axis cs:-3.043,23.20);
+\draw[thin] (axis cs:-0.960,22.20) -- (axis cs:-2.029,22.20);
+\draw[thin] (axis cs:1.005,21.20) -- (axis cs:-0.272,21.20);
+\draw[thin] (axis cs:-1.033,20.20) -- (axis cs:-2.420,20.20);
+\draw[thin] (axis cs:-0.043,19.20) -- (axis cs:-1.465,19.20);
+\draw[thin] (axis cs:0.832,18.20) -- (axis cs:-0.758,18.20);
+\draw[thin] (axis cs:4.905,17.20) -- (axis cs:3.252,17.20);
+\draw[thin] (axis cs:1.518,16.20) -- (axis cs:-0.319,16.20);
+\draw[thin] (axis cs:0.027,15.20) -- (axis cs:-2.334,15.20);
+\draw[thin] (axis cs:5.813,13.40) -- (axis cs:7.194,13.40);
+\draw[thin] (axis cs:-0.402,12.40) -- (axis cs:0.766,12.40);
+\draw[thin] (axis cs:-1.153,11.40) -- (axis cs:-0.102,11.40);
+\draw[thin] (axis cs:-2.383,10.40) -- (axis cs:-1.888,10.40);
+\draw[thin] (axis cs:-2.516,9.40) -- (axis cs:-2.398,9.40);
+\draw[thin] (axis cs:-3.423,8.40) -- (axis cs:-4.035,8.40);
+\draw[thin] (axis cs:-1.566,7.40) -- (axis cs:-2.650,7.40);
+\draw[thin] (axis cs:-3.009,6.40) -- (axis cs:-4.185,6.40);
+\draw[thin] (axis cs:4.520,5.40) -- (axis cs:3.134,5.40);
+\draw[thin] (axis cs:2.954,4.40) -- (axis cs:0.946,4.40);
+\draw[thin] (axis cs:-6.136,3.40) -- (axis cs:-8.228,3.40);
+\draw[thin] (axis cs:4.109,2.40) -- (axis cs:1.912,2.40);
+\draw[thin] (axis cs:1.482,1.40) -- (axis cs:-0.877,1.40);
+\addplot[only marks, mark=o, mark size=1.6pt] coordinates {
+(0.551,57.00)
+(-0.442,56.00)
+(1.049,55.00)
+(-2.955,54.00)
+(-1.839,53.00)
+(1.159,52.00)
+(-1.209,51.00)
+(-2.969,50.00)
+(-1.824,49.00)
+(-1.841,48.00)
+(0.726,47.00)
+(4.718,46.00)
+(0.751,45.00)
+(-0.677,44.00)
+(-5.450,43.00)
+(-1.922,41.20)
+(-1.242,40.20)
+(-4.535,39.20)
+(-1.864,38.20)
+(-1.165,37.20)
+(0.922,36.20)
+(-0.593,35.20)
+(0.497,34.20)
+(1.839,33.20)
+(0.257,32.20)
+(-2.149,31.20)
+(-1.755,30.20)
+(2.057,29.20)
+(-1.537,28.20)
+(-4.874,27.20)
+(2.681,26.20)
+(-3.596,25.20)
+(4.092,24.20)
+(-2.251,23.20)
+(-0.960,22.20)
+(1.005,21.20)
+(-1.033,20.20)
+(-0.043,19.20)
+(0.832,18.20)
+(4.905,17.20)
+(1.518,16.20)
+(0.027,15.20)
+(5.813,13.40)
+(-0.402,12.40)
+(-1.153,11.40)
+(-2.383,10.40)
+(-2.516,9.40)
+(-3.423,8.40)
+(-1.566,7.40)
+(-3.009,6.40)
+(4.520,5.40)
+(2.954,4.40)
+(-6.136,3.40)
+(4.109,2.40)
+(1.482,1.40)
+};
+\addlegendentry{Lower third by lobby rank}
+\addplot[only marks, mark=*, mark size=1.6pt] coordinates {
+(1.151,57.00)
+(0.145,56.00)
+(1.218,55.00)
+(-2.960,54.00)
+(-2.044,53.00)
+(0.806,52.00)
+(-1.650,51.00)
+(-3.487,50.00)
+(-2.711,49.00)
+(-2.766,48.00)
+(-0.379,47.00)
+(3.555,46.00)
+(-0.645,45.00)
+(-2.095,44.00)
+(-7.706,43.00)
+(0.233,41.20)
+(0.592,40.20)
+(-3.419,39.20)
+(-1.058,38.20)
+(-0.588,37.20)
+(1.467,36.20)
+(-0.068,35.20)
+(0.869,34.20)
+(2.127,33.20)
+(0.311,32.20)
+(-2.334,31.20)
+(-1.949,30.20)
+(1.737,29.20)
+(-1.981,28.20)
+(-5.335,27.20)
+(2.166,26.20)
+(-4.120,25.20)
+(3.391,24.20)
+(-3.043,23.20)
+(-2.029,22.20)
+(-0.272,21.20)
+(-2.420,20.20)
+(-1.465,19.20)
+(-0.758,18.20)
+(3.252,17.20)
+(-0.319,16.20)
+(-2.334,15.20)
+(7.194,13.40)
+(0.766,12.40)
+(-0.102,11.40)
+(-1.888,10.40)
+(-2.398,9.40)
+(-4.035,8.40)
+(-2.650,7.40)
+(-4.185,6.40)
+(3.134,5.40)
+(0.946,4.40)
+(-8.228,3.40)
+(1.912,2.40)
+(-0.877,1.40)
+};
+\addlegendentry{Upper third by lobby rank}
+\node[anchor=west, font=\footnotesize\itshape, fill=white, inner sep=1pt] at (axis cs:-8.85,57.45) {Tanks};
+\node[anchor=west, font=\footnotesize\itshape, fill=white, inner sep=1pt] at (axis cs:-8.85,41.65) {Damage heroes};
+\node[anchor=west, font=\footnotesize\itshape, fill=white, inner sep=1pt] at (axis cs:-8.85,13.85) {Supports};
+\end{axis}
+\end{tikzpicture}

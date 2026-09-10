@@ -1,0 +1,155 @@
+\begin{tikzpicture}
+\begin{axis}[
+  width=250.0pt, height=468.0pt, scale only axis, axis lines=left, tick style={draw=none}, y axis line style={draw=none}, clip=false,
+  label style={font=\small}, tick label style={font=\footnotesize}, yticklabel style={font=\footnotesize},
+  legend style={draw=none, fill=none, font=\footnotesize, cells={anchor=west}}, legend cell align=left,
+  xmin=-0.27, xmax=0.36, ymin=0, ymax=51.10, xtick={-0.2,-0.1,...,0.3},
+  xticklabel style={/pgf/number format/fixed, /pgf/number format/precision=1},
+  xlabel={Four-lineup contrast, log-odds (identifying matches in parentheses)},
+  ytick={49.20,48.20,47.20,46.20,45.20,44.20,43.20,42.20,41.20,40.20,39.20,38.20,37.20,36.20,35.20,32.30,31.30,30.30,29.30,28.30,27.30,26.30,25.30,24.30,23.30,22.30,21.30,20.30,19.30,18.30,17.30,14.40,13.40,12.40,11.40,10.40,9.40,8.40,7.40,6.40,5.40,4.40,3.40,2.40,1.40}, yticklabels={{Gambit + Rogue},{Iron Fist + White Fox},{Moon Knight + Blade},{Squirrel Girl + Iron Man},{The Punisher + Rocket Raccoon},{Mantis + Star-lord},{Magik + The Hood},{Human Torch + Jubilee},{Ultron + Adam Warlock},{Luna Snow + White Fox},{Storm + Thor},{Hulk + Iron Man},{Iron Fist + Daredevil},{Black Panther + Magik},{Spider-man + Black Cat},{Gambit + Deadpool (Duelist)},{Luna Snow + Daredevil},{Black Panther + Deadpool (Vanguard)},{Mister Fantastic + Rogue},{Groot + Emma Frost},{Angela + The Hood},{Jeff The Land Shark + Deadpool (Strategist)},{Jeff The Land Shark + Invisible Woman},{Human Torch + White Fox},{Star-lord + Invisible Woman},{Ultron + Devil Dinosaur},{Doctor Strange + Mister Fantastic},{Doctor Strange + Magneto},{Hela + Iron Man},{Mantis + Deadpool (Strategist)},{Spider-man + Angela},{The Thing against Magik},{Gambit against Angela},{Phoenix against Elsa Bloodstone},{Cloak \& Dagger against Venom},{Wolverine against Cloak \& Dagger},{Spider-man against Iron Man},{Black Widow against Iron Man},{The Thing against Deadpool (Duelist)},{Magik against The Hood},{Namor against Spider-man},{Magik against Devil Dinosaur},{Black Widow against Ultron},{The Punisher against The Thing},{Ultron against Magik}},
+]
+\draw[dashed, thin] (axis cs:0,0) -- (axis cs:0,51.10);
+\draw[black!35, thin] (axis cs:-0.27,34.20) -- (axis cs:0.36,34.20);
+\draw[black!35, thin] (axis cs:-0.27,16.30) -- (axis cs:0.36,16.30);
+\draw[black!45, thin] (axis cs:0,49.20) -- (axis cs:0.2093,49.20);
+\draw[black!45, thin] (axis cs:0,48.20) -- (axis cs:0.2032,48.20);
+\draw[black!45, thin] (axis cs:0,47.20) -- (axis cs:0.1626,47.20);
+\draw[black!45, thin] (axis cs:0,46.20) -- (axis cs:0.1391,46.20);
+\draw[black!45, thin] (axis cs:0,45.20) -- (axis cs:0.1321,45.20);
+\draw[black!45, thin] (axis cs:0,44.20) -- (axis cs:0.1306,44.20);
+\draw[black!45, thin] (axis cs:0,43.20) -- (axis cs:0.1088,43.20);
+\draw[black!45, thin] (axis cs:0,42.20) -- (axis cs:0.1085,42.20);
+\draw[black!45, thin] (axis cs:0,41.20) -- (axis cs:0.1070,41.20);
+\draw[black!45, thin] (axis cs:0,40.20) -- (axis cs:0.1065,40.20);
+\draw[black!45, thin] (axis cs:0,39.20) -- (axis cs:-0.0312,39.20);
+\draw[black!45, thin] (axis cs:0,38.20) -- (axis cs:-0.0316,38.20);
+\draw[black!45, thin] (axis cs:0,37.20) -- (axis cs:-0.0462,37.20);
+\draw[black!45, thin] (axis cs:0,36.20) -- (axis cs:-0.0490,36.20);
+\draw[black!45, thin] (axis cs:0,35.20) -- (axis cs:-0.0567,35.20);
+\draw[black!45, thin] (axis cs:0,32.30) -- (axis cs:0.1030,32.30);
+\draw[black!45, thin] (axis cs:0,31.30) -- (axis cs:0.0587,31.30);
+\draw[black!45, thin] (axis cs:0,30.30) -- (axis cs:0.0585,30.30);
+\draw[black!45, thin] (axis cs:0,29.30) -- (axis cs:0.0566,29.30);
+\draw[black!45, thin] (axis cs:0,28.30) -- (axis cs:0.0565,28.30);
+\draw[black!45, thin] (axis cs:0,27.30) -- (axis cs:0.0529,27.30);
+\draw[black!45, thin] (axis cs:0,26.30) -- (axis cs:0.0525,26.30);
+\draw[black!45, thin] (axis cs:0,25.30) -- (axis cs:0.0499,25.30);
+\draw[black!45, thin] (axis cs:0,24.30) -- (axis cs:-0.0554,24.30);
+\draw[black!45, thin] (axis cs:0,23.30) -- (axis cs:-0.0561,23.30);
+\draw[black!45, thin] (axis cs:0,22.30) -- (axis cs:-0.0562,22.30);
+\draw[black!45, thin] (axis cs:0,21.30) -- (axis cs:-0.0565,21.30);
+\draw[black!45, thin] (axis cs:0,20.30) -- (axis cs:-0.0588,20.30);
+\draw[black!45, thin] (axis cs:0,19.30) -- (axis cs:-0.0604,19.30);
+\draw[black!45, thin] (axis cs:0,18.30) -- (axis cs:-0.0708,18.30);
+\draw[black!45, thin] (axis cs:0,17.30) -- (axis cs:-0.0753,17.30);
+\draw[black!45, thin] (axis cs:0,14.40) -- (axis cs:0.1063,14.40);
+\draw[black!45, thin] (axis cs:0,13.40) -- (axis cs:0.0753,13.40);
+\draw[black!45, thin] (axis cs:0,12.40) -- (axis cs:0.0713,12.40);
+\draw[black!45, thin] (axis cs:0,11.40) -- (axis cs:0.0690,11.40);
+\draw[black!45, thin] (axis cs:0,10.40) -- (axis cs:0.0666,10.40);
+\draw[black!45, thin] (axis cs:0,9.40) -- (axis cs:0.0665,9.40);
+\draw[black!45, thin] (axis cs:0,8.40) -- (axis cs:0.0653,8.40);
+\draw[black!45, thin] (axis cs:0,7.40) -- (axis cs:0.0634,7.40);
+\draw[black!45, thin] (axis cs:0,6.40) -- (axis cs:0.0630,6.40);
+\draw[black!45, thin] (axis cs:0,5.40) -- (axis cs:0.0628,5.40);
+\draw[black!45, thin] (axis cs:0,4.40) -- (axis cs:0.0615,4.40);
+\draw[black!45, thin] (axis cs:0,3.40) -- (axis cs:0.0609,3.40);
+\draw[black!45, thin] (axis cs:0,2.40) -- (axis cs:0.0609,2.40);
+\draw[black!45, thin] (axis cs:0,1.40) -- (axis cs:0.0607,1.40);
+\addplot[only marks, mark=*, mark size=1.7pt] coordinates {
+(0.2093,49.20)
+(0.2032,48.20)
+(0.1626,47.20)
+(0.1391,46.20)
+(0.1321,45.20)
+(0.1306,44.20)
+(0.1088,43.20)
+(0.1085,42.20)
+(0.1070,41.20)
+(0.1065,40.20)
+(-0.0312,39.20)
+(-0.0316,38.20)
+(-0.0462,37.20)
+(-0.0490,36.20)
+(-0.0567,35.20)
+(0.1030,32.30)
+(0.0587,31.30)
+(0.0585,30.30)
+(0.0566,29.30)
+(0.0565,28.30)
+(0.0529,27.30)
+(0.0525,26.30)
+(0.0499,25.30)
+(-0.0554,24.30)
+(-0.0561,23.30)
+(-0.0562,22.30)
+(-0.0565,21.30)
+(-0.0588,20.30)
+(-0.0604,19.30)
+(-0.0708,18.30)
+(-0.0753,17.30)
+(0.1063,14.40)
+(0.0753,13.40)
+(0.0713,12.40)
+(0.0690,11.40)
+(0.0666,10.40)
+(0.0665,9.40)
+(0.0653,8.40)
+(0.0634,7.40)
+(0.0630,6.40)
+(0.0628,5.40)
+(0.0615,4.40)
+(0.0609,3.40)
+(0.0609,2.40)
+(0.0607,1.40)
+};
+\node[anchor=west, font=\footnotesize\itshape, fill=white, inner sep=1pt] at (axis cs:-0.265,50.30) {Team-up-eligible allied pairs};
+\node[anchor=west, font=\footnotesize\itshape, fill=white, inner sep=1pt] at (axis cs:-0.265,33.40) {Other allied pairs};
+\node[anchor=west, font=\footnotesize\itshape, fill=white, inner sep=1pt] at (axis cs:-0.265,15.50) {Opposing matchups, A against B};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.2173,49.20) {+0.209 (22,920)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.2112,48.20) {+0.203 (14,182)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.1706,47.20) {+0.163 (4,063)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.1471,46.20) {+0.139 (3,180)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.1401,45.20) {+0.132 (22,765)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.1386,44.20) {+0.131 (16,889)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.1168,43.20) {+0.109 (59,539)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.1165,42.20) {+0.108 (20,113)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.1150,41.20) {+0.107 (5,927)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.1145,40.20) {+0.106 (16,956)};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.0392,39.20) {$-$0.031 (5,756)};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.0396,38.20) {$-$0.032 (4,611)};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.0542,37.20) {$-$0.046 (5,253)};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.0570,36.20) {$-$0.049 (6,568)};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.0647,35.20) {$-$0.057 (7,537)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.1110,32.30) {+0.103 (13,919)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0667,31.30) {+0.059 (14,834)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0665,30.30) {+0.058 (2,435)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0646,29.30) {+0.057 (1,897)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0645,28.30) {+0.056 (4,985)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0609,27.30) {+0.053 (10,573)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0605,26.30) {+0.052 (2,990)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0579,25.30) {+0.050 (9,018)};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.0634,24.30) {$-$0.055 (3,889)};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.0641,23.30) {$-$0.056 (9,848)};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.0642,22.30) {$-$0.056 (2,440)};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.0645,21.30) {$-$0.057 (4,850)};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.0668,20.30) {$-$0.059 (22,879)};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.0684,19.30) {$-$0.060 (2,659)};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.0788,18.30) {$-$0.071 (3,888)};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.0833,17.30) {$-$0.075 (6,072)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.1143,14.40) {+0.106 (16,054)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0833,13.40) {+0.075 (8,342)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0793,12.40) {+0.071 (3,643)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0770,11.40) {+0.069 (28,213)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0746,10.40) {+0.067 (12,632)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0745,9.40) {+0.066 (5,705)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0733,8.40) {+0.065 (3,873)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0714,7.40) {+0.063 (6,190)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0710,6.40) {+0.063 (53,481)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0708,5.40) {+0.063 (8,682)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0695,4.40) {+0.062 (10,315)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0689,3.40) {+0.061 (2,983)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0689,2.40) {+0.061 (8,725)};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.0687,1.40) {+0.061 (5,854)};
+\end{axis}
+\end{tikzpicture}

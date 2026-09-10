@@ -1,0 +1,47 @@
+\begin{tikzpicture}
+\begin{axis}[
+  name=folds, scale only axis, width=159.5pt, height=150.0pt, axis lines=left, tick style={draw=none}, clip=false,
+  symbolic x coords={F1,F2,F3}, xtick={F1,F2,F3}, enlarge x limits=0.2,
+  xticklabels={{Fold 1\\(train 60\%)},{Fold 2\\(train 73\%)},{Fold 3\\(train 87\%)}}, xticklabel style={align=center, font=\footnotesize},
+  ylabel={Validation log loss (lower is better)}, ylabel style={font=\small},
+  yticklabel style={font=\footnotesize, /pgf/number format/fixed, /pgf/number format/fixed zerofill, /pgf/number format/precision=3}, scaled y ticks=false,
+  ymin=0.6663, ymax=0.6729,
+  title={\small Chronological development folds}, title style={yshift=-3pt},
+  legend style={at={(0,-0.24)}, anchor=north west, draw=none, fill=none, font=\footnotesize, cells={anchor=west}}, legend cell align=left,
+]
+\addplot[dashed, mark=square*, mark size=1.8pt] coordinates {(F1,0.67059) (F2,0.67082) (F3,0.66896)};
+\addlegendentry{Refitted headline specification}
+\addplot[dotted, mark=triangle*, mark size=2.2pt] coordinates {(F1,0.67230) (F2,0.67197) (F3,0.67030)};
+\addlegendentry{Heroes, composition, maps, rank imbalance}
+\addplot[dashdotted, mark=diamond*, mark size=2.2pt] coordinates {(F1,0.67159) (F2,0.67118) (F3,0.66964)};
+\addlegendentry{+ rank slopes and hero-by-map}
+\addplot[thick, mark=*, mark size=1.8pt] coordinates {(F1,0.66923) (F2,0.66814) (F3,0.66689)};
+\addlegendentry{+ shrunk allied and opposing pairs (unified)}
+\end{axis}
+\begin{axis}[
+  name=ev, at={(folds.south east)}, anchor=south west, xshift=78.0pt, scale only axis, width=124.5pt, height=150.0pt,
+  axis lines=left, tick style={draw=none}, y axis line style={draw=none}, clip=false,
+  xmin=-0.0025, xmax=0.0065, ymin=0.4, ymax=4.6, ytick={4,3,2,1}, yticklabels={{All matches\\($n$ = 19,804)},{Lower third\\($n$ = 3,374)},{Middle third\\($n$ = 5,677)},{Upper third\\($n$ = 10,753)}}, yticklabel style={align=right, font=\footnotesize},
+  xtick={-0.002,0,0.002,0.004,0.006}, xticklabel style={font=\footnotesize, /pgf/number format/fixed, /pgf/number format/precision=3}, scaled x ticks=false,
+  xlabel={Paired log-loss improvement over the refitted headline\\(positive = lower error)}, xlabel style={font=\small, align=center},
+  title={\small Internal temporal evaluation}, title style={yshift=-3pt},
+  legend style={at={(1,-0.3)}, anchor=north east, draw=none, fill=none, font=\footnotesize, cells={anchor=west}}, legend cell align=left,
+]
+\draw[dashed, thin] (axis cs:0,0.4) -- (axis cs:0,4.6);
+\draw[thin] (axis cs:0.00064,4) -- (axis cs:0.00303,4);
+\draw[thin] (axis cs:0.00064,3.85) -- (axis cs:0.00064,4.15); \draw[thin] (axis cs:0.00303,3.85) -- (axis cs:0.00303,4.15);
+\draw[line width=1.8pt] (axis cs:0.00151,4) -- (axis cs:0.00217,4);
+\addplot[only marks, mark=*, mark size=2pt] coordinates {(0.00184,4)};
+\addlegendentry{Overall improvement}
+\addlegendimage{line width=1.8pt}
+\addlegendentry{Player-resampling 95\% interval}
+\addlegendimage{thin}
+\addlegendentry{Match-i.i.d.\ 95\% interval}
+\addplot[only marks, mark=o, mark size=2pt] coordinates {(0.00263,3) (-0.00091,2) (0.00304,1)};
+\addlegendentry{By lobby-rank third (no interval)}
+\node[anchor=east, font=\footnotesize] at (axis cs:0.0063,4) {+0.0018};
+\node[anchor=east, font=\footnotesize] at (axis cs:0.0063,3) {+0.0026};
+\node[anchor=east, font=\footnotesize] at (axis cs:0.0063,2) {$-$0.0009};
+\node[anchor=east, font=\footnotesize] at (axis cs:0.0063,1) {+0.0030};
+\end{axis}
+\end{tikzpicture}

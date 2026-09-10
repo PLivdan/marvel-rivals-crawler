@@ -1,0 +1,240 @@
+\begin{tikzpicture}
+\begin{axis}[
+  width=339.0pt, height=513.0pt, scale only axis, axis lines=left, tick style={draw=none}, y axis line style={draw=none}, clip=false,
+  label style={font=\small}, tick label style={font=\footnotesize}, yticklabel style={font=\footnotesize},
+  legend style={draw=none, fill=none, font=\footnotesize, cells={anchor=west}}, legend cell align=left,
+  xmin=-8, xmax=8, ymin=0, ymax=57.80, xtick={-8,-6,...,8},
+  xlabel={Change in predicted win probability, percentage points},
+  ytick={57.00,56.00,55.00,54.00,53.00,52.00,51.00,50.00,49.00,48.00,47.00,46.00,45.00,44.00,43.00,41.20,40.20,39.20,38.20,37.20,36.20,35.20,34.20,33.20,32.20,31.20,30.20,29.20,28.20,27.20,26.20,25.20,24.20,23.20,22.20,21.20,20.20,19.20,18.20,17.20,16.20,15.20,13.40,12.40,11.40,10.40,9.40,8.40,7.40,6.40,5.40,4.40,3.40,2.40,1.40}, yticklabels={{The Thing},{Peni Parker},{The Hood},{Magneto},{Angela},{Hulk},{Thor},{Doctor Strange},{Devil Dinosaur},{Groot},{Venom},{Captain America},{Emma Frost},{Rogue},{Deadpool (Vanguard)},{Magik},{Black Cat},{Storm},{Daredevil},{Mister Fantastic},{Iron Fist},{Hela},{Iron Man},{Winter Soldier},{Moon Knight},{Human Torch},{Spider-man},{Wolverine},{Blade},{Black Widow},{Black Panther},{Elsa Bloodstone},{Psylocke},{Hawkeye},{The Punisher},{Namor},{Deadpool (Duelist)},{Star-lord},{Scarlet Witch},{Squirrel Girl},{Phoenix},{Cyclops},{Mantis},{Rocket Raccoon},{Ultron},{Adam Warlock},{Cloak \& Dagger},{Loki},{Gambit},{Jubilee},{Invisible Woman},{Jeff The Land Shark},{Luna Snow},{White Fox},{Deadpool (Strategist)}},
+]
+\draw[dashed, thin] (axis cs:0,0) -- (axis cs:0,57.80);
+\draw[black!35, thin] (axis cs:-8,42.00) -- (axis cs:8,42.00);
+\draw[black!35, thin] (axis cs:-8,14.20) -- (axis cs:8,14.20);
+\draw[black!45, thin] (axis cs:0,57.00) -- (axis cs:5.015,57.00);
+\draw[black!45, thin] (axis cs:0,56.00) -- (axis cs:2.253,56.00);
+\draw[black!45, thin] (axis cs:0,55.00) -- (axis cs:2.113,55.00);
+\draw[black!45, thin] (axis cs:0,54.00) -- (axis cs:1.874,54.00);
+\draw[black!45, thin] (axis cs:0,53.00) -- (axis cs:1.492,53.00);
+\draw[black!45, thin] (axis cs:0,52.00) -- (axis cs:1.422,52.00);
+\draw[black!45, thin] (axis cs:0,51.00) -- (axis cs:1.210,51.00);
+\draw[black!45, thin] (axis cs:0,50.00) -- (axis cs:0.060,50.00);
+\draw[black!45, thin] (axis cs:0,49.00) -- (axis cs:-0.007,49.00);
+\draw[black!45, thin] (axis cs:0,48.00) -- (axis cs:-0.488,48.00);
+\draw[black!45, thin] (axis cs:0,47.00) -- (axis cs:-0.828,47.00);
+\draw[black!45, thin] (axis cs:0,46.00) -- (axis cs:-0.870,46.00);
+\draw[black!45, thin] (axis cs:0,45.00) -- (axis cs:-1.548,45.00);
+\draw[black!45, thin] (axis cs:0,44.00) -- (axis cs:-1.565,44.00);
+\draw[black!45, thin] (axis cs:0,43.00) -- (axis cs:-5.057,43.00);
+\draw[black!45, thin] (axis cs:0,41.20) -- (axis cs:4.368,41.20);
+\draw[black!45, thin] (axis cs:0,40.20) -- (axis cs:4.174,40.20);
+\draw[black!45, thin] (axis cs:0,39.20) -- (axis cs:3.026,39.20);
+\draw[black!45, thin] (axis cs:0,38.20) -- (axis cs:2.515,38.20);
+\draw[black!45, thin] (axis cs:0,37.20) -- (axis cs:2.513,37.20);
+\draw[black!45, thin] (axis cs:0,36.20) -- (axis cs:1.759,36.20);
+\draw[black!45, thin] (axis cs:0,35.20) -- (axis cs:1.330,35.20);
+\draw[black!45, thin] (axis cs:0,34.20) -- (axis cs:1.248,34.20);
+\draw[black!45, thin] (axis cs:0,33.20) -- (axis cs:1.011,33.20);
+\draw[black!45, thin] (axis cs:0,32.20) -- (axis cs:0.950,32.20);
+\draw[black!45, thin] (axis cs:0,31.20) -- (axis cs:0.709,31.20);
+\draw[black!45, thin] (axis cs:0,30.20) -- (axis cs:0.411,30.20);
+\draw[black!45, thin] (axis cs:0,29.20) -- (axis cs:0.319,29.20);
+\draw[black!45, thin] (axis cs:0,28.20) -- (axis cs:-0.091,28.20);
+\draw[black!45, thin] (axis cs:0,27.20) -- (axis cs:-0.215,27.20);
+\draw[black!45, thin] (axis cs:0,26.20) -- (axis cs:-0.664,26.20);
+\draw[black!45, thin] (axis cs:0,25.20) -- (axis cs:-0.676,25.20);
+\draw[black!45, thin] (axis cs:0,24.20) -- (axis cs:-0.771,24.20);
+\draw[black!45, thin] (axis cs:0,23.20) -- (axis cs:-0.788,23.20);
+\draw[black!45, thin] (axis cs:0,22.20) -- (axis cs:-1.033,22.20);
+\draw[black!45, thin] (axis cs:0,21.20) -- (axis cs:-1.069,21.20);
+\draw[black!45, thin] (axis cs:0,20.20) -- (axis cs:-1.134,20.20);
+\draw[black!45, thin] (axis cs:0,19.20) -- (axis cs:-1.534,19.20);
+\draw[black!45, thin] (axis cs:0,18.20) -- (axis cs:-1.903,18.20);
+\draw[black!45, thin] (axis cs:0,17.20) -- (axis cs:-3.124,17.20);
+\draw[black!45, thin] (axis cs:0,16.20) -- (axis cs:-3.207,16.20);
+\draw[black!45, thin] (axis cs:0,15.20) -- (axis cs:-4.124,15.20);
+\draw[black!45, thin] (axis cs:0,13.40) -- (axis cs:6.211,13.40);
+\draw[black!45, thin] (axis cs:0,12.40) -- (axis cs:3.892,12.40);
+\draw[black!45, thin] (axis cs:0,11.40) -- (axis cs:3.489,11.40);
+\draw[black!45, thin] (axis cs:0,10.40) -- (axis cs:2.404,10.40);
+\draw[black!45, thin] (axis cs:0,9.40) -- (axis cs:0.824,9.40);
+\draw[black!45, thin] (axis cs:0,8.40) -- (axis cs:0.686,8.40);
+\draw[black!45, thin] (axis cs:0,7.40) -- (axis cs:-0.305,7.40);
+\draw[black!45, thin] (axis cs:0,6.40) -- (axis cs:-1.261,6.40);
+\draw[black!45, thin] (axis cs:0,5.40) -- (axis cs:-1.315,5.40);
+\draw[black!45, thin] (axis cs:0,4.40) -- (axis cs:-1.785,4.40);
+\draw[black!45, thin] (axis cs:0,3.40) -- (axis cs:-2.732,3.40);
+\draw[black!45, thin] (axis cs:0,2.40) -- (axis cs:-2.856,2.40);
+\draw[black!45, thin] (axis cs:0,1.40) -- (axis cs:-6.372,1.40);
+\addplot[only marks, mark=*, mark size=1.7pt] coordinates {
+(5.015,57.00)
+(2.253,56.00)
+(2.113,55.00)
+(1.874,54.00)
+(1.492,53.00)
+(1.422,52.00)
+(1.210,51.00)
+(0.060,50.00)
+(-0.007,49.00)
+(-0.488,48.00)
+(-0.828,47.00)
+(-0.870,46.00)
+(-1.548,45.00)
+(-1.565,44.00)
+(-5.057,43.00)
+(4.368,41.20)
+(4.174,40.20)
+(3.026,39.20)
+(2.515,38.20)
+(2.513,37.20)
+(1.759,36.20)
+(1.330,35.20)
+(1.248,34.20)
+(1.011,33.20)
+(0.950,32.20)
+(0.709,31.20)
+(0.411,30.20)
+(0.319,29.20)
+(-0.091,28.20)
+(-0.215,27.20)
+(-0.664,26.20)
+(-0.676,25.20)
+(-0.771,24.20)
+(-0.788,23.20)
+(-1.033,22.20)
+(-1.069,21.20)
+(-1.134,20.20)
+(-1.534,19.20)
+(-1.903,18.20)
+(-3.124,17.20)
+(-3.207,16.20)
+(-4.124,15.20)
+(6.211,13.40)
+(3.892,12.40)
+(3.489,11.40)
+(2.404,10.40)
+(0.824,9.40)
+(0.686,8.40)
+(-0.305,7.40)
+(-1.261,6.40)
+(-1.315,5.40)
+(-1.785,4.40)
+(-2.732,3.40)
+(-2.856,2.40)
+(-6.372,1.40)
+};
+\node[anchor=west, font=\footnotesize\itshape, fill=white, inner sep=1pt] at (axis cs:-7.85,57.45) {Tanks};
+\node[anchor=west, font=\footnotesize\itshape, fill=white, inner sep=1pt] at (axis cs:-7.85,41.65) {Damage heroes};
+\node[anchor=west, font=\footnotesize\itshape, fill=white, inner sep=1pt] at (axis cs:-7.85,13.85) {Supports};
+\node[anchor=west, font=\footnotesize] at (axis cs:5.235,57.00) {+5.02};
+\node[anchor=west, font=\footnotesize] at (axis cs:2.473,56.00) {+2.25};
+\node[anchor=west, font=\footnotesize] at (axis cs:2.333,55.00) {+2.11};
+\node[anchor=west, font=\footnotesize] at (axis cs:2.094,54.00) {+1.87};
+\node[anchor=west, font=\footnotesize] at (axis cs:1.712,53.00) {+1.49};
+\node[anchor=west, font=\footnotesize] at (axis cs:1.642,52.00) {+1.42};
+\node[anchor=west, font=\footnotesize] at (axis cs:1.430,51.00) {+1.21};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.280,50.00) {+0.06};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.227,49.00) {$-$0.01};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.708,48.00) {$-$0.49};
+\node[anchor=east, font=\footnotesize] at (axis cs:-1.048,47.00) {$-$0.83};
+\node[anchor=east, font=\footnotesize] at (axis cs:-1.090,46.00) {$-$0.87};
+\node[anchor=east, font=\footnotesize] at (axis cs:-1.768,45.00) {$-$1.55};
+\node[anchor=east, font=\footnotesize] at (axis cs:-1.785,44.00) {$-$1.57};
+\node[anchor=east, font=\footnotesize] at (axis cs:-5.277,43.00) {$-$5.06};
+\node[anchor=west, font=\footnotesize] at (axis cs:4.588,41.20) {+4.37};
+\node[anchor=west, font=\footnotesize] at (axis cs:4.394,40.20) {+4.17};
+\node[anchor=west, font=\footnotesize] at (axis cs:3.246,39.20) {+3.03};
+\node[anchor=west, font=\footnotesize] at (axis cs:2.735,38.20) {+2.51};
+\node[anchor=west, font=\footnotesize] at (axis cs:2.733,37.20) {+2.51};
+\node[anchor=west, font=\footnotesize] at (axis cs:1.979,36.20) {+1.76};
+\node[anchor=west, font=\footnotesize] at (axis cs:1.550,35.20) {+1.33};
+\node[anchor=west, font=\footnotesize] at (axis cs:1.468,34.20) {+1.25};
+\node[anchor=west, font=\footnotesize] at (axis cs:1.231,33.20) {+1.01};
+\node[anchor=west, font=\footnotesize] at (axis cs:1.170,32.20) {+0.95};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.929,31.20) {+0.71};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.631,30.20) {+0.41};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.539,29.20) {+0.32};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.311,28.20) {$-$0.09};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.435,27.20) {$-$0.21};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.884,26.20) {$-$0.66};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.896,25.20) {$-$0.68};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.991,24.20) {$-$0.77};
+\node[anchor=east, font=\footnotesize] at (axis cs:-1.008,23.20) {$-$0.79};
+\node[anchor=east, font=\footnotesize] at (axis cs:-1.253,22.20) {$-$1.03};
+\node[anchor=east, font=\footnotesize] at (axis cs:-1.289,21.20) {$-$1.07};
+\node[anchor=east, font=\footnotesize] at (axis cs:-1.354,20.20) {$-$1.13};
+\node[anchor=east, font=\footnotesize] at (axis cs:-1.754,19.20) {$-$1.53};
+\node[anchor=east, font=\footnotesize] at (axis cs:-2.123,18.20) {$-$1.90};
+\node[anchor=east, font=\footnotesize] at (axis cs:-3.344,17.20) {$-$3.12};
+\node[anchor=east, font=\footnotesize] at (axis cs:-3.427,16.20) {$-$3.21};
+\node[anchor=east, font=\footnotesize] at (axis cs:-4.344,15.20) {$-$4.12};
+\node[anchor=west, font=\footnotesize] at (axis cs:6.431,13.40) {+6.21};
+\node[anchor=west, font=\footnotesize] at (axis cs:4.112,12.40) {+3.89};
+\node[anchor=west, font=\footnotesize] at (axis cs:3.709,11.40) {+3.49};
+\node[anchor=west, font=\footnotesize] at (axis cs:2.624,10.40) {+2.40};
+\node[anchor=west, font=\footnotesize] at (axis cs:1.044,9.40) {+0.82};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.906,8.40) {+0.69};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.525,7.40) {$-$0.31};
+\node[anchor=east, font=\footnotesize] at (axis cs:-1.481,6.40) {$-$1.26};
+\node[anchor=east, font=\footnotesize] at (axis cs:-1.535,5.40) {$-$1.32};
+\node[anchor=east, font=\footnotesize] at (axis cs:-2.005,4.40) {$-$1.79};
+\node[anchor=east, font=\footnotesize] at (axis cs:-2.952,3.40) {$-$2.73};
+\node[anchor=east, font=\footnotesize] at (axis cs:-3.076,2.40) {$-$2.86};
+\node[anchor=east, font=\footnotesize] at (axis cs:-6.592,1.40) {$-$6.37};
+\node[anchor=south east, font=\footnotesize, text=black!60, align=right] at (axis cs:9.6,57.35) {Eligible\\ slots (\%)};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,57.00) {51};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,56.00) {57};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,55.00) {41};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,54.00) {41};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,53.00) {94};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,52.00) {90};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,51.00) {90};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,50.00) {85};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,49.00) {90};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,48.00) {83};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,47.00) {64};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,46.00) {96};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,45.00) {78};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,44.00) {94};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,43.00) {95};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,41.20) {62};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,40.20) {29};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,39.20) {95};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,38.20) {82};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,37.20) {95};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,36.20) {88};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,35.20) {74};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,34.20) {93};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,33.20) {56};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,32.20) {93};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,31.20) {93};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,30.20) {59};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,29.20) {94};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,28.20) {94};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,27.20) {86};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,26.20) {48};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,25.20) {45};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,24.20) {94};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,23.20) {95};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,22.20) {74};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,21.20) {68};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,20.20) {93};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,19.20) {94};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,18.20) {94};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,17.20) {95};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,16.20) {93};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,15.20) {85};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,13.40) {75};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,12.40) {77};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,11.40) {95};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,10.40) {95};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,9.40) {32};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,8.40) {94};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,7.40) {40};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,6.40) {67};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,5.40) {74};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,4.40) {92};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,3.40) {78};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,2.40) {89};
+\node[anchor=east, font=\footnotesize, text=black!60] at (axis cs:9.6,1.40) {93};
+\end{axis}
+\end{tikzpicture}

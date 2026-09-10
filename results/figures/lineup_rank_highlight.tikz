@@ -1,0 +1,59 @@
+\begin{tikzpicture}
+\begin{axis}[
+  width=372.0pt, height=150.0pt, scale only axis, axis lines=left, tick style={draw=none}, y axis line style={draw=none}, clip=false,
+  label style={font=\small}, tick label style={font=\footnotesize}, yticklabel style={font=\footnotesize},
+  legend style={draw=none, fill=none, font=\footnotesize, cells={anchor=west}}, legend cell align=left,
+  xmin=-10, xmax=10, ymin=0.4, ymax=8.60, xtick={-8,-6,...,8},
+  xlabel={Observed-incumbent replacement value, percentage points},
+  ytick={7.60,6.60,5.60,4.60,3.60,2.60,1.60,0.60}, yticklabels={{Elsa Bloodstone},{Wolverine},{Mantis},{Loki},{Ultron},{Deadpool (Vanguard)},{Cloak \& Dagger},{Black Panther}},
+  legend style={at={(0.985,0.985)}, anchor=north east},
+]
+\draw[dashed, thin] (axis cs:0,0.4) -- (axis cs:0,8.60);
+\draw[thin] (axis cs:-1.922,7.60) -- (axis cs:0.233,7.60);
+\draw[thin] (axis cs:-1.242,6.60) -- (axis cs:0.592,6.60);
+\draw[thin] (axis cs:5.813,5.60) -- (axis cs:7.194,5.60);
+\draw[thin] (axis cs:-0.402,4.60) -- (axis cs:0.766,4.60);
+\draw[thin] (axis cs:4.109,3.60) -- (axis cs:1.912,3.60);
+\draw[thin] (axis cs:-5.450,2.60) -- (axis cs:-7.706,2.60);
+\draw[thin] (axis cs:1.482,1.60) -- (axis cs:-0.877,1.60);
+\draw[thin] (axis cs:0.027,0.60) -- (axis cs:-2.334,0.60);
+\addplot[only marks, mark=o, mark size=1.9pt] coordinates {
+(-1.922,7.60)
+(-1.242,6.60)
+(5.813,5.60)
+(-0.402,4.60)
+(4.109,3.60)
+(-5.450,2.60)
+(1.482,1.60)
+(0.027,0.60)
+};
+\addlegendentry{Lower third by lobby rank}
+\addplot[only marks, mark=*, mark size=1.9pt] coordinates {
+(0.233,7.60)
+(0.592,6.60)
+(7.194,5.60)
+(0.766,4.60)
+(1.912,3.60)
+(-7.706,2.60)
+(-0.877,1.60)
+(-2.334,0.60)
+};
+\addlegendentry{Upper third by lobby rank}
+\node[anchor=east, font=\footnotesize] at (axis cs:-2.222,7.60) {$-$1.92};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.533,7.60) {+0.23};
+\node[anchor=east, font=\footnotesize] at (axis cs:-1.542,6.60) {$-$1.24};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.892,6.60) {+0.59};
+\node[anchor=east, font=\footnotesize] at (axis cs:5.513,5.60) {+5.81};
+\node[anchor=west, font=\footnotesize] at (axis cs:7.494,5.60) {+7.19};
+\node[anchor=east, font=\footnotesize] at (axis cs:-0.702,4.60) {$-$0.40};
+\node[anchor=west, font=\footnotesize] at (axis cs:1.066,4.60) {+0.77};
+\node[anchor=east, font=\footnotesize] at (axis cs:1.612,3.60) {+1.91};
+\node[anchor=west, font=\footnotesize] at (axis cs:4.409,3.60) {+4.11};
+\node[anchor=east, font=\footnotesize] at (axis cs:-8.006,2.60) {$-$7.71};
+\node[anchor=west, font=\footnotesize] at (axis cs:-5.150,2.60) {$-$5.45};
+\node[anchor=east, font=\footnotesize] at (axis cs:-1.177,1.60) {$-$0.88};
+\node[anchor=west, font=\footnotesize] at (axis cs:1.782,1.60) {+1.48};
+\node[anchor=east, font=\footnotesize] at (axis cs:-2.634,0.60) {$-$2.33};
+\node[anchor=west, font=\footnotesize] at (axis cs:0.327,0.60) {+0.03};
+\end{axis}
+\end{tikzpicture}
