@@ -16,7 +16,7 @@ H = need(f"{SEL}_hero_by_rank.csv"); R = need(f"{SEL}_replacement.csv"); P = nee
 TUN = need("results/lineup_tuning.json", "json"); BASE = need("results/lineup_baseline_dev.json", "json")
 DS = need("results/lineup_design/summary.json", "json"); COV = need("results/rank_coverage.json", "json")
 CONF = need("results/lineup_confirmation.json", "json"); SNAP = need("results/dev_snapshot/filters.json", "json")
-LOCK = need("results/lineup_lock.json", "json"); PUB = json.load(open("results/lineup_published.json")) if os.path.exists("results/lineup_published.json") else None
+FIT = need("results/lineup_fit_scatter.json", "json"); LOCK = need("results/lineup_lock.json", "json"); PUB = json.load(open("results/lineup_published.json")) if os.path.exists("results/lineup_published.json") else None
 PUBR = pd.read_csv("results/lineup_published_replacement.csv") if os.path.exists("results/lineup_published_replacement.csv") else None
 OLD = {w: need(f"results/apm_hero_table_{w}_full.csv") for w in ("W0", "W2", "W1")}; OLDM = need("results/apm_run_meta_W1_full.json", "json")
 BOOT_REPS = int(np.load("results/lineup_bootstrap_draws.npz")["replacement_obs_meta"].shape[0]) if os.path.exists("results/lineup_bootstrap_draws.npz") else 0
@@ -160,7 +160,11 @@ subs = {
     "N_EVAL": str(len(evals)), "LAMS": ", ".join(f"{l:g}" for l in lams),
     "TUNE_SPREAD": f"{max(e['mean_val_logloss'] for e in TUNE8) - min(e['mean_val_logloss'] for e in TUNE8):.5f}",
     "FINAL_ITERS": str(TUN["final"]["n_iter"]), "TUNING_ROWS": tuning_rows(), "LADDER_ROWS": ladder_rows(),
-    "HERO_HDR": HERO_HDR, "HERO_BODY": HERO_BODY, "TU_HDR": TU_HDR, "TU_BODY": TU_BODY, "N_TU": num(len(TU)), "MIN_CONTEXTS": num(int(R.contexts_legal.min())), "NT_ROWS": NT_ROWS, "O_ROWS": O_ROWS,
+    "HERO_HDR": HERO_HDR, "HERO_BODY": HERO_BODY, "TU_HDR": TU_HDR, "TU_BODY": TU_BODY, "N_TU": num(len(TU)), "MIN_CONTEXTS": num(int(R.contexts_legal.min())),
+    "FIT_HERO_CORR": f"{FIT['hero']['unified']['corr']:.3f}", "FIT_HERO_GAP": f"{FIT['hero']['unified']['mean_abs_gap_pp']:.2f}",
+    "FIT_HERO_CORR_BASE": f"{FIT['hero']['headline']['corr']:.3f}", "FIT_HERO_GAP_BASE": f"{FIT['hero']['headline']['mean_abs_gap_pp']:.2f}",
+    "FIT_SHAPE_CORR": f"{FIT['shape']['unified']['corr']:.3f}", "FIT_MIN_SIDES": num(FIT["min_shape_sides"]),
+    "FIT_MIN_HERO_SIDES": num(min(pt["n_sides"] for pt in FIT["hero"]["points"])), "NT_ROWS": NT_ROWS, "O_ROWS": O_ROWS,
     "N_OLD": num(OLDM["n_matches"]), "OLD_SD0": f"{OLD_SD['W0']:.2f}", "OLD_SD2": f"{OLD_SD['W2']:.2f}", "OLD_SD1": f"{OLD_SD['W1']:.2f}",
     "OLD_MAGIK0": f2(OLD_MAGIK["W0"]), "OLD_MAGIK2": f2(OLD_MAGIK["W2"]), "OLD_MAGIK1": f2(OLD_MAGIK["W1"]),
 }

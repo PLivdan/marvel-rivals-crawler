@@ -195,7 +195,7 @@ def render_pairs(d):
   width={d['W']:.1f}pt, height={d['H']:.1f}pt, {COMMON}
   xmin={XMIN}, xmax={XMAX}, ymin=0, ymax={ymax_p:.2f}, xtick={{-0.2,-0.1,...,0.3}},
   xticklabel style={{/pgf/number format/fixed, /pgf/number format/precision=1}},
-  xlabel={{Four-lineup contrast, log-odds (identifying matches in parentheses)}},
+  xlabel={{Four-draft contrast, log-odds (identifying matches in parentheses)}},
   {tick_opts(ticks_p, labels_p, Yp)},
 ]
 \draw[dashed, thin] (axis cs:0,0) -- (axis cs:0,{ymax_p:.2f});

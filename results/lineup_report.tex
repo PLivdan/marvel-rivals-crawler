@@ -7,7 +7,7 @@
 \titleformat{\subsection}{\normalsize\bfseries}{}{0pt}{}
 \titlespacing*{\subsection}{0pt}{12pt plus 3pt minus 2pt}{4pt}
 \pagestyle{fancy}\fancyhf{}\renewcommand{\headrulewidth}{0pt}
-\fancyfoot[C]{\thepage}\fancyfoot[R]{\scriptsize build \texttt{193bfb1d}}
+\fancyfoot[C]{\thepage}\fancyfoot[R]{\scriptsize build \texttt{d8aa3352}}
 \usepackage[colorlinks=true,linkcolor=black,urlcolor=black]{hyperref}
 \captionsetup{font=small,labelfont=bf,skip=5pt}
 \setlength{\tabcolsep}{5pt}
@@ -16,19 +16,19 @@
 \begin{document}
 
 \begin{center}
-{\Large\bfseries A Unified Starting-Lineup Model for \emph{Marvel Rivals}}\\[4pt]
-{\large Which heroes make a starting lineup more likely to win?}\\[10pt]
+{\Large\bfseries Hero Adjusted Plus--Minus in \emph{Marvel Rivals}}\\[4pt]
+{\large Which heroes make a starting draft more likely to win?}\\[10pt]
 {\normalsize Clocktock (Philip Livdan)}\\[2pt]
 {\small McCombs School of Business, The University of Texas at Austin}\\
 {\small\texttt{plivdan@utexas.edu}}\\[8pt]
-{\small Season 9.5, PC ranked, balance regime 7 August to 11 September 2026. Development snapshot frozen 2026-09-09. Report build \texttt{193bfb1d}.}
+{\small Season 9.5, PC ranked, balance regime 7 August to 11 September 2026. Development snapshot frozen 2026-09-09. Report build \texttt{d8aa3352}.}
 \end{center}
 
 \vspace{6pt}
-\noindent Which heroes make a starting lineup more likely to win? Raw win rates mix hero choice with the
+\noindent Which heroes make a starting draft more likely to win? Raw win rates mix hero choice with the
 players selecting it, their teammates, and their opponents. Using 451,204 competitive matches, this
 report compares predicted outcomes when one starting hero is replaced by another in the same role,
-accounting for observed rank, map, and lineup differences. The comparison follows the match from its
+accounting for observed rank, map, and draft differences. The comparison follows the match from its
 opening, including whatever swaps occur afterward.
 
 Three findings organise what follows. First, substantial differences remain between heroes within each
@@ -45,7 +45,7 @@ the largest positive synergies but not the only ones.
 The sample counts are these. 471,008 eligible matches remain after the filters described in
 Appendix~A; 451,204 of them, played up to 4 September 11:00 UTC, were used for the selected fit, and the
 19,804 played in the final four days were held back for an internal temporal evaluation. The model is a
-single penalized logistic regression on the starting lineups; its equation, identification checks,
+single penalized logistic regression on the starting drafts; its equation, identification checks,
 penalty search, and software metadata are in Appendix~B. In the main text, what matters is what it
 adjusts for and what its outputs mean.
 
@@ -80,7 +80,7 @@ match 20/80.
     {\textbf{Time-weighted}\\{\footnotesize (W1)}\\[3pt] 20\% Spider-Man, 80\% Elsa\\[3pt] {\footnotesize\itshape ``How were the minutes split?''}};
 \end{tikzpicture}
 \caption{Three ways to credit one player who swaps heroes. Illustrative; no estimation is involved.
-The starting-hero rule is the one used here. Every lineup-derived quantity in the model (hero contrasts,
+The starting-hero rule is the one used here. Every draft-derived quantity in the model (hero contrasts,
 composition, allied pairs, opposing pairs) uses the same starting record.}
 \label{fig:swap}
 \end{figure}
@@ -95,7 +95,7 @@ opening with a hero, swaps included, rather than the hero's performance in unint
 
 \subsection*{What the model adjusts for}
 
-The model predicts the probability that side~0 wins a match from the two starting lineups and pre-match
+The model predicts the probability that side~0 wins a match from the two starting drafts and pre-match
 information. Beyond each hero's own contrast it includes the map, the difference in the two teams' mean
 pre-match rank score, the lobby's overall rank, the role composition of each team (how many Tanks, Damage
 heroes, and Supports), every pair of allied starters, every pair of opposing starters, and a deviation for
@@ -113,7 +113,7 @@ affected term, and averages the change in predicted win probability. The benchma
 same-role hero for that slot, so a value of +6.21 for Mantis means that, averaged over the slots
 where Mantis could legally have started, starting Mantis instead of an average available Support raises
 the predicted win probability by +6.21 percentage points. A positive value is an average model
-prediction over those contexts, not a bonus that every lineup would receive.
+prediction over those contexts, not a bonus that every draft would receive.
 
 \begin{figure}[H]\centering
 \caption{Replacement values against the average legal same-role hero, all 55 heroes}\label{fig:repl}
@@ -204,13 +204,13 @@ third begins at a lobby mean of 4,642, and few sampled lobbies average above 5{,
 
 \section*{Which teammates fit together, and which opposing matchups stand out?}
 
-A pair effect is reported as a four-lineup contrast on the log-odds scale. Take the pair's coefficient,
+A pair effect is reported as a four-draft contrast on the log-odds scale. Take the pair's coefficient,
 subtract the average coefficient of each member with the same-role alternatives to the other, and add back
 the average over alternative pairs. The result asks whether these two heroes add more together than their
 separate relationships with other heroes would predict; it cancels the hero main effects and each hero's
 other pairings, so it does not depend on where additive hero content is placed. These are log-odds
-contrasts, not percentage-point contributions of the pair to a lineup: a four-lineup contrast compares
-four hypothetical lineups, not one lineup with and without the pair. Figure~\ref{fig:pairs} shows selected
+contrasts, not percentage-point contributions of the pair to a draft: a four-draft contrast compares
+four hypothetical drafts, not one draft with and without the pair. Figure~\ref{fig:pairs} shows selected
 contrasts with the number of identifying matches, meaning distinct development matches in which the
 pair's signed feature is nonzero; only pairs with at least 500 such matches are shown.
 
@@ -221,7 +221,7 @@ pair's signed feature is nonzero; only pairs with at least 500 such matches are 
 \input{figures/lineup_pairs.tikz}
 
 \begin{minipage}{0.95\linewidth}\footnotesize\vspace{2pt}
-\emph{Notes.} Four-lineup contrasts in log-odds, with identifying-match counts in parentheses. Top:
+\emph{Notes.} Four-draft contrasts in log-odds, with identifying-match counts in parentheses. Top:
 allied pairs designated as team-ups in the Season 9.5 catalogue. Middle: other allied pairs. Bottom:
 opposing matchups, oriented so that ``A against B'' means A's side wins more often when the two start on
 opposite sides than the heroes' other matchups predict. Selection is by fitted size among pairs with at
@@ -332,7 +332,7 @@ comparison; its points are not drawn because they sit on top of the unified mode
 Two kinds of uncertainty are involved, and only one has been computed. The interval on the evaluation's
 average improvement comes from resampling players so that matches sharing players move together. The
 stability of individual hero and pair estimates under the same resampling is a separate exercise; at the
-time of this build it had completed 14 replications and is not reported, so no figure in this
+time of this build it had completed 19 replications and is not reported, so no figure in this
 report carries confidence bands or significance marks, and differences of a few tenths of a point between
 heroes, or a few hundredths in pair contrasts, should be treated as unresolved.
 
@@ -465,7 +465,7 @@ Heroes, composition, maps, rank imbalance & 96 & 0.67230 & 0.67197 & 0.67030 & 0
 
 \textbf{Software metadata.} Design and fitter in the repository's \texttt{lineup} package at revision
 832c615; penalty search run on an 8-CPU Colab runtime from the cached design; report build
-\texttt{193bfb1d}, the hash of this document's text with the hash itself left blank.
+\texttt{d8aa3352}, the hash of this document's text with the hash itself left blank.
 
 \section*{Appendix C. Full tables and figures}
 
@@ -589,7 +589,7 @@ Hawkeye + Psylocke & +0.039 & 3,584 & Luna Snow + Namor & +0.012 & 14,262 &  &  
 \vspace{-2pt}
 \noindent\begin{minipage}{\linewidth}\footnotesize
 \emph{Notes.} Pairs are listed in descending order of contrast, reading down each column in turn.
-\emph{Contrast} is the four-lineup log-odds contrast at the median lobby rank and \emph{Matches} the number
+\emph{Contrast} is the four-draft log-odds contrast at the median lobby rank and \emph{Matches} the number
 of distinct development matches with a nonzero signed feature. Read as the synergy of a team-up-eligible
 starting pair; activation of the team-up ability is not observed.
 \end{minipage}

@@ -1,11 +1,11 @@
 \begin{tikzpicture}
 \begin{axis}[
-  width=250.0pt, height=468.0pt, scale only axis, axis lines=left, tick style={draw=none}, y axis line style={draw=none}, clip=false,
+  width=253.0pt, height=468.0pt, scale only axis, axis lines=left, tick style={draw=none}, y axis line style={draw=none}, clip=false,
   label style={font=\small}, tick label style={font=\footnotesize}, yticklabel style={font=\footnotesize},
   legend style={draw=none, fill=none, font=\footnotesize, cells={anchor=west}}, legend cell align=left,
   xmin=-0.27, xmax=0.36, ymin=0, ymax=51.10, xtick={-0.2,-0.1,...,0.3},
   xticklabel style={/pgf/number format/fixed, /pgf/number format/precision=1},
-  xlabel={Four-lineup contrast, log-odds (identifying matches in parentheses)},
+  xlabel={Four-draft contrast, log-odds (identifying matches in parentheses)},
   ytick={49.20,48.20,47.20,46.20,45.20,44.20,43.20,42.20,41.20,40.20,39.20,38.20,37.20,36.20,35.20,32.30,31.30,30.30,29.30,28.30,27.30,26.30,25.30,24.30,23.30,22.30,21.30,20.30,19.30,18.30,17.30,14.40,13.40,12.40,11.40,10.40,9.40,8.40,7.40,6.40,5.40,4.40,3.40,2.40,1.40}, yticklabels={{Gambit + Rogue},{Iron Fist + White Fox},{Moon Knight + Blade},{Squirrel Girl + Iron Man},{The Punisher + Rocket Raccoon},{Mantis + Star-lord},{Magik + The Hood},{Human Torch + Jubilee},{Ultron + Adam Warlock},{Luna Snow + White Fox},{Storm + Thor},{Hulk + Iron Man},{Iron Fist + Daredevil},{Black Panther + Magik},{Spider-man + Black Cat},{Gambit + Deadpool (Duelist)},{Luna Snow + Daredevil},{Black Panther + Deadpool (Vanguard)},{Mister Fantastic + Rogue},{Groot + Emma Frost},{Angela + The Hood},{Jeff The Land Shark + Deadpool (Strategist)},{Jeff The Land Shark + Invisible Woman},{Human Torch + White Fox},{Star-lord + Invisible Woman},{Ultron + Devil Dinosaur},{Doctor Strange + Mister Fantastic},{Doctor Strange + Magneto},{Hela + Iron Man},{Mantis + Deadpool (Strategist)},{Spider-man + Angela},{The Thing against Magik},{Gambit against Angela},{Phoenix against Elsa Bloodstone},{Cloak \& Dagger against Venom},{Wolverine against Cloak \& Dagger},{Spider-man against Iron Man},{Black Widow against Iron Man},{The Thing against Deadpool (Duelist)},{Magik against The Hood},{Namor against Spider-man},{Magik against Devil Dinosaur},{Black Widow against Ultron},{The Punisher against The Thing},{Ultron against Magik}},
 ]
 \draw[dashed, thin] (axis cs:0,0) -- (axis cs:0,51.10);

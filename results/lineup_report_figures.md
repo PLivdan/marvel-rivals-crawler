@@ -58,7 +58,7 @@ comparison sentence), `apm_hero_table_W{0,2,1}_full.csv` and `apm_run_meta_W1_fu
   intention-to-treat or attenuation claims. Earlier-specification attribution numbers (dispersions 2.60 /
   4.27 / 6.38, Magik +3.48 / +7.94 / +14.57 on 477,483 matches) appear only in Appendix D, labelled as coming
   from the earlier specification.
-- **Pair contrasts** are stated as four-lineup log-odds contrasts, not percentage-point contributions of a
+- **Pair contrasts** are stated as four-draft log-odds contrasts, not percentage-point contributions of a
   pair to a lineup; orientation "A against B" is defined in the caption and table notes.
 - **Averaging rule**: each hero is averaged over its own eligible contexts (legal = not already on that side
   and not banned), so coverage differs across heroes (Black Cat 29% of Damage slots, Wolverine 94%); the
