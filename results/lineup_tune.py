@@ -15,7 +15,8 @@ import numpy as np
 from multiprocessing import get_context
 sys.path.insert(0, ".")
 from lineup.fit import LineupDesign, GROUPS
-WORKERS = int(os.environ.get("LINEUP_WORKERS", "1"))      # folds fitted in parallel processes (fork); ~4 GB RAM each
+WORKERS = int(os.environ.get("LINEUP_WORKERS", "1"))      # parallel processes (fork) over (candidate, fold) jobs; ~4 GB RAM each
+TOL = float(os.environ.get("LINEUP_TOL", "1e-5"))        # Newton stopping tolerance for the search (final fit uses 1e-6)
 
 T_CONF = 1788519632                                  # 2026-09-04T11:00:32Z, see results/confirmation_protocol.json
 LOG = "results/lineup_tuning.json"
@@ -31,13 +32,13 @@ def save(): json.dump(state, open(LOG, "w"), indent=1)
 def key(lams): return ",".join(f"{l:g}" for l in lams)
 WARM = {}                                            # in-memory warm starts per fold: key -> phi
 def _fit_fold(args):
-    """One fold: fit at lams with optional training subsample and warm start; returns (phi, fold record)."""
+    """One (candidate, fold) job: fit at lams with optional training subsample and warm start; returns (phi, fold record)."""
     f, lams, sub, max_iter, phi0 = args
     tr, va = FOLDS[f]
     w = np.zeros(d.n); w[tr] = 1.0
     if sub < 1.0:
         rng = np.random.default_rng(f); drop = rng.random(len(tr)) > sub; w[tr[drop]] = 0.0
-    fit = d.fit(lams, w, phi0=phi0, max_iter=max_iter, verbose=False)
+    fit = d.fit(lams, w, phi0=phi0, max_iter=max_iter, tol=TOL, verbose=False)
     ev = d.evaluate(fit, va); ev.pop("loss_vector")
     thirds = np.digitize(d.lobby[va], np.quantile(d.lobby[dev], [1/3, 2/3]))
     by_third = []
@@ -47,26 +48,34 @@ def _fit_fold(args):
            **{k2: round(v, 5) if isinstance(v, float) else v for k2, v in ev.items()}, "by_third": by_third}
     return fit["phi"], rec
 
-def evaluate(lams, sub=1.0, max_iter=6, tag=""):
-    k = key(lams)
-    done = [e for e in state["evaluations"] if e["key"] == k and e["sub"] == sub]
-    if done: return done[0]["mean_val_logloss"]
-    res = {"key": k, "lams": list(lams), "sub": sub, "tag": tag, "folds": []}
+def evaluate_batch(cands, sub=1.0, max_iter=6, tags=None):
+    """Evaluate several candidate penalty vectors at once: every (candidate, fold) job runs in the process pool."""
+    tags = tags or [""] * len(cands)
+    todo = [(i, c) for i, c in enumerate(cands) if not any(e["key"] == key(c) and e["sub"] == sub for e in state["evaluations"])]
     t0 = time.time()
-    jobs = [(f, list(lams), sub, max_iter, WARM.get(f)) for f in range(len(FOLDS))]
-    if WORKERS > 1:
-        with get_context("fork").Pool(min(WORKERS, len(FOLDS))) as pool:
-            outs = pool.map(_fit_fold, jobs)
-    else:
-        outs = [_fit_fold(j) for j in jobs]
-    for f, (phi, rec) in enumerate(outs):
-        WARM[f] = phi; res["folds"].append(rec)
-    res["mean_val_logloss"] = float(np.mean([f["logloss"] for f in res["folds"]]))
-    res["mean_cal_slope"] = float(np.mean([f["cal_slope"] for f in res["folds"]]))
-    res["seconds"] = round(time.time() - t0)
-    state["evaluations"].append(res); save()
-    print(f"  {tag:10s} lams={k:32s} val logloss {res['mean_val_logloss']:.5f}  slope {res['mean_cal_slope']:.3f}  [{res['seconds']}s]", flush=True)
-    return res["mean_val_logloss"]
+    jobs = [(f, list(c), sub, max_iter, WARM.get(f)) for i, c in todo for f in range(len(FOLDS))]
+    if jobs:
+        if WORKERS > 1:
+            with get_context("fork").Pool(min(WORKERS, len(jobs))) as pool:
+                outs = pool.map(_fit_fold, jobs)
+        else:
+            outs = [_fit_fold(j) for j in jobs]
+        for (i, c), chunk in zip(todo, [outs[j:j + len(FOLDS)] for j in range(0, len(outs), len(FOLDS))]):
+            res = {"key": key(c), "lams": list(c), "sub": sub, "tag": tags[i], "folds": [rec for _, rec in chunk]}
+            res["mean_val_logloss"] = float(np.mean([f["logloss"] for f in res["folds"]]))
+            res["mean_cal_slope"] = float(np.mean([f["cal_slope"] for f in res["folds"]]))
+            res["seconds"] = round(time.time() - t0)
+            state["evaluations"].append(res)
+            print(f"  {tags[i]:10s} lams={res['key']:32s} val logloss {res['mean_val_logloss']:.5f}  slope {res['mean_cal_slope']:.3f}  [{res['seconds']}s]", flush=True)
+        # warm starts: keep the best candidate's coefficients per fold
+        best_i = min(range(len(todo)), key=lambda j: next(e for e in state["evaluations"] if e["key"] == key(todo[j][1]) and e["sub"] == sub)["mean_val_logloss"])
+        for f, (phi, _) in enumerate(outs[best_i * len(FOLDS):(best_i + 1) * len(FOLDS)]):
+            WARM[f] = phi
+        save()
+    return [next(e for e in state["evaluations"] if e["key"] == key(c) and e["sub"] == sub)["mean_val_logloss"] for c in cands]
+
+def evaluate(lams, sub=1.0, max_iter=6, tag=""):
+    return evaluate_batch([lams], sub, max_iter, [tag])[0]
 
 mode = sys.argv[1] if len(sys.argv) > 1 else "pilot"
 if mode == "pilot":
@@ -83,11 +92,13 @@ elif mode in ("coarse", "fine"):
         improved = False
         base = evaluate(best, sub, tag=f"{mode}{pas}")
         for gi in order_groups:
+            cands = []
             for mult in steps:
-                cand = list(best); cand[gi] = float(np.clip(cand[gi] * mult, 0.01, 1e6))
-                v = evaluate(cand, sub, tag=f"{mode}{pas}:{GROUPS[gi][:2]}")
-                if v < base - 1e-6:
-                    best, base, improved = cand, v, True
+                cand = list(best); cand[gi] = float(np.clip(cand[gi] * mult, 0.01, 1e6)); cands.append(cand)
+            vals = evaluate_batch(cands, sub, tags=[f"{mode}{pas}:{GROUPS[gi][:2]}"] * len(cands))
+            j = int(np.argmin(vals))
+            if vals[j] < base - 1e-6:
+                best, base, improved = cands[j], vals[j], True
         state["best_lams"] = best; state["best_val_logloss"] = base; save()
         print(f"pass {pas} best {key(best)} -> {base:.5f}", flush=True)
         if not improved: break
@@ -104,6 +115,5 @@ elif mode == "reduced":
                 "no_pair_slopes": [best[0], best[1], best[2], best[3], BIG],
                 "no_pairs": [best[0], BIG, BIG, best[3], BIG],
                 "no_pairs_no_slopes_no_heromap": [best[0], BIG, BIG, BIG, BIG]}
-    for name, lams in variants.items():
-        evaluate(lams, 1.0, tag=name)
+    evaluate_batch(list(variants.values()), 1.0, tags=list(variants.keys()))
     state["reduced"] = {name: key(l) for name, l in variants.items()}; save()
