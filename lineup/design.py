@@ -4,8 +4,8 @@ Blocks (all from starting lineups, side 0 minus side 1 conventions):
   maps      alpha_v          one intercept per map (unpenalized)
   drank     Delta R          team mean pre-match score difference (raw; standardized per fold)
   hero      x_mh = A_mh - B_mh, within-role sum-to-zero basis (52 free of 55)
-  shape     composition contrasts c(A) - c(B), sum-to-zero basis over shapes with >= MIN_SHAPE
-            team-instances plus a pooled 'other'
+  shape     composition contrasts c(A) - c(B), sum-to-zero basis over EVERY observed shape (no pooling,
+            rare shapes are shrunk by the ridge; support is applied when reporting)
   heromap   x_mh * 1[v_m = v], sparse; exact aliases removed (per-map hero sums, per-hero map sums)
   allied    z_mhk = A_mh A_mk - B_mh B_mk, h < k, every pair with nonzero identifying support
   opposing  w_mhk = A_mh B_mk - A_mk B_mh, h < k, every pair with nonzero identifying support
@@ -23,7 +23,8 @@ from scipy.linalg import null_space
 from apm import contrasts
 from apm.features import _starting_hero_per_player
 
-MIN_SHAPE = 100
+MIN_SHAPE = 1        # every observed composition shape gets its own (penalized) coefficient: makes the
+                     # pair-sum and hero-map-sum aliases with the hero and shape blocks EXACT, so they can be removed
 TOL = 1e-6
 
 
@@ -136,14 +137,15 @@ def build(conn, snap_csv="results/dev_snapshot/matches.csv", out="results/lineup
         return ["{}-{}-{}".format(*map(int, c)) for c in cnt]
     sh0, sh1 = shape_of(s0), shape_of(s1)
     counts = pd.Series(sh0 + sh1).value_counts()
-    common = sorted(counts[counts >= MIN_SHAPE].index); labels = common + ["other"]
+    common = sorted(counts[counts >= MIN_SHAPE].index)
+    labels = common + (["other"] if (counts < MIN_SHAPE).any() else [])       # no empty pooled category
     canon = lambda s: s if s in common else "other"
     shape_raw = np.zeros((n, len(labels)))
     for i, (a, b) in enumerate(zip(sh0, sh1)):
         shape_raw[i, labels.index(canon(a))] += 1.0; shape_raw[i, labels.index(canon(b))] -= 1.0
     shape_basis = contrasts.sum_to_zero_basis(len(labels))
     X_shape = shape_raw @ shape_basis
-    log(t0, f"dense blocks: hero {X_hero.shape[1]}, shape {X_shape.shape[1]} ({len(common)} shapes + other)")
+    log(t0, f"dense blocks: hero {X_hero.shape[1]}, shape {X_shape.shape[1]} ({len(labels)} shape categories)")
     # ---- hero-by-map (sparse) ------------------------------------------------------------------
     hm_rows, hm_cols, hm_vals = [], [], []
     for i in range(6):

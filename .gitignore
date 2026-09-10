@@ -14,3 +14,6 @@ results/*.fls
 results/*.log
 results/build.log
 results/aux_stats.json
+results/lineup_design/*
+!results/lineup_design/summary.json
+results/lineup_design_test/
