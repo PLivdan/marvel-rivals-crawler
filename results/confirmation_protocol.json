@@ -28,6 +28,20 @@
    "at_utc": "2026-09-10T00:05:00Z",
    "change": "regime boundary fixed",
    "reason": "eligible confirmation matches are those played after 2026-09-08T11:00:32Z and before 2026-09-11T09:00:00Z (Season 10 patch)"
+  },
+  {
+   "at_utc": "2026-09-10T00:40:00Z",
+   "before_any_confirmation_outcome_was_read": true,
+   "change": "collection stopped at the user's instruction (crawler paused with 39 matches played after the snapshot); the confirmation sample is redefined as an INTERNAL slice of the frozen snapshot",
+   "definition": "eligible confirmation matches = snapshot matches with play time > 1788519632 (2026-09-04T11:00:32Z, the final four days of play), passing the legal-lineup filter; development = snapshot matches with play time <= 1788519632; every design build, fold, tuning run, diagnostic and report decision of the rebuild uses development rows only",
+   "baseline": "the published headline fit was estimated on the whole snapshot, so for a like-for-like comparison the baseline (Spec A+, identical specification) is REFITTED on the development rows; the published coefficients are not used in the confirmation",
+   "caveat": "the final week of the snapshot informed the published report's holdout figures and the decision not to adopt unpenalized pair blocks; the rebuild's tuning and selection never read the slice, but it is not a post-lock future sample",
+   "stopping_rule": "evaluate once, after the candidate is locked; sample size is fixed by the definition"
+  },
+  {
+   "at_utc": "2026-09-10T00:40:00Z",
+   "change": "legal-lineup filter added to both samples",
+   "reason": "1.36% of snapshot matches (6,475) have two teammates whose first-appearance hero is the same, which cannot be a simultaneous start; their starting record is unverifiable and they are excluded, not collapsed"
   }
  ]
 }
