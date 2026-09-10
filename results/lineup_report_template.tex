@@ -275,7 +275,8 @@ values mean lower prediction error.
 
 The right panel is an internal temporal evaluation rather than a clean future test. The <<N_CONF>> matches
 are those played in the final four days of the snapshot, after <<CONF_CUT>> UTC. Their outcomes were kept
-out of every design build, fold, tuning run, and table above, and were read once, but the same days overlap
+out of every design build, fold, tuning run, and table above, and were first read for the comparison in
+Figure~\ref{fig:pred} (Figure~\ref{fig:fit} describes the same slice), but the same days overlap
 the final week already examined in the earlier report on the headline specification, so the comparison
 inherits that prior use. On those matches the unified model's paired log-loss improvement over the
 refitted headline is <<CONF_D>>, with a player-resampling interval of <<CONF_LO>> to <<CONF_HI>>. By lobby
@@ -297,6 +298,33 @@ Sample & Overall & Lower third & Middle third & Upper third \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+Figure~\ref{fig:fit} looks at the same evaluation slice from the side of the heroes, as the earlier report did
+for its holdout week. Each of the <<N_CONF>> matches contributes two team-sides. Grouping team-sides by each
+hero they started and comparing the model's mean predicted win probability with the share that actually won
+gives one point per hero; grouping by composition shape gives one per shape. Across heroes the correlation
+is <<FIT_HERO_CORR>> and the mean absolute gap <<FIT_HERO_GAP>> percentage points, against <<FIT_HERO_CORR_BASE>>
+and <<FIT_HERO_GAP_BASE>> for the refitted headline specification, which shares the hero terms: at this level
+of aggregation the two models are not distinguishable, and the improvement in Figure~\ref{fig:pred} is not
+a matter of ranking heroes better. Across composition shapes the correlation is <<FIT_SHAPE_CORR>>.
+
+\begin{figure}[!tb]\centering
+\caption{Does the model predict which heroes' teams win? By starting hero and by composition}
+\label{fig:fit}
+\vspace{2pt}
+\input{figures/lineup_fit.tikz}
+
+\begin{minipage}{0.95\linewidth}\footnotesize\vspace{2pt}
+\emph{Notes.} The <<N_CONF>> matches of the internal temporal evaluation, each contributing two team-sides;
+predictions are from the selected fit on development rows. Panel A groups team-sides by each hero they started:
+the horizontal axis is the unified model's mean predicted win probability for those team-sides, the vertical
+axis the share that actually won. Labels mark the two heroes farthest from the line and the two extremes; the
+smallest hero group has <<FIT_MIN_HERO_SIDES>> team-sides, so a realised share can miss its prediction by a
+point or two through sampling alone. Panel B groups team-sides by composition shape (Tanks--Damage--Supports)
+with at least <<FIT_MIN_SIDES>> team-sides. The refitted headline specification's statistics are shown for
+comparison; its points are not drawn because they sit on top of the unified model's.
+\end{minipage}
+\end{figure}
 
 \section*{What remains uncertain?}
 
@@ -324,7 +352,7 @@ a start cannot be simultaneous and the record is unverifiable. Finally, the eval
 data used earlier, as disclosed; a clean test needs matches played after the model was fixed, which the
 Season 10 patch now makes a different balance regime. <<PUB_NOTE>>
 
-\clearpage
+\FloatBarrier
 \appendix
 \FloatBarrier
 \section*{Appendix A. Data, regime, and protocol}

@@ -1,0 +1,529 @@
+{
+ "n_matches": 19804,
+ "n_sides": 39608,
+ "min_shape_sides": 100,
+ "hero": {
+  "unified": {
+   "corr": 0.9220602496810322,
+   "mean_abs_gap_pp": 0.7298847611289658,
+   "n_groups": 55
+  },
+  "headline": {
+   "corr": 0.9254500618358948,
+   "mean_abs_gap_pp": 0.7217235536229889,
+   "n_groups": 55
+  },
+  "points": [
+   {
+    "name": "Hulk",
+    "role": "Tank",
+    "n_sides": 3626,
+    "pred": 0.49827391480124394,
+    "pred_base": 0.5000399048182453,
+    "real": 0.49531163816878104
+   },
+   {
+    "name": "The Punisher",
+    "role": "Damage",
+    "n_sides": 2911,
+    "pred": 0.4892679248617362,
+    "pred_base": 0.48946364546810295,
+    "real": 0.48196496049467535
+   },
+   {
+    "name": "Storm",
+    "role": "Damage",
+    "n_sides": 1712,
+    "pred": 0.5208313067482412,
+    "pred_base": 0.5183761651309522,
+    "real": 0.5251168224299065
+   },
+   {
+    "name": "Loki",
+    "role": "Support",
+    "n_sides": 1880,
+    "pred": 0.5183962772752848,
+    "pred_base": 0.5147279297178013,
+    "real": 0.5377659574468086
+   },
+   {
+    "name": "Human Torch",
+    "role": "Damage",
+    "n_sides": 2647,
+    "pred": 0.5028467125713191,
+    "pred_base": 0.5038636826274935,
+    "real": 0.5296562145825463
+   },
+   {
+    "name": "Doctor Strange",
+    "role": "Tank",
+    "n_sides": 5740,
+    "pred": 0.4939760733615737,
+    "pred_base": 0.4954025523975512,
+    "real": 0.48048780487804876
+   },
+   {
+    "name": "Mantis",
+    "role": "Support",
+    "n_sides": 7064,
+    "pred": 0.5545828506316793,
+    "pred_base": 0.551344438814956,
+    "real": 0.5540770101925255
+   },
+   {
+    "name": "Hawkeye",
+    "role": "Damage",
+    "n_sides": 1619,
+    "pred": 0.47901180527334825,
+    "pred_base": 0.480498354568431,
+    "real": 0.47004323656578134
+   },
+   {
+    "name": "Captain America",
+    "role": "Tank",
+    "n_sides": 1460,
+    "pred": 0.4897042298664375,
+    "pred_base": 0.4909834870129429,
+    "real": 0.4821917808219178
+   },
+   {
+    "name": "Rocket Raccoon",
+    "role": "Support",
+    "n_sides": 7864,
+    "pred": 0.5304985841212423,
+    "pred_base": 0.5314845948724386,
+    "real": 0.5269582909460834
+   },
+   {
+    "name": "Hela",
+    "role": "Damage",
+    "n_sides": 5041,
+    "pred": 0.4983819216390436,
+    "pred_base": 0.49703723720087006,
+    "real": 0.4846260662566951
+   },
+   {
+    "name": "Cloak & Dagger",
+    "role": "Support",
+    "n_sides": 12794,
+    "pred": 0.5009405094782488,
+    "pred_base": 0.5030960574500682,
+    "real": 0.4979677974050336
+   },
+   {
+    "name": "Black Panther",
+    "role": "Damage",
+    "n_sides": 3019,
+    "pred": 0.4789294565987781,
+    "pred_base": 0.48253624856604477,
+    "real": 0.48327260682345147
+   },
+   {
+    "name": "Groot",
+    "role": "Tank",
+    "n_sides": 2412,
+    "pred": 0.4966992449488342,
+    "pred_base": 0.4957259922281152,
+    "real": 0.494195688225539
+   },
+   {
+    "name": "Ultron",
+    "role": "Support",
+    "n_sides": 2592,
+    "pred": 0.5273819260498015,
+    "pred_base": 0.531659644234825,
+    "real": 0.5270061728395061
+   },
+   {
+    "name": "Magik",
+    "role": "Damage",
+    "n_sides": 5865,
+    "pred": 0.5277170824985897,
+    "pred_base": 0.5315399438943259,
+    "real": 0.5329923273657289
+   },
+   {
+    "name": "Moon Knight",
+    "role": "Damage",
+    "n_sides": 2476,
+    "pred": 0.5026384508676095,
+    "pred_base": 0.5023876420641544,
+    "real": 0.4886914378029079
+   },
+   {
+    "name": "Luna Snow",
+    "role": "Support",
+    "n_sides": 8092,
+    "pred": 0.47663488150392036,
+    "pred_base": 0.4761599792541431,
+    "real": 0.467498764211567
+   },
+   {
+    "name": "Squirrel Girl",
+    "role": "Damage",
+    "n_sides": 1240,
+    "pred": 0.4635004865531572,
+    "pred_base": 0.4647170770429404,
+    "real": 0.47338709677419355
+   },
+   {
+    "name": "Black Widow",
+    "role": "Damage",
+    "n_sides": 3702,
+    "pred": 0.4922158536606413,
+    "pred_base": 0.4896073968913987,
+    "real": 0.4937871420853593
+   },
+   {
+    "name": "Iron Man",
+    "role": "Damage",
+    "n_sides": 2174,
+    "pred": 0.5067697516545436,
+    "pred_base": 0.5074648326106084,
+    "real": 0.5220791168353266
+   },
+   {
+    "name": "Venom",
+    "role": "Tank",
+    "n_sides": 4541,
+    "pred": 0.4844469698753837,
+    "pred_base": 0.48421161275515934,
+    "real": 0.4868971592160317
+   },
+   {
+    "name": "Spider-man",
+    "role": "Damage",
+    "n_sides": 6103,
+    "pred": 0.4941439532054041,
+    "pred_base": 0.4931139564204421,
+    "real": 0.4999180730788137
+   },
+   {
+    "name": "Magneto",
+    "role": "Tank",
+    "n_sides": 17413,
+    "pred": 0.5078231114200575,
+    "pred_base": 0.5067214621099804,
+    "real": 0.5097341067018893
+   },
+   {
+    "name": "Scarlet Witch",
+    "role": "Damage",
+    "n_sides": 1494,
+    "pred": 0.46606593669545465,
+    "pred_base": 0.46875739276933537,
+    "real": 0.46720214190093706
+   },
+   {
+    "name": "Thor",
+    "role": "Tank",
+    "n_sides": 3345,
+    "pred": 0.5084679361380741,
+    "pred_base": 0.5060848704234477,
+    "real": 0.5076233183856502
+   },
+   {
+    "name": "Mister Fantastic",
+    "role": "Damage",
+    "n_sides": 1557,
+    "pred": 0.5161867873025019,
+    "pred_base": 0.5154172058694997,
+    "real": 0.4951830443159923
+   },
+   {
+    "name": "Winter Soldier",
+    "role": "Damage",
+    "n_sides": 9612,
+    "pred": 0.4989859887010727,
+    "pred_base": 0.500209149821339,
+    "real": 0.48907615480649186
+   },
+   {
+    "name": "Peni Parker",
+    "role": "Tank",
+    "n_sides": 2049,
+    "pred": 0.5239197739112752,
+    "pred_base": 0.5228344500585375,
+    "real": 0.5143972669594924
+   },
+   {
+    "name": "Star-lord",
+    "role": "Damage",
+    "n_sides": 1865,
+    "pred": 0.502659203228046,
+    "pred_base": 0.5039967140976923,
+    "real": 0.5045576407506702
+   },
+   {
+    "name": "Blade",
+    "role": "Damage",
+    "n_sides": 2010,
+    "pred": 0.4912856115294271,
+    "pred_base": 0.49423950495009766,
+    "real": 0.49900497512437814
+   },
+   {
+    "name": "Namor",
+    "role": "Damage",
+    "n_sides": 2857,
+    "pred": 0.47783628823267876,
+    "pred_base": 0.47880890536498827,
+    "real": 0.48617430871543577
+   },
+   {
+    "name": "Adam Warlock",
+    "role": "Support",
+    "n_sides": 1953,
+    "pred": 0.5234338306182603,
+    "pred_base": 0.5273070335496375,
+    "real": 0.5130568356374808
+   },
+   {
+    "name": "Jeff The Land Shark",
+    "role": "Support",
+    "n_sides": 2722,
+    "pred": 0.47948045568817255,
+    "pred_base": 0.47817821215927836,
+    "real": 0.48126377663482733
+   },
+   {
+    "name": "Psylocke",
+    "role": "Damage",
+    "n_sides": 1886,
+    "pred": 0.48554091034812047,
+    "pred_base": 0.4825595966505381,
+    "real": 0.4872746553552492
+   },
+   {
+    "name": "Wolverine",
+    "role": "Damage",
+    "n_sides": 1998,
+    "pred": 0.5005531411126668,
+    "pred_base": 0.49808821904848255,
+    "real": 0.5
+   },
+   {
+    "name": "Invisible Woman",
+    "role": "Support",
+    "n_sides": 9493,
+    "pred": 0.49289076756963224,
+    "pred_base": 0.4907377562068954,
+    "real": 0.4905720004213631
+   },
+   {
+    "name": "The Thing",
+    "role": "Tank",
+    "n_sides": 5422,
+    "pred": 0.5351923801858217,
+    "pred_base": 0.5372009492283626,
+    "real": 0.5520103282921431
+   },
+   {
+    "name": "Iron Fist",
+    "role": "Damage",
+    "n_sides": 3252,
+    "pred": 0.5089165800148507,
+    "pred_base": 0.5090436189603196,
+    "real": 0.507380073800738
+   },
+   {
+    "name": "Emma Frost",
+    "role": "Tank",
+    "n_sides": 7911,
+    "pred": 0.48155492807915345,
+    "pred_base": 0.48198781589101164,
+    "real": 0.4812286689419795
+   },
+   {
+    "name": "Phoenix",
+    "role": "Damage",
+    "n_sides": 1546,
+    "pred": 0.45541299370061944,
+    "pred_base": 0.4536389559573392,
+    "real": 0.43014230271668824
+   },
+   {
+    "name": "Daredevil",
+    "role": "Damage",
+    "n_sides": 3515,
+    "pred": 0.5118304620878307,
+    "pred_base": 0.5137914745705762,
+    "real": 0.5186344238975817
+   },
+   {
+    "name": "Angela",
+    "role": "Tank",
+    "n_sides": 2217,
+    "pred": 0.5093174567000959,
+    "pred_base": 0.5123403985363887,
+    "real": 0.5160126296797474
+   },
+   {
+    "name": "Gambit",
+    "role": "Support",
+    "n_sides": 9556,
+    "pred": 0.5034511341637039,
+    "pred_base": 0.5014196560552072,
+    "real": 0.5092088740058602
+   },
+   {
+    "name": "Elsa Bloodstone",
+    "role": "Damage",
+    "n_sides": 3598,
+    "pred": 0.4975691329270675,
+    "pred_base": 0.4929266847318956,
+    "real": 0.4947192884936076
+   },
+   {
+    "name": "White Fox",
+    "role": "Support",
+    "n_sides": 3379,
+    "pred": 0.4732173820610554,
+    "pred_base": 0.47404618916303126,
+    "real": 0.47469665581533
+   },
+   {
+    "name": "Black Cat",
+    "role": "Damage",
+    "n_sides": 1487,
+    "pred": 0.5155176899668735,
+    "pred_base": 0.5179446239332586,
+    "real": 0.5339609952925353
+   },
+   {
+    "name": "Devil Dinosaur",
+    "role": "Tank",
+    "n_sides": 3043,
+    "pred": 0.49080137356393355,
+    "pred_base": 0.4891312013661727,
+    "real": 0.4811041735129806
+   },
+   {
+    "name": "Cyclops",
+    "role": "Damage",
+    "n_sides": 4122,
+    "pred": 0.44967094030791155,
+    "pred_base": 0.4505156047368435,
+    "real": 0.44492964580300826
+   },
+   {
+    "name": "Jubilee",
+    "role": "Support",
+    "n_sides": 10434,
+    "pred": 0.49032980733329656,
+    "pred_base": 0.49158222110007765,
+    "real": 0.49769982748706154
+   },
+   {
+    "name": "Rogue",
+    "role": "Tank",
+    "n_sides": 3089,
+    "pred": 0.4992357695432477,
+    "pred_base": 0.4981248384043582,
+    "real": 0.5050178051149239
+   },
+   {
+    "name": "The Hood",
+    "role": "Tank",
+    "n_sides": 12099,
+    "pred": 0.5126445975363008,
+    "pred_base": 0.5113897769813596,
+    "real": 0.5132655591371188
+   },
+   {
+    "name": "Deadpool (Vanguard)",
+    "role": "Tank",
+    "n_sides": 1371,
+    "pred": 0.45154880571921097,
+    "pred_base": 0.4540436739176224,
+    "real": 0.4653537563822028
+   },
+   {
+    "name": "Deadpool (Duelist)",
+    "role": "Damage",
+    "n_sides": 2668,
+    "pred": 0.4877144603983143,
+    "pred_base": 0.48353098234881103,
+    "real": 0.4838830584707646
+   },
+   {
+    "name": "Deadpool (Strategist)",
+    "role": "Support",
+    "n_sides": 2111,
+    "pred": 0.43487973336006247,
+    "pred_base": 0.439270404611498,
+    "real": 0.443391757460919
+   }
+  ]
+ },
+ "shape": {
+  "unified": {
+   "corr": 0.9881575638719352,
+   "mean_abs_gap_pp": 1.3983219322518807,
+   "n_groups": 8
+  },
+  "headline": {
+   "corr": 0.9833857262115984,
+   "mean_abs_gap_pp": 1.5732385870473167,
+   "n_groups": 8
+  },
+  "points": [
+   {
+    "shape": "1-2-3",
+    "n_sides": 992,
+    "pred": 0.4582319982312142,
+    "pred_base": 0.46017762553520913,
+    "real": 0.43548387096774194
+   },
+   {
+    "shape": "1-3-2",
+    "n_sides": 3596,
+    "pred": 0.4581338717593988,
+    "pred_base": 0.46052852809133066,
+    "real": 0.4574527252502781
+   },
+   {
+    "shape": "1-4-1",
+    "n_sides": 121,
+    "pred": 0.3318286665273982,
+    "pred_base": 0.33339183338321743,
+    "real": 0.2892561983471074
+   },
+   {
+    "shape": "2-1-3",
+    "n_sides": 1223,
+    "pred": 0.5075830014303422,
+    "pred_base": 0.5082565331357378,
+    "real": 0.5028618152085037
+   },
+   {
+    "shape": "2-2-2",
+    "n_sides": 30986,
+    "pred": 0.5136186684408391,
+    "pred_base": 0.5134560630740641,
+    "real": 0.5141999612728329
+   },
+   {
+    "shape": "2-3-1",
+    "n_sides": 1056,
+    "pred": 0.37252951518555755,
+    "pred_base": 0.37459966144453016,
+    "real": 0.36553030303030304
+   },
+   {
+    "shape": "3-1-2",
+    "n_sides": 1052,
+    "pred": 0.49725809671333654,
+    "pred_base": 0.4902225863532893,
+    "real": 0.5171102661596958
+   },
+   {
+    "shape": "3-2-1",
+    "n_sides": 328,
+    "pred": 0.3521247861181623,
+    "pred_base": 0.35027287431886056,
+    "real": 0.3384146341463415
+   }
+  ]
+ }
+}

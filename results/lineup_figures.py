@@ -265,6 +265,102 @@ def render_prediction(d):
 \end{{tikzpicture}}"""
 fit("lineup_prediction", render_prediction, {"W1": 175.0, "W2": 140.0, "H": 150.0, "GAP": 78.0}, wkeys=("W1", "W2"))
 
+# ---------- Figure: predicted against realised win rates on the evaluation slice (by hero, by composition) ------
+FS = json.load(open("results/lineup_fit_scatter.json"))
+HP = pd.DataFrame(FS["hero"]["points"]); SP = pd.DataFrame(FS["shape"]["points"])
+def bounds(df, pad=0.01, step=0.05):
+    lo = min(df.pred.min(), df.real.min()) - pad; hi = max(df.pred.max(), df.real.max()) + pad
+    return float(np.floor(lo / step) * step), float(np.ceil(hi / step) * step)
+def label_nodes(d, lo, hi, keys=None, reserved=(), char_w=0.0105):
+    """One node per labelled point, ported from the headline report: near candidates sit diagonally next to
+    the point on the empty side of the 45-degree line; if every near candidate would overlap another point,
+    another label, a reserved region or the frame, the label moves out and a thin leader joins it."""
+    span = hi - lo
+    norm = lambda x, y: ((x - lo) / span, (y - lo) / span)
+    back = lambda nx, ny: (lo + nx * span, lo + ny * span)
+    points = [norm(r.pred, r.real) for r in d.itertuples()]
+    ANCHOR = {(-1, 1): "south east", (1, 1): "south west", (-1, -1): "north east", (1, -1): "north west",
+              (0, 1): "south", (0, -1): "north", (-1, 0): "east", (1, 0): "west"}
+    placed, out = [], []
+    for r in d.sort_values("pred").itertuples():
+        if keys is not None and r.key not in keys: continue
+        hw = max(0.04, char_w * len(str(r.key)))
+        def centre(px, py, sx, sy): return px + sx * hw, py + sy * 0.025
+        def score(cx, cy, own):
+            if not (0.0 <= cx - hw and cx + hw <= 1.0 and 0.0 <= cy - 0.025 and cy + 0.025 <= 1.0): return -1.0
+            if any(x0 - hw <= cx <= x1 + hw and y0 - 0.03 <= cy <= y1 + 0.03 for x0, x1, y0, y1 in reserved): return 0.0
+            best = 9.0
+            for qx, qy in points:
+                if (qx, qy) != own: best = min(best, (((cx - qx) / (hw + 0.02)) ** 2 + ((cy - qy) / 0.06) ** 2) ** 0.5)
+            for qx, qy, qw in placed: best = min(best, (((cx - qx) / (hw + qw + 0.03)) ** 2 + ((cy - qy) / 0.06) ** 2) ** 0.5)
+            return best
+        nx, ny = norm(r.pred, r.real); own = (nx, ny); cands = []
+        for sx, sy in ((-1, 1), (1, -1), (1, 1), (-1, -1)):
+            px, py = nx + sx * 0.012, ny + sy * 0.008
+            cands.append((score(*centre(px, py, sx, sy), own), False, sx, sy, (px, py)))
+        default = cands[0] if ny >= nx else cands[1]
+        if default[0] >= 1.0: best = default
+        else:
+            for radius in (0.10, 0.15, 0.20):
+                for sx, sy in ANCHOR:
+                    px, py = nx + sx * radius, ny + sy * radius
+                    cands.append((score(*centre(px, py, sx, sy), own), True, sx, sy, (px, py)))
+            best = max(cands, key=lambda c: (min(c[0], 1.3), not c[1], c[2] == -1, c[3] == 0))
+        sc_, far, sx, sy, (px, py) = best
+        cx, cy = centre(px, py, sx, sy); placed.append((cx, cy, hw)); lx, ly = back(px, py)
+        if far: out.append(rf"\draw[very thin] (axis cs:{r.pred:.4f},{r.real:.4f}) -- (axis cs:{lx:.4f},{ly:.4f});")
+        out.append(rf"\node[font=\scriptsize, anchor={ANCHOR[(sx, sy)]}, inner sep=0.6pt, fill=white, fill opacity=0.85, text opacity=1] at (axis cs:{lx:.4f},{ly:.4f}) {{{esc(r.key)}}};")
+    return "\n".join(out)
+HP["key"] = HP.name; SP["key"] = SP["shape"]; HP["resid"] = HP.real - HP.pred
+H_LABELS = set(HP.sort_values("resid", key=abs, ascending=False).head(2).key) | {HP.loc[HP.pred.idxmax(), "key"], HP.loc[HP.pred.idxmin(), "key"]}
+A_LO, A_HI = bounds(HP); A_LO -= 0.05; B_LO, B_HI = bounds(SP)
+def render_fit(d):
+    hu, hb, su = FS["hero"]["unified"], FS["hero"]["headline"], FS["shape"]["unified"]
+    rowsA = "\n".join(f"{r.pred:.4f} {r.real:.4f}" for r in HP.itertuples()); rowsB = "\n".join(f"{r.pred:.4f} {r.real:.4f}" for r in SP.itertuples())
+    return rf"""
+\begin{{tikzpicture}}
+\begin{{axis}}[
+  name=A, scale only axis, width={d['W1']:.1f}pt, height={d['W1']:.1f}pt, axis lines=left, tick style={{draw=none}}, clip=false,
+  xmin={A_LO:.2f}, xmax={A_HI:.2f}, ymin={A_LO:.2f}, ymax={A_HI:.2f},
+  title={{\small Panel A: by starting hero ({len(HP)} heroes)}}, title style={{yshift=-3pt}},
+  xlabel={{Predicted win rate of teams starting the hero}}, ylabel={{Realised win rate on the evaluation slice}},
+  label style={{font=\footnotesize}}, tick label style={{font=\footnotesize, /pgf/number format/fixed, /pgf/number format/precision=2}},
+  legend style={{at={{(0.03,0.97)}}, anchor=north west, font=\footnotesize, draw=none, fill=none, cells={{anchor=west}}}},
+]
+\addplot[dashed, thin, domain={A_LO:.2f}:{A_HI:.2f}, samples=2] {{x}};
+\addlegendentry{{$45^\circ$ line}}
+\addplot[only marks, mark=*, mark size=1.7pt] table[x=p, y=a] {{
+p a
+{rowsA}
+}};
+\addlegendentry{{Unified model}}
+{label_nodes(HP, A_LO, A_HI, H_LABELS, reserved=[(0.0, 0.45, 0.86, 1.0), (0.48, 1.0, 0.0, 0.30)])}
+\node[anchor=south east, align=right, font=\scriptsize] at (rel axis cs:0.98,0.02)
+  {{Unified model:\\ corr.\ {hu['corr']:.3f}, mean $|$gap$|$ {hu['mean_abs_gap_pp']:.2f} pp\\[2pt] Refitted headline:\\ corr.\ {hb['corr']:.3f}, mean $|$gap$|$ {hb['mean_abs_gap_pp']:.2f} pp}};
+\end{{axis}}
+\begin{{axis}}[
+  name=B, at={{(A.south east)}}, anchor=south west, xshift={d['GAP']:.1f}pt, scale only axis, width={d['W2']:.1f}pt, height={d['W2']:.1f}pt,
+  axis lines=left, tick style={{draw=none}}, clip=false,
+  xmin={B_LO:.2f}, xmax={B_HI:.2f}, ymin={B_LO:.2f}, ymax={B_HI:.2f},
+  title={{\small Panel B: by team composition ({len(SP)} shapes)}}, title style={{yshift=-3pt}},
+  xlabel={{Predicted win rate of teams with the composition}}, ylabel={{Realised win rate on the evaluation slice}},
+  label style={{font=\footnotesize}}, tick label style={{font=\footnotesize, /pgf/number format/fixed, /pgf/number format/precision=2}},
+  legend style={{at={{(0.03,0.97)}}, anchor=north west, font=\footnotesize, draw=none, fill=none, cells={{anchor=west}}}},
+]
+\addplot[dashed, thin, domain={B_LO:.2f}:{B_HI:.2f}, samples=2] {{x}};
+\addlegendentry{{$45^\circ$ line}}
+\addplot[only marks, mark=*, mark size=1.7pt] table[x=p, y=a] {{
+p a
+{rowsB}
+}};
+\addlegendentry{{Unified model}}
+{label_nodes(SP, B_LO, B_HI, reserved=[(0.0, 0.42, 0.86, 1.0), (0.55, 1.0, 0.0, 0.18)])}
+\node[anchor=south east, align=right, font=\scriptsize] at (rel axis cs:0.98,0.02)
+  {{corr.\ {su['corr']:.3f}\\ mean $|$gap$|$ {su['mean_abs_gap_pp']:.2f} pp}};
+\end{{axis}}
+\end{{tikzpicture}}"""
+fit("lineup_fit", render_fit, {"W1": 175.0, "W2": 175.0, "GAP": 66.0}, wkeys=("W1", "W2"))
+
 for stale in ["lineup_replacement_ts.pdf", "lineup_replacement_damage.pdf"]:
     if os.path.exists(f"{OUT}/{stale}"): os.remove(f"{OUT}/{stale}")
 print("figures written:", sorted(os.path.basename(p) for p in glob.glob(f"{OUT}/lineup_*")))

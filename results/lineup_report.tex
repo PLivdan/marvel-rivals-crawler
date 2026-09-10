@@ -7,7 +7,7 @@
 \titleformat{\subsection}{\normalsize\bfseries}{}{0pt}{}
 \titlespacing*{\subsection}{0pt}{12pt plus 3pt minus 2pt}{4pt}
 \pagestyle{fancy}\fancyhf{}\renewcommand{\headrulewidth}{0pt}
-\fancyfoot[C]{\thepage}\fancyfoot[R]{\scriptsize build \texttt{ead22ccb}}
+\fancyfoot[C]{\thepage}\fancyfoot[R]{\scriptsize build \texttt{193bfb1d}}
 \usepackage[colorlinks=true,linkcolor=black,urlcolor=black]{hyperref}
 \captionsetup{font=small,labelfont=bf,skip=5pt}
 \setlength{\tabcolsep}{5pt}
@@ -21,7 +21,7 @@
 {\normalsize Clocktock (Philip Livdan)}\\[2pt]
 {\small McCombs School of Business, The University of Texas at Austin}\\
 {\small\texttt{plivdan@utexas.edu}}\\[8pt]
-{\small Season 9.5, PC ranked, balance regime 7 August to 11 September 2026. Development snapshot frozen 2026-09-09. Report build \texttt{ead22ccb}.}
+{\small Season 9.5, PC ranked, balance regime 7 August to 11 September 2026. Development snapshot frozen 2026-09-09. Report build \texttt{193bfb1d}.}
 \end{center}
 
 \vspace{6pt}
@@ -275,7 +275,8 @@ values mean lower prediction error.
 
 The right panel is an internal temporal evaluation rather than a clean future test. The 19,804 matches
 are those played in the final four days of the snapshot, after 4 September 11:00 UTC. Their outcomes were kept
-out of every design build, fold, tuning run, and table above, and were read once, but the same days overlap
+out of every design build, fold, tuning run, and table above, and were first read for the comparison in
+Figure~\ref{fig:pred} (Figure~\ref{fig:fit} describes the same slice), but the same days overlap
 the final week already examined in the earlier report on the headline specification, so the comparison
 inherits that prior use. On those matches the unified model's paired log-loss improvement over the
 refitted headline is +0.00184, with a player-resampling interval of +0.00151 to +0.00217. By lobby
@@ -299,12 +300,39 @@ Internal temporal evaluation & 1.062 & 0.908 & 1.038 & 1.116 \\
 \end{tabular}
 \end{table}
 
+Figure~\ref{fig:fit} looks at the same evaluation slice from the side of the heroes, as the earlier report did
+for its holdout week. Each of the 19,804 matches contributes two team-sides. Grouping team-sides by each
+hero they started and comparing the model's mean predicted win probability with the share that actually won
+gives one point per hero; grouping by composition shape gives one per shape. Across heroes the correlation
+is 0.922 and the mean absolute gap 0.73 percentage points, against 0.925
+and 0.72 for the refitted headline specification, which shares the hero terms: at this level
+of aggregation the two models are not distinguishable, and the improvement in Figure~\ref{fig:pred} is not
+a matter of ranking heroes better. Across composition shapes the correlation is 0.988.
+
+\begin{figure}[!tb]\centering
+\caption{Does the model predict which heroes' teams win? By starting hero and by composition}
+\label{fig:fit}
+\vspace{2pt}
+\input{figures/lineup_fit.tikz}
+
+\begin{minipage}{0.95\linewidth}\footnotesize\vspace{2pt}
+\emph{Notes.} The 19,804 matches of the internal temporal evaluation, each contributing two team-sides;
+predictions are from the selected fit on development rows. Panel A groups team-sides by each hero they started:
+the horizontal axis is the unified model's mean predicted win probability for those team-sides, the vertical
+axis the share that actually won. Labels mark the two heroes farthest from the line and the two extremes; the
+smallest hero group has 1,240 team-sides, so a realised share can miss its prediction by a
+point or two through sampling alone. Panel B groups team-sides by composition shape (Tanks--Damage--Supports)
+with at least 100 team-sides. The refitted headline specification's statistics are shown for
+comparison; its points are not drawn because they sit on top of the unified model's.
+\end{minipage}
+\end{figure}
+
 \section*{What remains uncertain?}
 
 Two kinds of uncertainty are involved, and only one has been computed. The interval on the evaluation's
 average improvement comes from resampling players so that matches sharing players move together. The
 stability of individual hero and pair estimates under the same resampling is a separate exercise; at the
-time of this build it had completed 11 replications and is not reported, so no figure in this
+time of this build it had completed 14 replications and is not reported, so no figure in this
 report carries confidence bands or significance marks, and differences of a few tenths of a point between
 heroes, or a few hundredths in pair contrasts, should be treated as unresolved.
 
@@ -325,7 +353,7 @@ a start cannot be simultaneous and the record is unverifiable. Finally, the eval
 data used earlier, as disclosed; a clean test needs matches played after the model was fixed, which the
 Season 10 patch now makes a different balance regime. Refitting the same specification and penalties on all 471,008 eligible matches, including the evaluation slice, changes the common-reference replacement values by 0.03 points on average, with a rank correlation of 0.9997 between the two sets; the tables in this report use the development fit.
 
-\clearpage
+\FloatBarrier
 \appendix
 \FloatBarrier
 \section*{Appendix A. Data, regime, and protocol}
@@ -437,7 +465,7 @@ Heroes, composition, maps, rank imbalance & 96 & 0.67230 & 0.67197 & 0.67030 & 0
 
 \textbf{Software metadata.} Design and fitter in the repository's \texttt{lineup} package at revision
 832c615; penalty search run on an 8-CPU Colab runtime from the cached design; report build
-\texttt{ead22ccb}, the hash of this document's text with the hash itself left blank.
+\texttt{193bfb1d}, the hash of this document's text with the hash itself left blank.
 
 \section*{Appendix C. Full tables and figures}
 

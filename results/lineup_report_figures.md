@@ -3,6 +3,7 @@
 Build pipeline (no model refits, no retuning, no new collection, no new bootstraps):
 
 ```
+PYTHONPATH=. python3 results/lineup_fit_scatter.py   # results/lineup_fit_scatter.json (evaluation-slice aggregates; no fitting)
 python3 results/lineup_figures.py        # results/figures/lineup_*.tikz (+ standalone .pdf copies)
 python3 results/make_lineup_report.py    # results/lineup_report.tex from results/lineup_report_template.tex
 cd results && latexmk -pdf lineup_report.tex
@@ -24,7 +25,8 @@ is the SHA-256 of the substituted document text plus the `.tikz` sources.
 | 3. Largest changes between lobby-rank thirds | `figures/lineup_rank_highlight.tikz` | `lineup_selected_replacement.csv`: `obs_meta_pp_third0`, `obs_meta_pp_third2`; `lineup_selected_summary_meta.json`: `thirds` | Selection = four largest increases and four largest decreases of third2 - third0; sorted by change; both endpoints printed. |
 | 4. Pair contrasts | `figures/lineup_pairs.tikz` | `lineup_selected_pairs_p50.csv`: `kind`, `did`, `support_dev`, `is_teamup`, `hero_a`, `hero_b` | Pairs with `support_dev` >= 500. Team-ups: 10 largest positive + 5 largest negative `did`; other allied: 8 + 8; opposing: 14 largest by absolute `did`, oriented so the contrast is positive ("A against B"). Label = contrast (identifying matches). |
 | 5. Prediction | `figures/lineup_prediction.tikz` | `lineup_tuning.json` (`evaluations` with `sub == 1.0` for the keys in `reduced`: selected, no_pairs, no_pairs_no_slopes_no_heromap), `lineup_baseline_dev.json` (`folds`), `lineup_confirmation.json` (`D`, `ci_iid`, `ci_boot`, `by_third`, `n`) | Left: per-fold validation log loss. Right: paired improvement, all matches with the i.i.d. (thin) and player-resampling (thick) 95% intervals; by-third points without intervals. |
-| 6 (Appendix). Lower third against upper third, all 55 heroes | `figures/lineup_rank_all.tikz` | as Figure 3 | Remake of Figure A2 of the headline report: within role, sorted by third2 - third0; open = lower third, filled = upper third. |
+| 6. Predicted against realised win rates on the evaluation slice | `figures/lineup_fit.tikz` | `lineup_fit_scatter.json` (written by `results/lineup_fit_scatter.py` from `lineup_selected.npz`, the cached design rows after the confirmation cut, and the headline predictions saved in `lineup_baseline_dev.npz`; no fitting) | Panel A: one point per starting hero, mean predicted win probability of its team-sides against the share that won; labels = two farthest from the line + two extremes. Panel B: by composition shape with at least 100 team-sides. Stats box: correlation and mean absolute gap for the unified model and the refitted headline. |
+| 7 (Appendix). Lower third against upper third, all 55 heroes | `figures/lineup_rank_all.tikz` | as Figure 3 | Remake of Figure A2 of the headline report: within role, sorted by third2 - third0; open = lower third, filled = upper third. |
 
 ## Tables
 
@@ -65,3 +67,5 @@ comparison sentence), `apm_hero_table_W{0,2,1}_full.csv` and `apm_run_meta_W1_fu
 - **Rank-change figure**: the selection rule (four largest increases, four largest decreases) is stated, no
   stars are used, and lines are described as joining two estimates from the same fit rather than as intervals.
 - Sample counts stated as 471,008 eligible matches, 451,204 development rows, 19,804 evaluation matches.
+- The evaluation slice's outcomes are described as first read for the Figure 5 comparison, with Figure 6 a
+  descriptive view of the same slice (the earlier "read once" wording no longer holds).
