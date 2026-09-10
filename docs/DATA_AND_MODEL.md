@@ -417,6 +417,47 @@ post-start information.
 
 ---
 
+### 3.8 Unified starting-lineup model (rebuild, 9 September 2026 onward)
+
+Authorised by the user as a full rebuild; protocol in `results/confirmation_protocol.json`, audit in
+`results/patch_audit.md`, ledger in `.superpowers/sdd/2026-09-09-unified-lineup-model/`.
+
+- **Frozen development snapshot** `results/dev_snapshot/` (477,483 matches, play time 2026-08-07 11:12 to
+  2026-09-08 11:00 UTC, sha256 manifest). Collection was paused at the user's instruction, so the locked
+  **confirmation slice** is internal: the 19,804 matches played after 2026-09-04 11:00:32 UTC; development
+  = the 451,204 before it. The baseline for the locked comparison is Spec A+ refitted on development rows.
+- **Regime:** Season 9.5 balance state, 7 Aug 09:00 to 11 Sep 09:00 UTC (Season 10 patch); the snapshot
+  lies inside it; no mid-sample balance patch (official record + weekly win-rate check).
+- **Legal-lineup filter:** 6,475 matches (1.36%) with two teammates sharing the first-appearance hero are
+  excluded (cannot be simultaneous starts; record unverifiable), never collapsed.
+- **Design** (`lineup/design.py`, cached in `results/lineup_design/`): map intercepts, standardized rank
+  imbalance and its rank interaction, hero contrasts (within-role basis), every observed composition shape
+  (no pooling), hero-by-map deviations, every observed allied pair z = A_h A_k - B_h B_k and opposing pair
+  w = A_h B_k - A_k B_h, and a pooled rank slope for hero, composition, allied and opposing blocks (formed in
+  the fitter from the standardized lobby rank). Exact aliases (per-hero pair sums = 5x / 6x the hero
+  contrast, role-pair sums = composition functions, per-map and per-hero hero-map sums) are removed by
+  null-space bases only after a numerical check that each direction's image lies in the lower-order span
+  (187 of 187 candidates exact once shapes are unpooled). 6,692 free coefficients.
+- **Fitter** (`lineup/fit.py`): Newton/IRLS with five native-scale ridge groups (G1 hero+shape averages,
+  G2 allied, G3 opposing, G4 hero/shape slopes + hero-map, G5 pair slopes), maps and rank-imbalance
+  unpenalized; Gram matrices from the cached blocks with r-weighted reuse; ~2 min per Newton step at
+  full size. Camp-swap antisymmetry and lineup-level reconstruction are checked numerically.
+- **Tuning** (`results/lineup_tune.py`): three chronological development folds (train first 60/73/87%,
+  validate the next ~60k), bounded coordinate search on log10(lambda) with warm starts, coarse passes on
+  a 50% training subsample, fine pass and genuine reduced models on full data; selection by mean
+  validation log loss with calibration by rank third inspected.
+- **Summaries** (`lineup/summaries.py`): hero coefficients at lobby-rank percentiles; same-slot
+  replacement values as exact probability differences with every affected interaction recomputed
+  (observed-meta reference = the actual incumbent; common reference = the average legal same-role hero in
+  the same slot), respecting bans and uniqueness, by rank third, with coverage; four-lineup log-odds
+  contrasts for allied and opposing pairs against same-role alternatives; identifying support = distinct
+  matches with a nonzero signed feature, by rank third. Team-ups are labels joined afterwards.
+- **Stability** (`results/lineup_bootstrap.py`): player-multiplicity resampling at fixed penalties,
+  weights w_m = sum of the twelve players' draw counts rescaled to mean 1; reported as stability
+  conditional on the selected specification, not as confidence intervals.
+- **Report:** `results/make_lineup_report.py` -> `results/lineup_report.pdf` (provisional until the
+  locked confirmation is run). The published headline model stays in place until the candidate passes.
+
 ## 4. Known limitations, ordered by severity
 
 ### 4.1 Composition control: 18 shapes, everything else pooled
