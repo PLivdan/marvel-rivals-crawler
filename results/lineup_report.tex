@@ -4,7 +4,7 @@
 \titleformat{\section}{\large\bfseries}{}{0pt}{}
 \titlespacing*{\section}{0pt}{16pt plus 4pt minus 2pt}{6pt}
 \pagestyle{fancy}\fancyhf{}\renewcommand{\headrulewidth}{0pt}
-\fancyfoot[C]{\thepage}\fancyfoot[R]{\scriptsize build \texttt{3f473c63}}
+\fancyfoot[C]{\thepage}\fancyfoot[R]{\scriptsize build \texttt{570104a9}}
 \usepackage[colorlinks=true,linkcolor=black,urlcolor=black]{hyperref}
 \captionsetup{font=small,labelfont=bf,skip=6pt}
 \setlength{\tabcolsep}{5pt}
@@ -18,7 +18,7 @@
 {\normalsize Clocktock (Philip Livdan)}\\[2pt]
 {\small McCombs School of Business, The University of Texas at Austin}\\
 {\small\texttt{plivdan@utexas.edu}}\\[8pt]
-{\small Season 9.5, PC ranked, balance regime 7 August to 11 September 2026. Development snapshot frozen 2026-09-09. Report build \texttt{3f473c63}.}
+{\small Season 9.5, PC ranked, balance regime 7 August to 11 September 2026. Development snapshot frozen 2026-09-09. Report build \texttt{570104a9}.}
 \end{center}
 
 \vspace{4pt}
@@ -142,7 +142,7 @@ development rows.
 
 \section*{Hero values}
 
-The tables that follow come from the selected development fit, estimated on the 451,204 development matches only. Table~\ref{tab:hero} reports three things per hero. The coefficient $\beta_h$ is the
+The tables that follow come from the published fit: the locked specification and penalties refitted on all 471,008 legal matches, development and confirmation slice together, after the confirmation below was passed. The confirmation itself refers to the development-row fit. Table~\ref{tab:hero} reports three things per hero. The coefficient $\beta_h$ is the
 within-role log-odds contrast at the median lobby rank, reported with its slope per standard deviation of
 rank, so a reader can place it anywhere in the supported range. The replacement scores are exact predicted probability differences, in percentage points, from placing the
 hero into a starting slot in place of another hero of the same role, recomputing all five allied and six
@@ -154,10 +154,10 @@ every hero of a role is scored on the same context pool. Legality respects bans 
 coverage is the share of same-role slots in which the hero was a legal replacement, with a median of
 88\%.
 
-By the common reference, the strongest Tanks are The Thing (+5.0), Peni Parker (+2.3), and The Hood (+2.1), the strongest Damage heroes
-Magik (+4.4), Black Cat (+4.2), and Storm (+3.0), and the strongest Supports Mantis (+6.2), Rocket Raccoon (+3.9), and Ultron (+3.5). The observed-meta scores by rank third show
-which heroes' values move with the environment: Elsa Bloodstone (-1.9 to +0.2), Wolverine (-1.2 to +0.6), and Mantis (+5.8 to +7.2) gain the most from the bottom to the top
-third, while Black Panther (+0.0 to -2.3), and Cloak \& Dagger (+1.5 to -0.9) lose the most. These are pooled slopes evaluated at observed contexts, not
+By the common reference, the strongest Tanks are The Thing (+5.1), Peni Parker (+2.2), and The Hood (+2.1), the strongest Damage heroes
+Magik (+4.4), Black Cat (+4.2), and Storm (+3.0), and the strongest Supports Mantis (+6.2), Rocket Raccoon (+3.9), and Ultron (+3.4). The observed-meta scores by rank third show
+which heroes' values move with the environment: Elsa Bloodstone (-1.9 to +0.2), Wolverine (-1.2 to +0.5), and Mantis (+5.8 to +7.2) gain the most from the bottom to the top
+third, while Black Panther (+0.1 to -2.3), and Cloak \& Dagger (+1.5 to -0.9) lose the most. These are pooled slopes evaluated at observed contexts, not
 separate rank models.
 
 \section*{Pairs}
@@ -167,9 +167,9 @@ average coefficient of each member with the same-role alternatives to the other,
 alternative pairs. This cancels the hero main effects and each hero's other relationships and does not
 depend on where additive hero content is placed. Pairs are shown only with at least 500
 identifying matches, that is, distinct development matches in which the signed feature is nonzero.
-Designated team-ups are labelled; the largest by contrast are Gambit with Rogue (+0.21), Iron Fist with White Fox (+0.20), and Moon Knight with Blade (+0.16). Among pairs that are not
-designated team-ups, the largest positive contrasts are Gambit with Deadpool (Duelist) (+0.10), Luna Snow with Daredevil (+0.06), and Black Panther with Deadpool (Vanguard) (+0.06) and the largest negative Spider-man with Angela (-0.08), Mantis with Deadpool (Strategist) (-0.07), and Hela with Iron Man (-0.06).
-The largest opposing matchups are The Thing over Magik (+0.11), Gambit over Angela (+0.08), Phoenix over Elsa Bloodstone (+0.07), and Cloak \& Dagger over Venom (+0.07). The standard deviation of the contrasts is 0.050 across
+Designated team-ups are labelled; the largest by contrast are Gambit with Rogue (+0.21), Iron Fist with White Fox (+0.21), and Moon Knight with Blade (+0.17). Among pairs that are not
+designated team-ups, the largest positive contrasts are Gambit with Deadpool (Duelist) (+0.10), Black Panther with Deadpool (Vanguard) (+0.06), and Groot with Emma Frost (+0.06) and the largest negative Spider-man with Angela (-0.07), Mantis with Deadpool (Strategist) (-0.07), and Ultron with Devil Dinosaur (-0.07).
+The largest opposing matchups are The Thing over Magik (+0.10), Gambit over Angela (+0.08), Phoenix over Elsa Bloodstone (+0.07), and Cloak \& Dagger over Venom (+0.07). The standard deviation of the contrasts is 0.050 across
 team-up-eligible pairs, 0.020 across other allied pairs, and 0.022 across opposing pairs.
 
 A team-up-eligible pair's coefficient combines ordinary kit complementarity, any mechanic actually used,
@@ -189,7 +189,7 @@ The locked evaluation compares the candidate and the refitted headline model on 
 \begin{landscape}
 \begin{center}
 {\scriptsize\setlength{\tabcolsep}{1.9pt}\renewcommand{\arraystretch}{1.05}
-\captionof{table}{Hero coefficients by lobby rank and same-slot replacement values from the selected development fit}\label{tab:hero}
+\captionof{table}{Hero coefficients by lobby rank and same-slot replacement values from the published fit}\label{tab:hero}
 \begin{tabular}{l r r r r r r r r @{\hspace{0.8em}} l r r r r r r r r}
 \toprule
 & \multicolumn{2}{c}{Coefficient} & \multicolumn{2}{c}{Replacement, pp} & \multicolumn{3}{c}{Obs.\ meta by third} & &
@@ -199,35 +199,35 @@ The locked evaluation compares the candidate and the refitted headline model on 
 & $\beta_h$ & slope & Obs.\ meta & Common & Low & Mid & High & Cov. \\
 \midrule
 \multicolumn{9}{l}{\emph{Panel A: Tank (15 heroes)}} & \multicolumn{9}{l}{\emph{Panel B: Damage (27 heroes)}} \\
-The Thing & +0.177 & -0.011 & +4.13 & +5.02 & +4.72 & +4.20 & +3.56 & 51 & Magik & +0.103 & -0.017 & +4.07 & +4.37 & +4.91 & +4.09 & +3.25 & 62 \\
-Peni Parker & +0.096 & +0.001 & +0.95 & +2.25 & +1.16 & +0.97 & +0.81 & 57 & Black Cat & +0.128 & -0.010 & +3.88 & +4.17 & +4.09 & +3.65 & +3.39 & 29 \\
-The Hood & +0.052 & +0.021 & +1.15 & +2.11 & +1.05 & +1.19 & +1.22 & 41 & Storm & +0.131 & -0.002 & +2.42 & +3.03 & +2.68 & +2.40 & +2.17 & 95 \\
-Magneto & +0.081 & +0.026 & +0.81 & +1.87 & +0.55 & +0.84 & +1.15 & 41 & Daredevil & +0.039 & +0.004 & +1.95 & +2.51 & +1.84 & +1.92 & +2.13 & 82 \\
-Angela & +0.042 & -0.009 & +0.14 & +1.49 & +0.73 & +0.09 & -0.38 & 94 & Mister Fantastic & +0.088 & -0.007 & +1.88 & +2.51 & +2.06 & +1.85 & +1.74 & 95 \\
-Hulk & +0.073 & -0.007 & +0.06 & +1.42 & +0.75 & +0.08 & -0.65 & 90 & Iron Fist & +0.055 & +0.012 & +1.17 & +1.76 & +0.92 & +1.13 & +1.47 & 88 \\
-Thor & +0.049 & +0.016 & -0.15 & +1.21 & -0.44 & -0.17 & +0.14 & 90 & Hela & +0.087 & +0.020 & +0.70 & +1.33 & +0.50 & +0.75 & +0.87 & 74 \\
-Doctor Strange & -0.025 & -0.009 & -1.41 & +0.06 & -0.68 & -1.42 & -2.10 & 85 & Iron Man & +0.083 & -0.020 & +0.60 & +1.25 & +1.52 & +0.61 & -0.32 & 93 \\
-Devil Dinosaur & -0.013 & +0.006 & -1.45 & -0.01 & -1.21 & -1.46 & -1.65 & 90 & Winter Soldier & +0.045 & -0.015 & +0.42 & +1.01 & +1.01 & +0.36 & -0.27 & 56 \\
-Groot & -0.032 & +0.006 & -1.96 & -0.49 & -1.84 & -1.96 & -2.04 & 83 & Moon Knight & +0.040 & +0.012 & +0.29 & +0.95 & +0.26 & +0.29 & +0.31 & 93 \\
-Venom & -0.040 & -0.009 & -2.34 & -0.83 & -1.84 & -2.35 & -2.77 & 64 & Human Torch & -0.004 & -0.020 & +0.05 & +0.71 & +0.83 & +0.04 & -0.76 & 93 \\
-Captain America & -0.070 & -0.010 & -2.28 & -0.87 & -1.82 & -2.30 & -2.71 & 96 & Spider-man & -0.003 & +0.012 & -0.32 & +0.41 & -0.59 & -0.34 & -0.07 & 59 \\
-Emma Frost & -0.098 & -0.000 & -3.25 & -1.55 & -2.97 & -3.27 & -3.49 & 78 & Wolverine & -0.028 & +0.036 & -0.35 & +0.32 & -1.24 & -0.34 & +0.59 & 94 \\
-Rogue & -0.075 & +0.008 & -2.97 & -1.57 & -2.95 & -2.99 & -2.96 & 94 & Blade & -0.028 & -0.021 & -0.78 & -0.09 & -0.04 & -0.82 & -1.46 & 94 \\
-Deadpool (Vanguard) & -0.218 & -0.031 & -6.60 & -5.06 & -5.45 & -6.57 & -7.71 & 95 & Black Widow & -0.001 & +0.012 & -0.91 & -0.21 & -1.17 & -0.92 & -0.59 & 86 \\
-\multicolumn{9}{l}{\emph{Panel C: Support (13 heroes)}} & Black Panther & -0.009 & -0.036 & -1.47 & -0.66 & +0.03 & -1.26 & -2.33 & 48 \\
-Mantis & +0.267 & +0.032 & +6.44 & +6.21 & +5.81 & +6.59 & +7.19 & 75 & Elsa Bloodstone & -0.002 & +0.040 & -1.24 & -0.68 & -1.92 & -0.78 & +0.23 & 45 \\
-Rocket Raccoon & +0.175 & -0.004 & +3.87 & +3.89 & +4.52 & +3.92 & +3.13 & 77 & Psylocke & -0.018 & +0.017 & -1.48 & -0.77 & -1.86 & -1.49 & -1.06 & 94 \\
-Ultron & +0.151 & -0.023 & +3.06 & +3.49 & +4.11 & +3.14 & +1.91 & 95 & Hawkeye & -0.052 & -0.013 & -1.49 & -0.79 & -0.96 & -1.50 & -2.03 & 95 \\
-Adam Warlock & +0.101 & -0.033 & +1.96 & +2.40 & +2.95 & +1.95 & +0.95 & 95 & The Punisher & -0.042 & -0.005 & -1.77 & -1.03 & -1.54 & -1.78 & -1.98 & 74 \\
-Cloak \& Dagger & +0.010 & -0.019 & +0.29 & +0.82 & +1.48 & +0.47 & -0.88 & 32 & Namor & -0.028 & -0.015 & -1.81 & -1.07 & -1.03 & -1.74 & -2.42 & 68 \\
-Loki & +0.022 & +0.035 & +0.21 & +0.69 & -0.40 & +0.30 & +0.77 & 94 & Deadpool (Duelist) & -0.062 & +0.001 & -1.86 & -1.13 & -1.76 & -1.87 & -1.95 & 93 \\
-Gambit & +0.030 & +0.019 & -0.71 & -0.31 & -1.15 & -0.52 & -0.10 & 40 & Star-lord & -0.041 & -0.006 & -2.25 & -1.53 & -2.15 & -2.27 & -2.33 & 94 \\
-Jubilee & -0.066 & -0.007 & -2.09 & -1.26 & -1.57 & -1.95 & -2.65 & 67 & Scarlet Witch & -0.078 & -0.002 & -2.64 & -1.90 & -2.25 & -2.60 & -3.04 & 94 \\
-Invisible Woman & -0.070 & +0.022 & -2.12 & -1.32 & -2.38 & -2.08 & -1.89 & 74 & Squirrel Girl & -0.146 & +0.001 & -3.86 & -3.12 & -3.60 & -3.86 & -4.12 & 95 \\
-Jeff The Land Shark & -0.099 & +0.018 & -2.42 & -1.79 & -2.52 & -2.36 & -2.40 & 92 & Phoenix & -0.129 & +0.025 & -3.98 & -3.21 & -4.54 & -4.00 & -3.42 & 93 \\
-Luna Snow & -0.119 & +0.003 & -3.70 & -2.73 & -3.42 & -3.65 & -4.03 & 78 & Cyclops & -0.128 & -0.004 & -5.11 & -4.12 & -4.87 & -5.11 & -5.33 & 85 \\
-White Fox & -0.123 & -0.016 & -3.60 & -2.86 & -3.01 & -3.56 & -4.19 & 89 &  &  &  &  &  &  &  &  &  \\
-Deadpool (Strategist) & -0.279 & -0.026 & -7.17 & -6.37 & -6.14 & -7.15 & -8.23 & 93 &  &  &  &  &  &  &  &  &  \\
+The Thing & +0.182 & -0.007 & +4.21 & +5.10 & +4.70 & +4.28 & +3.73 & 51 & Magik & +0.105 & -0.017 & +4.10 & +4.40 & +4.93 & +4.12 & +3.28 & 62 \\
+Peni Parker & +0.095 & +0.000 & +0.90 & +2.21 & +1.12 & +0.92 & +0.74 & 57 & Black Cat & +0.130 & -0.011 & +3.95 & +4.24 & +4.18 & +3.68 & +3.39 & 29 \\
+The Hood & +0.056 & +0.022 & +1.15 & +2.12 & +1.06 & +1.19 & +1.20 & 41 & Storm & +0.132 & -0.002 & +2.43 & +3.04 & +2.70 & +2.42 & +2.17 & 95 \\
+Magneto & +0.083 & +0.028 & +0.82 & +1.89 & +0.54 & +0.85 & +1.19 & 41 & Daredevil & +0.042 & +0.007 & +1.96 & +2.52 & +1.77 & +1.94 & +2.22 & 82 \\
+Angela & +0.043 & -0.008 & +0.16 & +1.52 & +0.72 & +0.10 & -0.33 & 94 & Mister Fantastic & +0.088 & -0.008 & +1.79 & +2.43 & +1.99 & +1.76 & +1.62 & 95 \\
+Hulk & +0.073 & -0.011 & +0.06 & +1.43 & +0.84 & +0.06 & -0.74 & 90 & Iron Fist & +0.056 & +0.011 & +1.16 & +1.76 & +0.95 & +1.11 & +1.43 & 88 \\
+Thor & +0.047 & +0.018 & -0.16 & +1.22 & -0.49 & -0.17 & +0.18 & 90 & Iron Man & +0.086 & -0.019 & +0.66 & +1.31 & +1.54 & +0.68 & -0.23 & 93 \\
+Doctor Strange & -0.031 & -0.012 & -1.49 & +0.00 & -0.69 & -1.49 & -2.23 & 85 & Hela & +0.081 & +0.019 & +0.63 & +1.26 & +0.43 & +0.68 & +0.79 & 74 \\
+Devil Dinosaur & -0.015 & +0.008 & -1.49 & -0.03 & -1.26 & -1.49 & -1.69 & 90 & Winter Soldier & +0.040 & -0.014 & +0.35 & +0.95 & +0.91 & +0.30 & -0.30 & 56 \\
+Groot & -0.035 & +0.008 & -1.98 & -0.50 & -1.92 & -1.99 & -2.01 & 83 & Moon Knight & +0.030 & +0.009 & +0.18 & +0.85 & +0.22 & +0.19 & +0.15 & 93 \\
+Venom & -0.042 & -0.009 & -2.31 & -0.78 & -1.83 & -2.32 & -2.71 & 64 & Human Torch & +0.006 & -0.015 & +0.18 & +0.84 & +0.84 & +0.18 & -0.52 & 93 \\
+Captain America & -0.073 & -0.016 & -2.36 & -0.93 & -1.76 & -2.38 & -2.92 & 96 & Spider-man & -0.002 & +0.013 & -0.28 & +0.45 & -0.56 & -0.30 & -0.02 & 59 \\
+Emma Frost & -0.098 & -0.002 & -3.26 & -1.55 & -2.93 & -3.28 & -3.55 & 78 & Wolverine & -0.028 & +0.034 & -0.35 & +0.33 & -1.19 & -0.33 & +0.54 & 94 \\
+Rogue & -0.071 & +0.011 & -2.98 & -1.56 & -3.03 & -3.00 & -2.92 & 94 & Blade & -0.023 & -0.018 & -0.76 & -0.07 & -0.07 & -0.79 & -1.41 & 94 \\
+Deadpool (Vanguard) & -0.215 & -0.031 & -6.57 & -5.02 & -5.41 & -6.54 & -7.69 & 95 & Black Widow & -0.003 & +0.013 & -0.89 & -0.20 & -1.14 & -0.89 & -0.58 & 86 \\
+\multicolumn{9}{l}{\emph{Panel C: Support (13 heroes)}} & Black Panther & -0.011 & -0.039 & -1.45 & -0.64 & +0.11 & -1.23 & -2.35 & 48 \\
+Mantis & +0.268 & +0.032 & +6.43 & +6.21 & +5.80 & +6.57 & +7.17 & 75 & Elsa Bloodstone & -0.005 & +0.039 & -1.24 & -0.68 & -1.90 & -0.81 & +0.17 & 45 \\
+Rocket Raccoon & +0.173 & -0.005 & +3.85 & +3.89 & +4.52 & +3.91 & +3.09 & 77 & Psylocke & -0.014 & +0.018 & -1.47 & -0.76 & -1.86 & -1.48 & -1.05 & 94 \\
+Ultron & +0.146 & -0.025 & +2.99 & +3.43 & +4.08 & +3.08 & +1.80 & 95 & Hawkeye & -0.056 & -0.014 & -1.55 & -0.84 & -0.99 & -1.55 & -2.12 & 95 \\
+Adam Warlock & +0.096 & -0.034 & +1.87 & +2.32 & +2.86 & +1.85 & +0.85 & 95 & Namor & -0.025 & -0.016 & -1.75 & -1.01 & -0.98 & -1.68 & -2.36 & 68 \\
+Cloak \& Dagger & +0.009 & -0.020 & +0.26 & +0.81 & +1.46 & +0.44 & -0.93 & 32 & The Punisher & -0.042 & -0.005 & -1.79 & -1.05 & -1.55 & -1.80 & -2.00 & 74 \\
+Loki & +0.024 & +0.036 & +0.26 & +0.74 & -0.40 & +0.33 & +0.86 & 94 & Deadpool (Duelist) & -0.067 & +0.001 & -1.87 & -1.14 & -1.76 & -1.88 & -1.96 & 93 \\
+Gambit & +0.036 & +0.022 & -0.69 & -0.27 & -1.18 & -0.49 & -0.01 & 40 & Star-lord & -0.038 & -0.005 & -2.25 & -1.53 & -2.19 & -2.27 & -2.29 & 94 \\
+Jubilee & -0.065 & -0.007 & -2.04 & -1.21 & -1.52 & -1.91 & -2.61 & 67 & Scarlet Witch & -0.079 & -0.002 & -2.64 & -1.90 & -2.27 & -2.59 & -3.03 & 94 \\
+Invisible Woman & -0.070 & +0.023 & -2.13 & -1.31 & -2.43 & -2.09 & -1.87 & 74 & Squirrel Girl & -0.141 & +0.002 & -3.83 & -3.09 & -3.58 & -3.83 & -4.08 & 95 \\
+Jeff The Land Shark & -0.098 & +0.017 & -2.43 & -1.78 & -2.48 & -2.36 & -2.45 & 92 & Phoenix & -0.133 & +0.023 & -4.07 & -3.29 & -4.54 & -4.07 & -3.59 & 93 \\
+Luna Snow & -0.118 & +0.003 & -3.75 & -2.77 & -3.45 & -3.70 & -4.13 & 78 & Cyclops & -0.129 & -0.004 & -5.13 & -4.14 & -4.87 & -5.13 & -5.37 & 85 \\
+White Fox & -0.124 & -0.016 & -3.60 & -2.85 & -2.99 & -3.56 & -4.22 & 89 &  &  &  &  &  &  &  &  &  \\
+Deadpool (Strategist) & -0.277 & -0.026 & -7.13 & -6.32 & -6.12 & -7.12 & -8.16 & 93 &  &  &  &  &  &  &  &  &  \\
 \bottomrule
 \end{tabular}
 }
@@ -235,7 +235,7 @@ Deadpool (Strategist) & -0.279 & -0.026 & -7.17 & -6.37 & -6.14 & -7.15 & -8.23 
 \vspace{-2pt}
 \noindent\begin{minipage}{\linewidth}\scriptsize
 \emph{Notes.} $\beta_h$ is the within-role log-odds contrast at the median lobby score of 4,548, and
-\emph{slope} its change per standard deviation of lobby rank (252 points), so the coefficient at the 25th
+\emph{slope} its change per standard deviation of lobby rank (253 points), so the coefficient at the 25th
 and 75th percentiles is $\beta_h \mp$ about $0.67\times$slope. Replacement values are exact predicted probability differences in percentage points over
 120,000 development matches: observed meta replaces the actual same-role incumbent, common reference
 compares with the average legal same-role hero in the same slot. Rank thirds are split at lobby scores
@@ -253,56 +253,56 @@ fewer than 200 legal contexts are blank.
 \toprule
 Pair & Coef. & Contrast & Matches & Top third \% & Pair & Coef. & Contrast & Matches & Top third \% \\
 \midrule
-Gambit $\times$ Rogue & +0.184 & +0.209 & 22,920 & 34 & Loki $\times$ Angela & +0.029 & +0.028 & 3,104 & 39 \\
-Iron Fist $\times$ White Fox & +0.188 & +0.203 & 14,182 & 31 & Captain America $\times$ Winter Soldier & +0.030 & +0.027 & 7,579 & 33 \\
-Moon Knight $\times$ Blade & +0.152 & +0.163 & 4,063 & 21 & The Thing $\times$ Iron Fist & +0.021 & +0.025 & 14,162 & 40 \\
-Squirrel Girl $\times$ Iron Man & +0.129 & +0.139 & 3,180 & 13 & Human Torch $\times$ Invisible Woman & +0.025 & +0.024 & 14,581 & 38 \\
-The Punisher $\times$ Rocket Raccoon & +0.125 & +0.132 & 22,765 & 32 & Hulk $\times$ Captain America & +0.022 & +0.023 & 2,810 & 36 \\
-Mantis $\times$ Star-lord & +0.114 & +0.131 & 16,889 & 40 & Jeff The Land Shark $\times$ Devil Dinosaur & +0.026 & +0.023 & 6,651 & 24 \\
-Magik $\times$ The Hood & +0.099 & +0.109 & 59,539 & 34 & Wolverine $\times$ Cyclops & +0.026 & +0.021 & 3,675 & 28 \\
-Human Torch $\times$ Jubilee & +0.099 & +0.108 & 20,113 & 34 & Captain America $\times$ Blade & +0.015 & +0.021 & 3,137 & 26 \\
-Ultron $\times$ Adam Warlock & +0.140 & +0.107 & 5,927 & 41 & Magneto $\times$ Gambit & +0.032 & +0.020 & 62,728 & 33 \\
-Luna Snow $\times$ White Fox & +0.100 & +0.106 & 16,956 & 28 & Ultron $\times$ Iron Man & +0.018 & +0.018 & 4,055 & 23 \\
-Hulk $\times$ Doctor Strange & +0.072 & +0.096 & 8,175 & 36 & Luna Snow $\times$ Emma Frost & +0.017 & +0.016 & 34,932 & 33 \\
-Storm $\times$ Jeff The Land Shark & +0.087 & +0.096 & 7,545 & 31 & Star-lord $\times$ Angela & +0.015 & +0.015 & 2,782 & 34 \\
-Cloak \& Dagger $\times$ The Hood & +0.076 & +0.092 & 94,581 & 32 & Hulk $\times$ Namor & +0.027 & +0.015 & 9,394 & 30 \\
-Doctor Strange $\times$ Invisible Woman & +0.091 & +0.092 & 40,971 & 32 & Gambit $\times$ Jubilee & -0.006 & +0.015 & 32,597 & 28 \\
-Loki $\times$ Mantis & +0.083 & +0.090 & 6,996 & 48 & Cloak \& Dagger $\times$ Luna Snow & -0.004 & +0.014 & 35,050 & 33 \\
-Jubilee $\times$ The Hood & +0.081 & +0.086 & 114,785 & 30 & Phoenix $\times$ Rogue & +0.014 & +0.013 & 2,444 & 26 \\
-Rocket Raccoon $\times$ Peni Parker & +0.074 & +0.083 & 13,302 & 32 & Psylocke $\times$ White Fox & +0.008 & +0.013 & 4,989 & 25 \\
-Mantis $\times$ Groot & +0.053 & +0.071 & 13,159 & 40 & Luna Snow $\times$ Namor & +0.004 & +0.012 & 14,262 & 30 \\
-Phoenix $\times$ Cyclops & +0.069 & +0.068 & 8,596 & 22 & Black Panther $\times$ Peni Parker & +0.003 & +0.010 & 2,557 & 35 \\
-Scarlet Witch $\times$ Jubilee & +0.060 & +0.067 & 16,017 & 14 & Loki $\times$ Hela & +0.001 & +0.010 & 5,953 & 47 \\
-Winter Soldier $\times$ Elsa Bloodstone & +0.058 & +0.063 & 16,804 & 33 & Hela $\times$ Namor & +0.007 & +0.009 & 10,547 & 28 \\
-Storm $\times$ Adam Warlock & +0.040 & +0.052 & 2,124 & 39 & Captain America $\times$ Thor & +0.011 & +0.007 & 2,437 & 24 \\
-Mantis $\times$ Emma Frost & +0.043 & +0.052 & 28,531 & 39 & Mister Fantastic $\times$ The Thing & -0.005 & +0.006 & 5,027 & 31 \\
-Spider-man $\times$ Peni Parker & +0.045 & +0.050 & 5,978 & 33 & Cloak \& Dagger $\times$ Psylocke & +0.006 & +0.003 & 15,160 & 33 \\
-Cloak \& Dagger $\times$ Moon Knight & +0.049 & +0.046 & 19,222 & 20 & Groot $\times$ Jeff The Land Shark & +0.005 & +0.002 & 4,413 & 29 \\
-White Fox $\times$ Black Cat & +0.044 & +0.046 & 9,483 & 18 & The Punisher $\times$ Winter Soldier & -0.002 & +0.000 & 10,666 & 34 \\
-Venom $\times$ Phoenix & +0.045 & +0.045 & 10,303 & 28 & Rocket Raccoon $\times$ Squirrel Girl & +0.008 & -0.002 & 6,010 & 17 \\
-Elsa Bloodstone $\times$ Devil Dinosaur & +0.037 & +0.045 & 9,421 & 25 & The Punisher $\times$ Devil Dinosaur & -0.004 & -0.004 & 6,134 & 21 \\
-Iron Man $\times$ Thor & +0.034 & +0.044 & 6,839 & 24 & Human Torch $\times$ The Thing & -0.004 & -0.004 & 11,499 & 36 \\
-Magneto $\times$ Rogue & +0.028 & +0.044 & 15,160 & 38 & Venom $\times$ Spider-man & -0.003 & -0.004 & 19,990 & 36 \\
-Hela $\times$ Thor & +0.039 & +0.043 & 10,438 & 36 & Black Panther $\times$ Black Cat & +0.000 & -0.005 & 2,662 & 26 \\
-Wolverine $\times$ Gambit & +0.038 & +0.041 & 10,108 & 42 & Moon Knight $\times$ Elsa Bloodstone & -0.004 & -0.006 & 3,089 & 18 \\
-Hela $\times$ Venom & +0.038 & +0.041 & 9,967 & 41 & Mister Fantastic $\times$ Invisible Woman & -0.006 & -0.007 & 9,144 & 30 \\
-Hawkeye $\times$ Psylocke & +0.037 & +0.039 & 3,584 & 27 & Psylocke $\times$ Emma Frost & -0.012 & -0.010 & 8,548 & 32 \\
-Rocket Raccoon $\times$ Mister Fantastic & +0.042 & +0.039 & 10,499 & 29 & Venom $\times$ Blade & -0.014 & -0.010 & 5,306 & 26 \\
-Venom $\times$ Jeff The Land Shark & +0.033 & +0.039 & 8,644 & 28 & Magneto $\times$ Emma Frost & -0.027 & -0.013 & 36,898 & 37 \\
-Invisible Woman $\times$ The Thing & +0.050 & +0.039 & 29,386 & 38 & Rocket Raccoon $\times$ Groot & -0.012 & -0.016 & 13,270 & 32 \\
-Hela $\times$ Phoenix & +0.039 & +0.037 & 4,617 & 36 & Thor $\times$ Angela & -0.011 & -0.017 & 2,685 & 32 \\
-Doctor Strange $\times$ Magik & +0.042 & +0.037 & 24,603 & 33 & Hulk $\times$ Wolverine & -0.020 & -0.017 & 4,536 & 43 \\
-Mantis $\times$ Adam Warlock & +0.069 & +0.035 & 4,275 & 46 & Magneto $\times$ Scarlet Witch & -0.008 & -0.018 & 18,147 & 18 \\
-Squirrel Girl $\times$ Spider-man & +0.030 & +0.035 & 3,125 & 20 & Blade $\times$ Jubilee & -0.016 & -0.019 & 14,149 & 22 \\
-The Punisher $\times$ Daredevil & +0.030 & +0.034 & 3,862 & 39 & Luna Snow $\times$ Adam Warlock & +0.009 & -0.029 & 5,084 & 44 \\
-Hawkeye $\times$ Cloak \& Dagger & +0.041 & +0.033 & 13,883 & 25 & Hawkeye $\times$ Black Widow & -0.028 & -0.029 & 2,174 & 31 \\
-Groot $\times$ Star-lord & +0.033 & +0.033 & 5,188 & 33 & Storm $\times$ Human Torch & -0.032 & -0.030 & 2,461 & 34 \\
-Doctor Strange $\times$ Scarlet Witch & +0.038 & +0.033 & 8,960 & 16 & Gambit $\times$ Cyclops & -0.034 & -0.030 & 20,331 & 27 \\
-Black Widow $\times$ Phoenix & +0.032 & +0.032 & 4,041 & 35 & Storm $\times$ Thor & -0.029 & -0.031 & 5,756 & 27 \\
-Storm $\times$ Black Panther & +0.033 & +0.031 & 2,787 & 32 & Hulk $\times$ Iron Man & -0.033 & -0.032 & 4,611 & 27 \\
-Black Widow $\times$ Daredevil & +0.027 & +0.030 & 5,429 & 50 & Iron Fist $\times$ Daredevil & -0.049 & -0.046 & 5,253 & 42 \\
-Ultron $\times$ Peni Parker & +0.015 & +0.029 & 2,422 & 29 & Black Panther $\times$ Magik & -0.047 & -0.049 & 6,568 & 39 \\
-Star-lord $\times$ Adam Warlock & +0.015 & +0.029 & 2,006 & 35 & Spider-man $\times$ Black Cat & -0.054 & -0.057 & 7,537 & 24 \\
+Gambit $\times$ Rogue & +0.187 & +0.212 & 22,920 & 34 & Captain America $\times$ Blade & +0.023 & +0.030 & 3,137 & 26 \\
+Iron Fist $\times$ White Fox & +0.190 & +0.205 & 14,182 & 31 & Star-lord $\times$ Adam Warlock & +0.014 & +0.028 & 2,006 & 35 \\
+Moon Knight $\times$ Blade & +0.158 & +0.169 & 4,063 & 21 & Human Torch $\times$ Invisible Woman & +0.028 & +0.027 & 14,581 & 38 \\
+Squirrel Girl $\times$ Iron Man & +0.135 & +0.146 & 3,180 & 13 & Loki $\times$ Angela & +0.028 & +0.026 & 3,104 & 39 \\
+Mantis $\times$ Star-lord & +0.114 & +0.131 & 16,889 & 40 & Jeff The Land Shark $\times$ Devil Dinosaur & +0.027 & +0.026 & 6,651 & 24 \\
+The Punisher $\times$ Rocket Raccoon & +0.124 & +0.131 & 22,765 & 32 & Captain America $\times$ Winter Soldier & +0.026 & +0.023 & 7,579 & 33 \\
+Ultron $\times$ Adam Warlock & +0.158 & +0.125 & 5,927 & 41 & Ultron $\times$ Iron Man & +0.022 & +0.023 & 4,055 & 23 \\
+Magik $\times$ The Hood & +0.100 & +0.109 & 59,539 & 34 & The Thing $\times$ Iron Fist & +0.018 & +0.022 & 14,162 & 40 \\
+Luna Snow $\times$ White Fox & +0.101 & +0.107 & 16,956 & 28 & Wolverine $\times$ Cyclops & +0.026 & +0.021 & 3,675 & 28 \\
+Human Torch $\times$ Jubilee & +0.097 & +0.106 & 20,113 & 34 & Magneto $\times$ Gambit & +0.031 & +0.020 & 62,728 & 33 \\
+Storm $\times$ Jeff The Land Shark & +0.090 & +0.098 & 7,545 & 31 & Star-lord $\times$ Angela & +0.018 & +0.019 & 2,782 & 34 \\
+Doctor Strange $\times$ Invisible Woman & +0.093 & +0.093 & 40,971 & 32 & Luna Snow $\times$ Emma Frost & +0.019 & +0.018 & 34,932 & 33 \\
+Cloak \& Dagger $\times$ The Hood & +0.078 & +0.093 & 94,581 & 32 & Loki $\times$ Hela & +0.007 & +0.017 & 5,953 & 47 \\
+Loki $\times$ Mantis & +0.085 & +0.092 & 6,996 & 48 & Cloak \& Dagger $\times$ Luna Snow & -0.003 & +0.016 & 35,050 & 33 \\
+Hulk $\times$ Doctor Strange & +0.069 & +0.091 & 8,175 & 36 & Luna Snow $\times$ Namor & +0.005 & +0.014 & 14,262 & 30 \\
+Jubilee $\times$ The Hood & +0.079 & +0.085 & 114,785 & 30 & Gambit $\times$ Jubilee & -0.009 & +0.012 & 32,597 & 28 \\
+Rocket Raccoon $\times$ Peni Parker & +0.074 & +0.082 & 13,302 & 32 & Phoenix $\times$ Rogue & +0.012 & +0.011 & 2,444 & 26 \\
+Mantis $\times$ Groot & +0.055 & +0.072 & 13,159 & 40 & Psylocke $\times$ White Fox & +0.007 & +0.011 & 4,989 & 25 \\
+Scarlet Witch $\times$ Jubilee & +0.062 & +0.070 & 16,017 & 14 & Hulk $\times$ Namor & +0.022 & +0.011 & 9,394 & 30 \\
+Winter Soldier $\times$ Elsa Bloodstone & +0.064 & +0.069 & 16,804 & 33 & Black Panther $\times$ Peni Parker & +0.003 & +0.011 & 2,557 & 35 \\
+Phoenix $\times$ Cyclops & +0.068 & +0.067 & 8,596 & 22 & Hela $\times$ Namor & +0.009 & +0.010 & 10,547 & 28 \\
+Mantis $\times$ Emma Frost & +0.044 & +0.052 & 28,531 & 39 & Mister Fantastic $\times$ The Thing & -0.003 & +0.009 & 5,027 & 31 \\
+Storm $\times$ Adam Warlock & +0.041 & +0.052 & 2,124 & 39 & Groot $\times$ Jeff The Land Shark & +0.005 & +0.002 & 4,413 & 29 \\
+Cloak \& Dagger $\times$ Moon Knight & +0.055 & +0.052 & 19,222 & 20 & Cloak \& Dagger $\times$ Psylocke & +0.003 & -0.000 & 15,160 & 33 \\
+Iron Man $\times$ Thor & +0.039 & +0.050 & 6,839 & 24 & Rocket Raccoon $\times$ Squirrel Girl & +0.009 & -0.000 & 6,010 & 17 \\
+Spider-man $\times$ Peni Parker & +0.046 & +0.050 & 5,978 & 33 & Captain America $\times$ Thor & +0.004 & -0.002 & 2,437 & 24 \\
+Hawkeye $\times$ Psylocke & +0.045 & +0.048 & 3,584 & 27 & The Punisher $\times$ Winter Soldier & -0.007 & -0.004 & 10,666 & 34 \\
+Wolverine $\times$ Gambit & +0.044 & +0.048 & 10,108 & 42 & The Punisher $\times$ Devil Dinosaur & -0.003 & -0.004 & 6,134 & 21 \\
+White Fox $\times$ Black Cat & +0.045 & +0.045 & 9,483 & 18 & Venom $\times$ Blade & -0.010 & -0.005 & 5,306 & 26 \\
+Magneto $\times$ Rogue & +0.027 & +0.042 & 15,160 & 38 & Mister Fantastic $\times$ Invisible Woman & -0.005 & -0.005 & 9,144 & 30 \\
+Venom $\times$ Jeff The Land Shark & +0.035 & +0.042 & 8,644 & 28 & Moon Knight $\times$ Elsa Bloodstone & -0.002 & -0.005 & 3,089 & 18 \\
+Hela $\times$ Venom & +0.039 & +0.042 & 9,967 & 41 & Black Panther $\times$ Black Cat & -0.000 & -0.005 & 2,662 & 26 \\
+Elsa Bloodstone $\times$ Devil Dinosaur & +0.033 & +0.041 & 9,421 & 25 & Venom $\times$ Spider-man & -0.004 & -0.006 & 19,990 & 36 \\
+Doctor Strange $\times$ Magik & +0.045 & +0.041 & 24,603 & 33 & Thor $\times$ Angela & -0.006 & -0.011 & 2,685 & 32 \\
+Venom $\times$ Phoenix & +0.039 & +0.040 & 10,303 & 28 & Human Torch $\times$ The Thing & -0.011 & -0.011 & 11,499 & 36 \\
+Hela $\times$ Thor & +0.037 & +0.040 & 10,438 & 36 & Magneto $\times$ Emma Frost & -0.027 & -0.013 & 36,898 & 37 \\
+Rocket Raccoon $\times$ Mister Fantastic & +0.042 & +0.039 & 10,499 & 29 & Psylocke $\times$ Emma Frost & -0.015 & -0.014 & 8,548 & 32 \\
+Invisible Woman $\times$ The Thing & +0.051 & +0.039 & 29,386 & 38 & Rocket Raccoon $\times$ Groot & -0.010 & -0.016 & 13,270 & 32 \\
+The Punisher $\times$ Daredevil & +0.033 & +0.038 & 3,862 & 39 & Magneto $\times$ Scarlet Witch & -0.007 & -0.017 & 18,147 & 18 \\
+Hulk $\times$ Captain America & +0.036 & +0.038 & 2,810 & 36 & Hulk $\times$ Wolverine & -0.022 & -0.018 & 4,536 & 43 \\
+Hela $\times$ Phoenix & +0.039 & +0.037 & 4,617 & 36 & Blade $\times$ Jubilee & -0.018 & -0.021 & 14,149 & 22 \\
+Doctor Strange $\times$ Scarlet Witch & +0.041 & +0.037 & 8,960 & 16 & Hawkeye $\times$ Black Widow & -0.023 & -0.023 & 2,174 & 31 \\
+Ultron $\times$ Peni Parker & +0.019 & +0.037 & 2,422 & 29 & Storm $\times$ Human Torch & -0.027 & -0.024 & 2,461 & 34 \\
+Squirrel Girl $\times$ Spider-man & +0.030 & +0.036 & 3,125 & 20 & Luna Snow $\times$ Adam Warlock & +0.012 & -0.027 & 5,084 & 44 \\
+Black Widow $\times$ Phoenix & +0.035 & +0.035 & 4,041 & 35 & Storm $\times$ Thor & -0.027 & -0.028 & 5,756 & 27 \\
+Black Widow $\times$ Daredevil & +0.032 & +0.035 & 5,429 & 50 & Hulk $\times$ Iron Man & -0.031 & -0.029 & 4,611 & 27 \\
+Hawkeye $\times$ Cloak \& Dagger & +0.040 & +0.032 & 13,883 & 25 & Gambit $\times$ Cyclops & -0.034 & -0.030 & 20,331 & 27 \\
+Groot $\times$ Star-lord & +0.032 & +0.032 & 5,188 & 33 & Iron Fist $\times$ Daredevil & -0.047 & -0.045 & 5,253 & 42 \\
+Storm $\times$ Black Panther & +0.033 & +0.031 & 2,787 & 32 & Black Panther $\times$ Magik & -0.050 & -0.052 & 6,568 & 39 \\
+Mantis $\times$ Adam Warlock & +0.067 & +0.031 & 4,275 & 46 & Spider-man $\times$ Black Cat & -0.055 & -0.057 & 7,537 & 24 \\
 \bottomrule
 \end{tabular}
 }
@@ -328,31 +328,31 @@ synergy of a team-up-eligible starting pair.
 \multicolumn{5}{l}{\emph{Largest positive}} & \multicolumn{5}{l}{\emph{Largest negative}} \\
 Pair & Coef. & Contrast & Matches & Top third \% & Pair & Coef. & Contrast & Matches & Top third \% \\
 \midrule
-Gambit $\times$ Deadpool (Duelist) & +0.090 & +0.103 & 13,919 & 37 & Spider-man $\times$ Angela & -0.067 & -0.075 & 6,072 & 38 \\
-Luna Snow $\times$ Daredevil & +0.055 & +0.059 & 14,834 & 46 & Mantis $\times$ Deadpool (Strategist) & -0.046 & -0.071 & 3,888 & 36 \\
-Black Panther $\times$ Deadpool (Vanguard) & +0.047 & +0.058 & 2,435 & 30 & Hela $\times$ Iron Man & -0.052 & -0.060 & 2,659 & 29 \\
-Mister Fantastic $\times$ Rogue & +0.044 & +0.057 & 1,897 & 28 & Doctor Strange $\times$ Magneto & -0.076 & -0.059 & 22,879 & 37 \\
-Groot $\times$ Emma Frost & +0.043 & +0.056 & 4,985 & 31 & Doctor Strange $\times$ Mister Fantastic & -0.053 & -0.057 & 4,850 & 27 \\
-Angela $\times$ The Hood & +0.052 & +0.053 & 10,573 & 35 & Ultron $\times$ Devil Dinosaur & -0.056 & -0.056 & 2,440 & 22 \\
-Jeff The Land Shark $\times$ Deadpool (Strategist) & +0.043 & +0.052 & 2,990 & 23 & Star-lord $\times$ Invisible Woman & -0.052 & -0.056 & 9,848 & 34 \\
-Jeff The Land Shark $\times$ Invisible Woman & +0.026 & +0.050 & 9,018 & 30 & Human Torch $\times$ White Fox & -0.045 & -0.055 & 3,889 & 26 \\
-The Punisher $\times$ Invisible Woman & +0.044 & +0.049 & 15,011 & 33 & Emma Frost $\times$ Gambit & -0.035 & -0.053 & 26,315 & 32 \\
-Hulk $\times$ Deadpool (Strategist) & +0.038 & +0.049 & 5,149 & 33 & Jubilee $\times$ Rogue & -0.038 & -0.051 & 11,643 & 25 \\
-Storm $\times$ Devil Dinosaur & +0.039 & +0.046 & 2,855 & 25 & Adam Warlock $\times$ Deadpool (Strategist) & -0.006 & -0.051 & 1,187 & 30 \\
-Loki $\times$ Psylocke & +0.035 & +0.046 & 2,088 & 44 & Loki $\times$ Adam Warlock & -0.011 & -0.050 & 818 & 46 \\
-Loki $\times$ Gambit & +0.028 & +0.046 & 6,326 & 45 & Hela $\times$ Ultron & -0.053 & -0.049 & 3,179 & 37 \\
-Luna Snow $\times$ Psylocke & +0.037 & +0.046 & 8,908 & 40 & Magik $\times$ The Thing & -0.043 & -0.049 & 14,601 & 38 \\
-Magneto $\times$ Wolverine & +0.039 & +0.046 & 16,482 & 48 & Namor $\times$ Gambit & -0.049 & -0.049 & 13,436 & 29 \\
-Loki $\times$ Cloak \& Dagger & +0.021 & +0.046 & 8,641 & 37 & Wolverine $\times$ The Thing & -0.052 & -0.048 & 4,489 & 45 \\
-Magik $\times$ Star-lord & +0.035 & +0.045 & 4,706 & 35 & Peni Parker $\times$ Gambit & -0.035 & -0.047 & 6,877 & 32 \\
-Venom $\times$ Elsa Bloodstone & +0.040 & +0.045 & 6,936 & 32 & Mantis $\times$ Devil Dinosaur & -0.046 & -0.047 & 7,705 & 34 \\
-Jeff The Land Shark $\times$ Deadpool (Duelist) & +0.036 & +0.044 & 4,462 & 28 & Human Torch $\times$ Jeff The Land Shark & -0.039 & -0.047 & 3,374 & 32 \\
-Mantis $\times$ Elsa Bloodstone & +0.036 & +0.043 & 10,927 & 39 & Daredevil $\times$ Rogue & -0.043 & -0.045 & 3,897 & 40 \\
-Angela $\times$ Devil Dinosaur & +0.037 & +0.042 & 1,461 & 28 & Loki $\times$ Ultron & -0.018 & -0.045 & 651 & 33 \\
-Captain America $\times$ Hela & +0.040 & +0.042 & 2,843 & 37 & Iron Fist $\times$ Jubilee & -0.034 & -0.045 & 21,512 & 33 \\
-Namor $\times$ Invisible Woman & +0.031 & +0.042 & 15,997 & 28 & The Punisher $\times$ Loki & -0.041 & -0.044 & 3,226 & 38 \\
-Devil Dinosaur $\times$ Deadpool (Strategist) & +0.037 & +0.042 & 4,645 & 20 & Adam Warlock $\times$ White Fox & +0.005 & -0.043 & 1,735 & 23 \\
-Magik $\times$ Deadpool (Strategist) & +0.043 & +0.041 & 9,146 & 29 & Squirrel Girl $\times$ Cyclops & -0.035 & -0.043 & 2,385 & 11 \\
+Gambit $\times$ Deadpool (Duelist) & +0.089 & +0.102 & 13,919 & 37 & Spider-man $\times$ Angela & -0.063 & -0.071 & 6,072 & 38 \\
+Black Panther $\times$ Deadpool (Vanguard) & +0.050 & +0.062 & 2,435 & 30 & Mantis $\times$ Deadpool (Strategist) & -0.044 & -0.069 & 3,888 & 36 \\
+Groot $\times$ Emma Frost & +0.047 & +0.062 & 4,985 & 31 & Ultron $\times$ Devil Dinosaur & -0.067 & -0.067 & 2,440 & 22 \\
+Luna Snow $\times$ Daredevil & +0.052 & +0.057 & 14,834 & 46 & Hela $\times$ Iron Man & -0.056 & -0.064 & 2,659 & 29 \\
+Mister Fantastic $\times$ Rogue & +0.042 & +0.055 & 1,897 & 28 & Star-lord $\times$ Invisible Woman & -0.053 & -0.057 & 9,848 & 34 \\
+The Punisher $\times$ Invisible Woman & +0.047 & +0.053 & 15,011 & 33 & Doctor Strange $\times$ Mister Fantastic & -0.052 & -0.055 & 4,850 & 27 \\
+Angela $\times$ The Hood & +0.052 & +0.052 & 10,573 & 35 & Human Torch $\times$ White Fox & -0.044 & -0.055 & 3,889 & 26 \\
+Jeff The Land Shark $\times$ Deadpool (Strategist) & +0.042 & +0.051 & 2,990 & 23 & Adam Warlock $\times$ Deadpool (Strategist) & -0.009 & -0.055 & 1,187 & 30 \\
+Hulk $\times$ Deadpool (Strategist) & +0.039 & +0.051 & 5,149 & 33 & Namor $\times$ Gambit & -0.054 & -0.054 & 13,436 & 29 \\
+Storm $\times$ Devil Dinosaur & +0.042 & +0.050 & 2,855 & 25 & Doctor Strange $\times$ Magneto & -0.072 & -0.053 & 22,879 & 37 \\
+Loki $\times$ Gambit & +0.030 & +0.049 & 6,326 & 45 & Daredevil $\times$ Rogue & -0.050 & -0.053 & 3,897 & 40 \\
+Venom $\times$ Elsa Bloodstone & +0.041 & +0.047 & 6,936 & 32 & Emma Frost $\times$ Gambit & -0.035 & -0.053 & 26,315 & 32 \\
+Jeff The Land Shark $\times$ Invisible Woman & +0.024 & +0.047 & 9,018 & 30 & Loki $\times$ Adam Warlock & -0.010 & -0.050 & 818 & 46 \\
+Magik $\times$ Star-lord & +0.037 & +0.047 & 4,706 & 35 & Magik $\times$ The Thing & -0.045 & -0.050 & 14,601 & 38 \\
+Captain America $\times$ Hela & +0.045 & +0.046 & 2,843 & 37 & Loki $\times$ Ultron & -0.020 & -0.050 & 651 & 33 \\
+Loki $\times$ Cloak \& Dagger & +0.018 & +0.046 & 8,641 & 37 & Mantis $\times$ Devil Dinosaur & -0.046 & -0.047 & 7,705 & 34 \\
+Loki $\times$ Psylocke & +0.035 & +0.046 & 2,088 & 44 & Peni Parker $\times$ Gambit & -0.036 & -0.047 & 6,877 & 32 \\
+Human Torch $\times$ Ultron & +0.041 & +0.045 & 2,326 & 36 & Adam Warlock $\times$ White Fox & +0.003 & -0.046 & 1,735 & 23 \\
+Devil Dinosaur $\times$ Deadpool (Strategist) & +0.039 & +0.044 & 4,645 & 20 & Iron Fist $\times$ Jubilee & -0.036 & -0.046 & 21,512 & 33 \\
+Luna Snow $\times$ Psylocke & +0.034 & +0.044 & 8,908 & 40 & Groot $\times$ Venom & -0.040 & -0.046 & 2,808 & 33 \\
+Angela $\times$ Devil Dinosaur & +0.038 & +0.044 & 1,461 & 28 & Wolverine $\times$ White Fox & -0.038 & -0.045 & 3,348 & 28 \\
+Mantis $\times$ Elsa Bloodstone & +0.036 & +0.044 & 10,927 & 39 & Wolverine $\times$ The Thing & -0.051 & -0.045 & 4,489 & 45 \\
+Magik $\times$ Deadpool (Strategist) & +0.044 & +0.043 & 9,146 & 29 & Hela $\times$ Ultron & -0.049 & -0.045 & 3,179 & 37 \\
+Iron Man $\times$ Spider-man & +0.038 & +0.043 & 3,756 & 26 & Jubilee $\times$ Rogue & -0.033 & -0.045 & 11,643 & 25 \\
+Luna Snow $\times$ Venom & +0.031 & +0.043 & 19,901 & 37 & Cloak \& Dagger $\times$ Peni Parker & -0.039 & -0.044 & 12,063 & 28 \\
 \bottomrule
 \end{tabular}
 }
@@ -373,31 +373,31 @@ than its members' other pairings predict.
 \toprule
 Matchup & Coef. & Contrast & Matches & Top third \% & Matchup & Coef. & Contrast & Matches & Top third \% \\
 \midrule
-The Thing over Magik & +0.085 & +0.106 & 16,054 & 38 & Black Panther over Mantis & +0.053 & +0.053 & 9,327 & 46 \\
-Gambit over Angela & +0.066 & +0.075 & 8,342 & 36 & Mister Fantastic over Black Widow & +0.048 & +0.053 & 2,976 & 35 \\
-Phoenix over Elsa Bloodstone & +0.065 & +0.071 & 3,643 & 24 & Rocket Raccoon over Squirrel Girl & +0.045 & +0.052 & 6,015 & 17 \\
-Cloak \& Dagger over Venom & +0.057 & +0.069 & 28,213 & 31 & Namor over Gambit & +0.044 & +0.052 & 13,764 & 29 \\
-Wolverine over Cloak \& Dagger & +0.051 & +0.067 & 12,632 & 38 & Gambit over Daredevil & +0.047 & +0.051 & 13,091 & 41 \\
-Spider-man over Iron Man & +0.064 & +0.066 & 5,705 & 26 & Mister Fantastic over Black Cat & +0.047 & +0.051 & 2,967 & 21 \\
-Black Widow over Iron Man & +0.063 & +0.065 & 3,873 & 29 & Black Widow over Hela & +0.045 & +0.051 & 9,464 & 48 \\
-The Thing over Deadpool (Duelist) & +0.056 & +0.063 & 6,190 & 36 & Captain America over Invisible Woman & +0.049 & +0.050 & 7,080 & 31 \\
-Magik over The Hood & +0.063 & +0.063 & 53,481 & 34 & Peni Parker over Magik & +0.033 & +0.050 & 5,887 & 32 \\
-Namor over Spider-man & +0.061 & +0.063 & 8,682 & 32 & The Thing over Rogue & +0.054 & +0.050 & 5,708 & 34 \\
-Magik over Devil Dinosaur & +0.065 & +0.062 & 10,315 & 27 & Iron Fist over Black Widow & +0.042 & +0.050 & 7,097 & 46 \\
-Black Widow over Ultron & +0.060 & +0.061 & 2,983 & 38 & Mister Fantastic over Magneto & +0.038 & +0.050 & 14,966 & 34 \\
-The Punisher over The Thing & +0.057 & +0.061 & 8,725 & 34 & Winter Soldier over Hulk & +0.038 & +0.048 & 17,460 & 43 \\
-Ultron over Magik & +0.049 & +0.061 & 5,854 & 32 & Spider-man over Rocket Raccoon & +0.043 & +0.048 & 26,191 & 37 \\
-Deadpool (Duelist) over Invisible Woman & +0.055 & +0.060 & 12,725 & 35 & Spider-man over Human Torch & +0.046 & +0.048 & 7,436 & 40 \\
-Iron Fist over Rocket Raccoon & +0.053 & +0.060 & 16,582 & 40 & Hulk over Wolverine & +0.040 & +0.048 & 3,531 & 47 \\
-Storm over Iron Fist & +0.060 & +0.060 & 3,805 & 38 & The Thing over Mister Fantastic & +0.038 & +0.048 & 4,781 & 31 \\
-Black Cat over Mantis & +0.052 & +0.058 & 7,919 & 28 & Psylocke over Moon Knight & +0.045 & +0.048 & 2,397 & 23 \\
-Venom over Squirrel Girl & +0.050 & +0.056 & 3,247 & 15 & Iron Fist over Invisible Woman & +0.037 & +0.048 & 18,123 & 40 \\
-Daredevil over Black Cat & +0.049 & +0.056 & 4,371 & 30 & Daredevil over Rocket Raccoon & +0.043 & +0.047 & 14,532 & 45 \\
-Hawkeye over Storm & +0.048 & +0.055 & 1,684 & 29 & The Hood over The Punisher & +0.045 & +0.047 & 28,208 & 31 \\
-Daredevil over Invisible Woman & +0.044 & +0.054 & 16,320 & 44 & Emma Frost over Black Widow & +0.046 & +0.047 & 13,188 & 38 \\
-Invisible Woman over Winter Soldier & +0.049 & +0.054 & 47,155 & 40 & Devil Dinosaur over Gambit & +0.041 & +0.047 & 12,794 & 27 \\
-Captain America over Spider-man & +0.050 & +0.054 & 4,608 & 32 & Jubilee over Iron Fist & +0.039 & +0.047 & 23,217 & 32 \\
-Magneto over Hela & +0.059 & +0.053 & 40,218 & 46 & Gambit over Jeff The Land Shark & +0.033 & +0.047 & 12,936 & 27 \\
+The Thing over Magik & +0.080 & +0.103 & 16,054 & 38 & Captain America over Spider-man & +0.047 & +0.052 & 4,608 & 32 \\
+Gambit over Angela & +0.068 & +0.078 & 8,342 & 36 & The Thing over Rogue & +0.057 & +0.052 & 5,708 & 34 \\
+Phoenix over Elsa Bloodstone & +0.067 & +0.073 & 3,643 & 24 & Namor over Gambit & +0.043 & +0.052 & 13,764 & 29 \\
+Cloak \& Dagger over Venom & +0.059 & +0.070 & 28,213 & 31 & Mister Fantastic over Black Widow & +0.046 & +0.051 & 2,976 & 35 \\
+Black Widow over Ultron & +0.066 & +0.069 & 2,983 & 38 & Black Widow over Hela & +0.045 & +0.051 & 9,464 & 48 \\
+Spider-man over Iron Man & +0.066 & +0.068 & 5,705 & 26 & Mister Fantastic over Black Cat & +0.046 & +0.051 & 2,967 & 21 \\
+Wolverine over Cloak \& Dagger & +0.052 & +0.068 & 12,632 & 38 & Hawkeye over Storm & +0.043 & +0.050 & 1,684 & 29 \\
+The Thing over Deadpool (Duelist) & +0.059 & +0.068 & 6,190 & 36 & Hulk over Wolverine & +0.043 & +0.050 & 3,531 & 47 \\
+Ultron over Magik & +0.052 & +0.064 & 5,854 & 32 & Jubilee over Iron Fist & +0.043 & +0.050 & 23,217 & 32 \\
+Namor over Spider-man & +0.060 & +0.062 & 8,682 & 32 & Ultron over White Fox & +0.051 & +0.050 & 3,930 & 22 \\
+Black Widow over Iron Man & +0.060 & +0.062 & 3,873 & 29 & Psylocke over Moon Knight & +0.047 & +0.050 & 2,397 & 23 \\
+Magik over The Hood & +0.062 & +0.061 & 53,481 & 34 & Magneto over Hela & +0.056 & +0.049 & 40,218 & 46 \\
+Iron Fist over Rocket Raccoon & +0.053 & +0.061 & 16,582 & 40 & The Hood over The Punisher & +0.046 & +0.049 & 28,208 & 31 \\
+Magik over Devil Dinosaur & +0.064 & +0.060 & 10,315 & 27 & Cyclops over Adam Warlock & +0.034 & +0.049 & 4,099 & 28 \\
+Venom over Squirrel Girl & +0.054 & +0.060 & 3,247 & 15 & Spider-man over Human Torch & +0.046 & +0.049 & 7,436 & 40 \\
+Storm over Iron Fist & +0.058 & +0.058 & 3,805 & 38 & The Thing over Mister Fantastic & +0.037 & +0.049 & 4,781 & 31 \\
+Deadpool (Duelist) over Invisible Woman & +0.052 & +0.057 & 12,725 & 35 & Spider-man over Invisible Woman & +0.037 & +0.048 & 29,709 & 37 \\
+The Punisher over The Thing & +0.055 & +0.057 & 8,725 & 34 & Hela over Ultron & +0.043 & +0.048 & 3,926 & 39 \\
+Invisible Woman over Winter Soldier & +0.051 & +0.056 & 47,155 & 40 & Gambit over Daredevil & +0.045 & +0.048 & 13,091 & 41 \\
+Black Panther over Mantis & +0.056 & +0.056 & 9,327 & 46 & Black Cat over Psylocke & +0.044 & +0.048 & 2,660 & 23 \\
+Daredevil over Black Cat & +0.049 & +0.056 & 4,371 & 30 & Magik over Groot & +0.052 & +0.048 & 8,512 & 34 \\
+Rocket Raccoon over Squirrel Girl & +0.049 & +0.056 & 6,015 & 17 & Peni Parker over Magik & +0.029 & +0.048 & 5,887 & 32 \\
+Daredevil over Invisible Woman & +0.045 & +0.055 & 16,320 & 44 & Rogue over Devil Dinosaur & +0.036 & +0.047 & 3,693 & 26 \\
+Iron Fist over Black Widow & +0.046 & +0.054 & 7,097 & 46 & Iron Fist over Invisible Woman & +0.036 & +0.047 & 18,123 & 40 \\
+Black Cat over Mantis & +0.047 & +0.053 & 7,919 & 28 & Gambit over Magik & +0.041 & +0.047 & 26,144 & 35 \\
 \bottomrule
 \end{tabular}
 }
