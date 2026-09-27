@@ -199,6 +199,11 @@ def crawl_player(conn, client, uid, season):
 
     skip = 0
     while True:
+        # History rows from the last page's known matches are uncommitted, and
+        # pysqlite's open transaction holds SQLite's single write lock. Commit
+        # before every network call, as reseed does: the call first waits its
+        # turn in the shared pacer, longer than other workers' busy_timeout.
+        conn.commit()
         try:
             page = rivalsmeta.get_player_match_history_page(client, uid, skip, season)
         except fetcher.PlayerNotFoundError:
@@ -229,6 +234,7 @@ def crawl_player(conn, client, uid, season):
                         hit_known = True
                         break
                 continue
+            conn.commit()  # release the write lock before the network call; see above
             try:
                 detail = rivalsmeta.get_match_detail(client, match_uid)
                 # The history entry carries match_map_id, which the
@@ -265,7 +271,8 @@ def crawl_player(conn, client, uid, season):
 
 def _record_history_entry(conn, match_uid, uid, entry):
     """Keep the crawled player's own leaver flag and result from a history entry (committed
-    with the page's next write). Known matches are recorded too: no request is involved."""
+    before crawl_player's next network call). Known matches are recorded too: no request is
+    involved."""
     mp = entry.get("match_player") if isinstance(entry.get("match_player"), dict) else {}
     esc = mp.get("has_escaped")
     win = mp.get("is_win")

@@ -923,6 +923,71 @@ def test_reseed_never_holds_the_write_lock_across_a_network_call(tmp_path):
     other.close()
 
 
+def test_crawl_player_never_holds_the_write_lock_across_a_network_call(tmp_path):
+    """The reseed bug above, in the per-player crawl loop (2026-09-27).
+
+    _record_history_entry writes a row and leaves it for the page's next
+    commit, so the write lock was held across the match-detail fetch that
+    followed it, and across the next history page after a run of known
+    matches. Each of those fetches first waits its turn in the shared pacer
+    (~2.7s at 8 workers / 3 req/s), longer than it takes the other workers'
+    5s busy_timeout to run out: 5,106 "database is locked" pauses and 172
+    stranded claims in 3.6 active hours of the 2026-09-26 run.
+
+    Page 1 holds one new match then 19 known ones, so both paths are probed:
+    the detail fetch after a new match's history row, and the page-2 fetch
+    after 19 known matches' history rows."""
+    path = str(tmp_path / "crawl_lock.db")
+    conn = db.connect(path)
+    db.init_schema(conn)
+    uid = 457877313
+    db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "claimed"})
+    known = [f"known-{i}" for i in range(19)]
+    for match_uid in known:
+        db.upsert(conn, "matches", ["match_uid"], {"match_uid": match_uid})
+    conn.commit()
+
+    other = db.connect(path)
+    other.execute("PRAGMA busy_timeout=50")  # fail fast rather than wait 5s
+    profile = load("player_public.json")
+    match = load("match_detail.json")
+    page_1 = [{"match_uid": match["match_uid"]}] + [{"match_uid": m} for m in known]
+    observations = []
+
+    def probe(where):
+        # Stands in for another worker claiming or ingesting while this one
+        # is out on the network.
+        try:
+            other.execute("UPDATE players SET nick_name='probe' WHERE uid=?", (uid,))
+            other.commit()
+            observations.append((where, "writable"))
+        except sqlite3.OperationalError:
+            other.rollback()
+            observations.append((where, "LOCKED"))
+
+    class ProbingClient:
+        def get_json(self, path_, params=None):
+            if path_ == f"/api/player/{uid}":
+                probe("profile")
+                return profile
+            if path_ == f"/api/player-match-history/{uid}":
+                probe(f"history skip={params['skip']}")
+                return page_1 if params["skip"] == 0 else []
+            if path_ == f"/api/matches/{match['match_uid']}":
+                probe("match detail")
+                return match
+            raise AssertionError(f"unexpected call: {path_} {params}")
+
+    assert crawler.crawl_player(conn, ProbingClient(), uid=uid, season=19) == "done"
+
+    assert [w for w, _ in observations] == [
+        "profile", "history skip=0", "match detail", "history skip=20",
+    ]
+    assert [s for _, s in observations] == ["writable"] * 4, observations
+    conn.close()
+    other.close()
+
+
 def test_reseed_queues_players_from_global_and_hero_leaderboards():
     conn = make_conn()
     raw_leaderboard_text = (FIXTURES / "leaderboard_payload.json").read_text()
