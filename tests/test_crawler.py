@@ -97,6 +97,46 @@ def test_select_next_player_stays_fast_at_realistic_queue_size():
     assert elapsed < 1.0, f"select_next_player took {elapsed:.2f}s at 2000 pending players"
 
 
+def test_select_next_player_breaks_coverage_ties_by_oldest_player_across_heroes():
+    # Two heroes with identical (zero) coverage: the older pending player wins
+    # even though they belong to the higher-numbered hero. This pins the
+    # original ORDER BY (coverage, created_at) semantics across a rewrite.
+    conn = make_conn()
+    conn.execute(
+        "INSERT INTO players (uid, discovery_hero_id, crawl_status, created_at) VALUES (1, 1001, 'pending', 200)"
+    )
+    conn.execute(
+        "INSERT INTO players (uid, discovery_hero_id, crawl_status, created_at) VALUES (2, 1002, 'pending', 100)"
+    )
+    conn.commit()
+    assert crawler.select_next_player(conn) == 2
+
+
+def test_select_next_player_cost_does_not_scale_with_the_size_of_the_frontier():
+    # Observed live on 2026-09-20: at 410k pending players and 3.9M
+    # match_player_heroes rows, the claim query took 2-4.6s and six workers
+    # spent most of their time in it (claimed=0-2 of 6, throughput halved).
+    # The selection must cost a handful of index seeks, not a sort of the
+    # whole pending set: 100k pending across 40 heroes must stay well under
+    # the ~0.3s the old form needed for that sort.
+    conn = make_conn()
+    n_players = 100_000
+    n_heroes = 40
+    conn.executemany(
+        "INSERT INTO players (uid, discovery_hero_id, crawl_status, created_at) VALUES (?, ?, 'pending', ?)",
+        [(uid, 1000 + (uid % n_heroes), 1_000_000 + uid) for uid in range(n_players)],
+    )
+    conn.commit()
+
+    start = time.time()
+    for _ in range(10):
+        uid = crawler.select_next_player(conn)
+    elapsed = (time.time() - start) / 10
+
+    assert uid == 0  # every hero has zero coverage; the oldest player wins
+    assert elapsed < 0.05, f"select_next_player took {elapsed:.3f}s per call at 100k pending players"
+
+
 def test_claim_next_player_returns_none_when_queue_empty():
     conn = make_conn()
     assert crawler.claim_next_player(conn) is None
@@ -251,7 +291,7 @@ def test_two_connections_racing_for_the_same_player_produce_exactly_one_claim(tm
 
     conn_a = db.connect(path)
     conn_b = db.connect(path)
-    real_select = crawler.select_next_player
+    real_select = crawler._select_head
     b_result = []
 
     def select_then_let_b_claim(conn):
@@ -260,11 +300,11 @@ def test_two_connections_racing_for_the_same_player_produce_exactly_one_claim(tm
             # A has its candidate but has NOT claimed it yet. Restore the real
             # select first so B's claim runs normally, then let B claim and
             # commit inside A's window.
-            monkeypatch.setattr(crawler, "select_next_player", real_select)
+            monkeypatch.setattr(crawler, "_select_head", real_select)
             b_result.append(crawler.claim_next_player(conn_b))
         return uid
 
-    monkeypatch.setattr(crawler, "select_next_player", select_then_let_b_claim)
+    monkeypatch.setattr(crawler, "_select_head", select_then_let_b_claim)
     a_result = crawler.claim_next_player(conn_a)
 
     assert b_result == [1]  # B, which committed first, won the row
@@ -296,7 +336,7 @@ def test_release_player_returns_a_claim_to_the_frontier_untouched():
     status, last, claimed_at = conn.execute(
         "SELECT crawl_status, last_crawled_at, claimed_at FROM players WHERE uid=1"
     ).fetchone()
-    assert status == "pending"
+    assert status == "revisit"                                # it has completed a crawl before
     assert claimed_at is None
     # Releasing is a no-op on history: this player's revisit/first-crawl state
     # must survive a back-off unchanged.
@@ -600,7 +640,7 @@ def test_requeue_stale_players_revisits_done_players_keeping_last_crawled_at():
     status, last = conn.execute(
         "SELECT crawl_status, last_crawled_at FROM players WHERE uid=1"
     ).fetchone()
-    assert status == "pending"
+    assert status == "revisit"
     # A completed crawl is a genuine revisit: keeping the timestamp is what
     # lets crawl_player stop at the first already-known match and pull only
     # what's new.
@@ -677,8 +717,8 @@ def test_requeue_stale_players_never_touches_other_statuses():
 def test_requeue_stale_players_counts_both_categories():
     conn = make_conn()
     now = db.now()
-    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "done", "last_crawled_at": now - 50000})
-    db.upsert(conn, "players", ["uid"], {"uid": 2, "crawl_status": "done", "last_crawled_at": now - 50000})
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "done", "last_crawled_at": now - 4 * 86400})
+    db.upsert(conn, "players", ["uid"], {"uid": 2, "crawl_status": "done", "last_crawled_at": now - 4 * 86400})
     db.upsert(conn, "players", ["uid"], {"uid": 3, "crawl_status": "error", "last_crawled_at": now - 7200})
     db.upsert(conn, "players", ["uid"], {"uid": 4, "crawl_status": "done", "last_crawled_at": now})
 
@@ -740,7 +780,7 @@ def test_requeue_stale_players_leaves_a_claim_inside_its_window_alone():
 def test_requeue_stale_players_counts_orphaned_claims_alongside_the_other_categories():
     conn = make_conn()
     now = db.now()
-    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "done", "last_crawled_at": now - 50000})
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "done", "last_crawled_at": now - 4 * 86400})
     db.upsert(conn, "players", ["uid"], {"uid": 2, "crawl_status": "error", "last_crawled_at": now - 7200})
     # Older than the 1-hour default orphan window, so it is reaped...
     db.upsert(conn, "players", ["uid"], {"uid": 3, "crawl_status": "claimed", "claimed_at": now - 7200})
@@ -916,3 +956,146 @@ def test_reseed_queues_players_from_global_and_hero_leaderboards():
         "SELECT discovery_hero_id FROM players WHERE uid=1772998912"
     ).fetchone()
     assert row[0] == 1047
+
+
+# ---- 2026-09-22 review: per-player failures, revisits -------------------------------------------
+
+class _ScriptedClient:
+    """Serves a public profile, the given history pages, and a match detail for any uid."""
+    def __init__(self, uid, pages, profile=None, history_exc=None):
+        self.uid, self.pages, self.history_exc = uid, pages, history_exc
+        self.profile = profile or load("player_public.json")
+        self.detail_calls = []
+
+    def get_json(self, path, params=None):
+        if path == f"/api/player/{self.uid}":
+            return self.profile
+        if path == f"/api/player-match-history/{self.uid}":
+            if self.history_exc:
+                raise self.history_exc
+            i = params["skip"] // 20
+            return self.pages[i] if i < len(self.pages) else []
+        if path.startswith("/api/matches/"):
+            muid = path.rsplit("/", 1)[1]
+            self.detail_calls.append(muid)
+            m = copy.deepcopy(load("match_detail.json")); m["match_uid"] = muid
+            return m
+        raise AssertionError(f"unexpected call: {path} {params}")
+
+
+def test_a_404_on_match_history_marks_the_player_not_indexed_instead_of_escaping():
+    # Reproduced by the review: this used to escape crawl_player, kill the worker, stop
+    # the pool, and crash again on the same player after every restart.
+    conn = make_conn(); uid = 457877313
+    db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "claimed"})
+    client = _ScriptedClient(uid, [], history_exc=fetcher.PlayerNotFoundError("history"))
+    assert crawler.crawl_player(conn, client, uid=uid, season=20) == "not_indexed"
+
+
+def test_a_history_page_that_is_not_a_list_is_a_fetch_error_not_a_crash():
+    conn = make_conn(); uid = 457877313
+    db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "claimed"})
+    client = _ScriptedClient(uid, [{"error": "unexpected shape"}])
+    with pytest.raises(fetcher.FetchError):
+        crawler.crawl_player(conn, client, uid=uid, season=20)
+
+
+def test_history_entries_without_a_match_uid_are_skipped():
+    conn = make_conn(); uid = 457877313
+    db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "claimed"})
+    client = _ScriptedClient(uid, [[{"match_map_id": 1}, {"match_uid": "m_ok", "match_map_id": 1245}]])
+    assert crawler.crawl_player(conn, client, uid=uid, season=20) == "done"
+    assert client.detail_calls == ["m_ok"]
+
+
+def test_an_interrupted_revisit_does_not_lose_the_newer_matches_it_had_not_reached():
+    # Reproduced by the review: history [A, B, C, D]; D is from before the last completed
+    # crawl, A was ingested by a revisit that was then interrupted. The next revisit used to
+    # stop at A and never fetch B or C. It must stop only at a known match played before
+    # the last completed crawl.
+    conn = make_conn(); uid = 457877313
+    last_done = db.now() - 5 * 86400
+    db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "claimed", "last_crawled_at": last_done})
+    for known in ("A", "D"):
+        db.upsert(conn, "matches", ["match_uid"], {"match_uid": known})
+    conn.commit()
+    newer = last_done + 86400
+    page = [{"match_uid": "A", "match_time_stamp": newer + 300},
+            {"match_uid": "B", "match_time_stamp": newer + 200},
+            {"match_uid": "C", "match_time_stamp": newer + 100},
+            {"match_uid": "D", "match_time_stamp": last_done - 7200},
+            {"match_uid": "E", "match_time_stamp": last_done - 9000}]
+    client = _ScriptedClient(uid, [page])
+    assert crawler.crawl_player(conn, client, uid=uid, season=20) == "done"
+    assert client.detail_calls == ["B", "C"]                  # stopped at D, never reached E
+
+
+def test_requeue_moves_old_done_players_to_revisit_not_pending():
+    conn = make_conn(); now = db.now()
+    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "done", "last_crawled_at": now - 4 * 86400})
+    db.upsert(conn, "players", ["uid"], {"uid": 2, "crawl_status": "done", "last_crawled_at": now - 2 * 86400})
+    n = crawler.requeue_stale_players(conn)
+    assert n == 1                                             # default revisit window is 72 h
+    assert dict(conn.execute("SELECT uid, crawl_status FROM players")) == {1: "revisit", 2: "done"}
+
+
+def test_requeue_caps_revisits_per_cycle_oldest_first():
+    conn = make_conn(); now = db.now()
+    for uid in range(10):
+        db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "done", "last_crawled_at": now - 10 * 86400 + uid})
+    crawler.requeue_stale_players(conn, max_revisits=3)
+    assert [r[0] for r in conn.execute("SELECT uid FROM players WHERE crawl_status='revisit' ORDER BY uid")] == [0, 1, 2]
+
+
+def test_first_crawls_are_claimed_before_revisits():
+    conn = make_conn()
+    conn.execute("INSERT INTO players (uid, discovery_hero_id, crawl_status, created_at, last_crawled_at) VALUES (1, 1001, 'revisit', 1, 1)")
+    conn.execute("INSERT INTO players (uid, discovery_hero_id, crawl_status, created_at) VALUES (2, 1001, 'pending', 999)")
+    conn.commit()
+    assert crawler.claim_next_player(conn) == 2
+    assert crawler.claim_next_player(conn) == 1               # revisits only once no first crawl is waiting
+    assert crawler.claim_next_player(conn) is None
+
+
+def test_init_schema_migrates_queued_revisits_out_of_pending(tmp_path):
+    path = str(tmp_path / "old.db"); conn = db.connect(path); db.init_schema(conn)
+    conn.execute("INSERT INTO players (uid, crawl_status, last_crawled_at) VALUES (1, 'pending', 123)")
+    conn.execute("INSERT INTO players (uid, crawl_status) VALUES (2, 'pending')")
+    conn.commit(); db.init_schema(conn)
+    assert dict(conn.execute("SELECT uid, crawl_status FROM players")) == {1: "revisit", 2: "pending"}
+
+
+# ---- 2026-09-24: provenance and leaver capture (model review) --------------------------------------
+# The review found the crawl selects matches through hero-leaderboard specialists, a bias that can
+# only be measured if we know whose history surfaced each match; and leavers decide matches, but
+# the flag exists only in each player's own history entries. Both are read at no extra request.
+
+def test_a_new_match_records_the_player_whose_history_surfaced_it():
+    conn = make_conn(); uid = 457877313
+    db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "claimed"})
+    client = _ScriptedClient(uid, [[{"match_uid": "m_new", "match_map_id": 1245,
+                                     "match_player": {"player_uid": uid, "has_escaped": False}}]])
+    crawler.crawl_player(conn, client, uid=uid, season=20)
+    assert conn.execute("SELECT source_player_uid FROM matches WHERE match_uid='m_new'").fetchone()[0] == uid
+
+
+def test_every_history_entry_read_is_recorded_with_its_leaver_flag_even_for_known_matches():
+    conn = make_conn(); uid = 457877313
+    db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "claimed"})
+    db.upsert(conn, "matches", ["match_uid"], {"match_uid": "m_known"}); conn.commit()
+    page = [{"match_uid": "m_new", "match_player": {"player_uid": uid, "has_escaped": True, "is_win": 0}},
+            {"match_uid": "m_known", "match_player": {"player_uid": uid, "has_escaped": False, "is_win": 1}}]
+    crawler.crawl_player(conn, _ScriptedClient(uid, [page]), uid=uid, season=20)
+    rows = dict(conn.execute("SELECT match_uid, has_escaped FROM history_entries WHERE player_uid=?", (uid,)))
+    assert rows == {"m_new": 1, "m_known": 0}
+
+
+def test_a_match_first_surfaced_by_one_player_keeps_that_source_when_another_reports_it():
+    conn = make_conn()
+    for uid in (1, 2):
+        db.upsert(conn, "players", ["uid"], {"uid": uid, "crawl_status": "claimed"})
+    entry = lambda uid: [{"match_uid": "m_shared", "match_player": {"player_uid": uid, "has_escaped": False}}]
+    crawler.crawl_player(conn, _ScriptedClient(1, [entry(1)]), uid=1, season=20)
+    crawler.crawl_player(conn, _ScriptedClient(2, [entry(2)]), uid=2, season=20)
+    assert conn.execute("SELECT source_player_uid FROM matches WHERE match_uid='m_shared'").fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM history_entries WHERE match_uid='m_shared'").fetchone()[0] == 2

@@ -141,3 +141,62 @@ def test_players_created_at_defaults_without_caller_supplying_it():
     db.upsert(conn, "players", ["uid"], {"uid": 7, "nick_name": "Bob"})
     created_at = conn.execute("SELECT created_at FROM players WHERE uid=7").fetchone()[0]
     assert created_at is not None and created_at > 0
+
+
+def _insert_match_hero_rows(conn, rows):
+    # match_player_heroes.match_uid is FK-constrained to matches(match_uid).
+    for match_uid, player_uid, hero_id in rows:
+        db.upsert(conn, "matches", ["match_uid"], {"match_uid": match_uid})
+        db.upsert(
+            conn,
+            "match_player_heroes",
+            ["match_uid", "player_uid", "hero_id"],
+            {"match_uid": match_uid, "player_uid": player_uid, "hero_id": hero_id},
+        )
+    conn.commit()
+
+
+def test_hero_coverage_counts_match_player_heroes_rows_as_they_are_inserted():
+    # The claim priority used to re-aggregate COUNT(*) over match_player_heroes
+    # on EVERY claim: 0.9s at 3.9M rows, growing linearly, six workers at once.
+    # The count is now kept as a running total the crawl's inserts maintain.
+    conn = make_conn()
+    _insert_match_hero_rows(conn, [("m1", 1, 1001), ("m1", 2, 1001), ("m2", 1, 1002)])
+    assert dict(conn.execute("SELECT hero_id, n FROM hero_coverage").fetchall()) == {1001: 2, 1002: 1}
+
+
+def test_hero_coverage_does_not_double_count_an_upsert_of_an_existing_row():
+    conn = make_conn()
+    _insert_match_hero_rows(conn, [("m1", 1, 1001)])
+    # Re-ingesting the same (match, player, hero) hits ON CONFLICT DO UPDATE:
+    # no new row exists, so the coverage total must not move.
+    db.upsert(
+        conn,
+        "match_player_heroes",
+        ["match_uid", "player_uid", "hero_id"],
+        {"match_uid": "m1", "player_uid": 1, "hero_id": 1001, "k": 5},
+    )
+    conn.commit()
+    assert dict(conn.execute("SELECT hero_id, n FROM hero_coverage").fetchall()) == {1001: 1}
+
+
+def test_init_schema_backfills_hero_coverage_for_a_database_that_predates_it(tmp_path):
+    # data/rivals_season10.db already held 3.9M match_player_heroes rows when
+    # the table was introduced. Re-running init_schema (which every startup
+    # does) must rebuild the totals from the rows, not start them at zero.
+    path = str(tmp_path / "old.db")
+    conn = db.connect(path)
+    db.init_schema(conn)
+    _insert_match_hero_rows(conn, [("m1", 1, 1001), ("m2", 1, 1001), ("m3", 1, 1002)])
+    conn.execute("DROP TRIGGER IF EXISTS trg_hero_coverage_insert")
+    conn.execute("DROP TABLE hero_coverage")
+    conn.commit()
+    conn.close()
+
+    conn = db.connect(path)
+    db.init_schema(conn)
+    assert dict(conn.execute("SELECT hero_id, n FROM hero_coverage").fetchall()) == {1001: 2, 1002: 1}
+    # And the trigger is back, so the totals keep tracking new rows.
+    _insert_match_hero_rows(conn, [("m4", 1, 1002)])
+    assert dict(conn.execute("SELECT hero_id, n FROM hero_coverage").fetchall()) == {1001: 2, 1002: 2}
+    conn.close()

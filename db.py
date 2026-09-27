@@ -128,6 +128,52 @@ CREATE INDEX IF NOT EXISTS idx_teamup_heroes_hero_id ON teamup_heroes(hero_id);
 CREATE INDEX IF NOT EXISTS idx_players_crawl_status ON players(crawl_status);
 CREATE INDEX IF NOT EXISTS idx_match_player_heroes_hero_id ON match_player_heroes(hero_id);
 
+-- Running per-hero total of match_player_heroes rows, kept by the trigger
+-- below and rebuilt from scratch by init_schema on every startup. The claim
+-- priority needs "how much data do we already hold for each hero" on every
+-- claim; aggregating it live cost 0.9s at 3.9M rows (2026-09-20, six workers
+-- doing it concurrently) and grew with the table. The trigger fires only on
+-- a genuine INSERT — db.upsert's ON CONFLICT DO UPDATE path is an UPDATE, so
+-- re-ingesting a known row does not inflate the total.
+CREATE TABLE IF NOT EXISTS hero_coverage (
+    hero_id INTEGER PRIMARY KEY,
+    n INTEGER NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS trg_hero_coverage_insert
+AFTER INSERT ON match_player_heroes
+BEGIN
+    INSERT INTO hero_coverage (hero_id, n) VALUES (NEW.hero_id, 1)
+    ON CONFLICT(hero_id) DO UPDATE SET n = n + 1;
+END;
+
+-- Lets crawler.select_next_player find the oldest pending player of a given
+-- discovery hero, and walk the distinct discovery heroes that have pending
+-- players, with index seeks alone. Without it the selection sorted the whole
+-- pending frontier through a temp B-tree on every claim: 1-3.7s at 410k
+-- pending, and six workers racing for the same deterministic head.
+CREATE INDEX IF NOT EXISTS idx_players_pending_priority
+    ON players(crawl_status, discovery_hero_id, created_at);
+
+-- The progress line counts players finished in the last ten minutes every 60 s;
+-- without this it was a full scan of players (1.5 s at 440k rows, review M3).
+CREATE INDEX IF NOT EXISTS idx_players_last_crawled ON players(last_crawled_at);
+
+-- Last request time of the previous run, read at startup to detect a warm restart.
+CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+
+-- Every match-history entry the crawl has read: (match, the crawled player) with that
+-- player's leaver flag and result. The history endpoint is the only place `has_escaped`
+-- exists, and only for the player whose history it is; recorded for known matches too,
+-- at no extra request (2026-09-24 model review: leavers decide matches).
+CREATE TABLE IF NOT EXISTS history_entries (
+    match_uid TEXT NOT NULL,
+    player_uid INTEGER NOT NULL,
+    has_escaped INTEGER,
+    is_win INTEGER,
+    seen_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+    PRIMARY KEY (match_uid, player_uid)
+);
+
 -- Indexes for reading the data back out, not for the crawl itself. Both
 -- match_players and match_player_heroes are keyed by (match_uid, ...), so
 -- player_uid is only ever a non-leading column and any per-player lookup
@@ -205,6 +251,13 @@ CREATE TABLE IF NOT EXISTS apm_teamup_effects (
 # CREATE INDEX IF NOT EXISTS statements above, a new column does NOT self-apply
 # to an already-existing DB file — it needs an explicit ALTER TABLE.
 ADDED_COLUMNS = {
+    "matches": {
+        # The crawled player whose match history first surfaced this match. The crawl reaches
+        # matches through hero-leaderboard specialists first, so hero effects can be biased by
+        # those players' hero-specific skill; this is what makes that measurable
+        # (2026-09-24 model review). NULL for matches ingested before it existed.
+        "source_player_uid": "INTEGER",
+    },
     "players": {
         # Set by crawler.claim_next_player when a worker takes a player, and
         # cleared when that player reaches a terminal status. Deliberately
@@ -255,7 +308,45 @@ def connect_readonly(path):
 def init_schema(conn):
     conn.executescript(SCHEMA)
     _add_missing_columns(conn)
+    _rebuild_hero_coverage(conn)
+    _migrate_revisits_out_of_pending(conn)
     conn.commit()
+
+
+def _migrate_revisits_out_of_pending(conn):
+    """Queued revisits used to share 'pending' with first crawls. A pending row with
+    last_crawled_at set is a revisit (error and orphan retries clear the timestamp),
+    so it moves to 'revisit', which is claimed only when no first crawl waits."""
+    conn.execute(
+        "UPDATE players SET crawl_status='revisit' "
+        "WHERE crawl_status='pending' AND last_crawled_at IS NOT NULL"
+    )
+
+
+def get_meta(conn, key):
+    row = conn.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+    return row[0] if row else None
+
+
+def set_meta(conn, key, value):
+    conn.execute("INSERT INTO meta (key, value) VALUES (?, ?) "
+                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, str(value)))
+    conn.commit()
+
+
+def _rebuild_hero_coverage(conn):
+    """Recompute hero_coverage from match_player_heroes.
+
+    Runs on every startup, not only when the table is empty: a database that
+    predates the table has rows the trigger never saw, and rebuilding
+    unconditionally also heals any drift without needing to detect it. One
+    GROUP BY over the table — ~1s at 4M rows — once per process, instead of
+    once per claim."""
+    conn.execute("DELETE FROM hero_coverage")
+    conn.execute(
+        "INSERT INTO hero_coverage (hero_id, n) "
+        "SELECT hero_id, COUNT(*) FROM match_player_heroes GROUP BY hero_id"
+    )
 
 
 def _add_missing_columns(conn):

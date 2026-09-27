@@ -6,31 +6,87 @@ import fetcher
 import ingest
 import rivalsmeta
 
-# Hero coverage is computed ONCE as an aggregate CTE and LEFT JOINed, rather
-# than as a correlated subquery evaluated per candidate row (which measured
-# ~5.2s at only 2000 pending players, and gets far worse at realistic scale).
-# Ordering semantics are identical to the correlated form: untagged players
-# sort last, then fewest collected hero-rows first, then oldest-created first.
-PRIORITY_SQL = """
-WITH hero_counts AS (
-    SELECT hero_id, COUNT(*) AS c FROM match_player_heroes GROUP BY hero_id
+# Priority: untagged players sort last, then fewest collected hero-rows first,
+# then oldest-created first. The same order the original ORDER BY over the
+# whole frontier produced — but that form sorted every pending row through a
+# temp B-tree and re-aggregated hero coverage over match_player_heroes on
+# EVERY claim: 2-4.6s at 410k pending / 3.9M hero rows (2026-09-20), growing
+# linearly, and with six workers all computing the same deterministic head,
+# five lost the claim race each round. This form costs a few dozen index seeks
+# on idx_players_pending_priority however large the frontier gets.
+#
+# The recursive CTE is SQLite's idiom for a loose index scan: each step seeks
+# to the next distinct discovery_hero_id that still has a pending player, so
+# the hero set comes from the players table itself (a hero tagged on a player
+# need not exist in heroes/hero_coverage) without scanning the pending range —
+# SELECT DISTINCT over it measured 110ms at 410k rows; this is ~3ms.
+#
+# Ties on coverage are broken by the oldest pending player across the tied
+# heroes, exactly as the single ORDER BY did.
+_PRIORITY_TEMPLATE = """
+WITH RECURSIVE pending_heroes(hero_id) AS (
+    SELECT MIN(discovery_hero_id) FROM players
+     WHERE crawl_status = '{status}' AND discovery_hero_id IS NOT NULL
+    UNION ALL
+    SELECT (SELECT MIN(discovery_hero_id) FROM players
+             WHERE crawl_status = '{status}' AND discovery_hero_id > ph.hero_id)
+      FROM pending_heroes ph WHERE ph.hero_id IS NOT NULL
+),
+ranked AS (
+    SELECT ph.hero_id,
+           COALESCE(hc.n, 0) AS coverage,
+           (SELECT MIN(created_at) FROM players
+             WHERE crawl_status = '{status}' AND discovery_hero_id = ph.hero_id) AS oldest
+      FROM pending_heroes ph
+      LEFT JOIN hero_coverage hc ON hc.hero_id = ph.hero_id
+     WHERE ph.hero_id IS NOT NULL
 )
-SELECT p.uid FROM players p
-LEFT JOIN hero_counts h ON h.hero_id = p.discovery_hero_id
-WHERE p.crawl_status = 'pending'
-ORDER BY
-    CASE WHEN p.discovery_hero_id IS NULL THEN 999999999 ELSE COALESCE(h.c, 0) END ASC,
-    p.created_at ASC
-LIMIT 1
+SELECT uid FROM players
+ WHERE crawl_status = '{status}'
+   AND discovery_hero_id = (SELECT hero_id FROM ranked ORDER BY coverage, oldest LIMIT 1)
+ ORDER BY created_at
+ LIMIT 1
 """
+
+# Only reached when no tagged player is pending at all.
+_UNTAGGED_TEMPLATE = """
+SELECT uid FROM players
+ WHERE crawl_status = '{status}' AND discovery_hero_id IS NULL
+ ORDER BY created_at
+ LIMIT 1
+"""
+
+
+# First crawls are always claimed before revisits. A revisit re-reads a player
+# already crawled and stops at the first match played before that crawl, so it
+# yields ~1.6 matches per player against ~12 for a first crawl (22 Sep vs 20 Sep).
+# Queued revisits used to sit in 'pending' as the oldest rows and so went
+# first (2026-09-22 review, finding I3).
+QUEUE_STATUSES = ("pending", "revisit")
+PRIORITY_SQL = {st: _PRIORITY_TEMPLATE.format(status=st) for st in QUEUE_STATUSES}
+UNTAGGED_FALLBACK_SQL = {st: _UNTAGGED_TEMPLATE.format(status=st) for st in QUEUE_STATUSES}
+
+
+REVISIT_STOP_SLACK_SECONDS = 3600
 
 
 def select_next_player(conn):
     """Read-only peek at the head of the frontier. Safe on its own only when
     nothing else is crawling; concurrent callers must use claim_next_player,
     which builds on this."""
-    row = conn.execute(PRIORITY_SQL).fetchone()
-    return row[0] if row else None
+    head = _select_head(conn)
+    return head[0] if head else None
+
+
+def _select_head(conn):
+    """(uid, queue status) of the next player to crawl, or None."""
+    for status in QUEUE_STATUSES:
+        row = conn.execute(PRIORITY_SQL[status]).fetchone()
+        if row is None:
+            row = conn.execute(UNTAGGED_FALLBACK_SQL[status]).fetchone()
+        if row is not None:
+            return row[0], status
+    return None
 
 
 def claim_next_player(conn):
@@ -41,7 +97,7 @@ def claim_next_player(conn):
 
     The atomicity comes from nothing more exotic than SQLite's ordinary write
     serialization: one connection's UPDATE commits at a time, and the
-    `AND crawl_status='pending'` guard means a connection that lost the race
+    `AND crawl_status=<queue status>` guard means a connection that lost the race
     for this row simply matches zero rows and reports rowcount 0.
 
     The claim stamps `claimed_at`, NOT `last_crawled_at`. crawl_player reads
@@ -50,13 +106,14 @@ def claim_next_player(conn):
     would make every first crawl look like a revisit and silently strand the
     rest of that player's history (the exact bug the first-crawl resume fix
     exists to prevent)."""
-    uid = select_next_player(conn)
-    if uid is None:
+    head = _select_head(conn)
+    if head is None:
         return None
+    uid, status = head
     cur = conn.execute(
         "UPDATE players SET crawl_status='claimed', claimed_at=? "
-        "WHERE uid=? AND crawl_status='pending'",
-        (db.now(), uid),
+        "WHERE uid=? AND crawl_status=?",
+        (db.now(), uid, status),
     )
     conn.commit()
     if cur.rowcount == 0:
@@ -72,9 +129,11 @@ def release_player(conn, uid):
     simply left them 'pending' to be retried, and this restores exactly that.
     `last_crawled_at` is deliberately not written — the claim never touched it,
     so releasing preserves whatever first-crawl/revisit state the row had."""
+    # A player who has completed a crawl before goes back to the revisit queue,
+    # so an interrupted revisit does not jump ahead of first crawls.
     conn.execute(
-        "UPDATE players SET crawl_status='pending', claimed_at=NULL "
-        "WHERE uid=? AND crawl_status='claimed'",
+        "UPDATE players SET claimed_at=NULL, crawl_status=CASE WHEN last_crawled_at IS NULL "
+        "THEN 'pending' ELSE 'revisit' END WHERE uid=? AND crawl_status='claimed'",
         (uid,),
     )
     conn.commit()
@@ -129,29 +188,53 @@ def crawl_player(conn, client, uid, season):
         "SELECT last_crawled_at FROM players WHERE uid=?", (uid,)
     ).fetchone()
     is_revisit = bool(crawled_before_row) and crawled_before_row[0] is not None
+    # A revisit stops at the first known match played BEFORE the last completed
+    # crawl, not at the first known match. An interrupted revisit (circuit, busy
+    # database, shutdown) may have ingested the newest match and released the
+    # player with last_crawled_at unchanged; stopping at that match would lose
+    # every newer match it had not reached yet (review finding I2, reproduced).
+    # The hour of slack covers clock skew between the site and this machine.
+    # An entry with no timestamp keeps the old stop-at-first-known behaviour.
+    stop_before = crawled_before_row[0] - REVISIT_STOP_SLACK_SECONDS if is_revisit else None
 
     skip = 0
     while True:
-        page = rivalsmeta.get_player_match_history_page(client, uid, skip, season)
+        try:
+            page = rivalsmeta.get_player_match_history_page(client, uid, skip, season)
+        except fetcher.PlayerNotFoundError:
+            # The profile answered but the history 404s: the site no longer
+            # indexes this player. Before, this escaped crawl_player, killed
+            # the worker pool, and crashed again on the same player after every
+            # restart (review finding I1, reproduced).
+            return set_status(conn, uid, "not_indexed")
         if not page:
             break
+        if not isinstance(page, list):
+            raise fetcher.FetchError(
+                f"malformed history page for player {uid}: {type(page).__name__}, not a list"
+            )
         hit_known = False
         for entry in page:
-            match_uid = entry["match_uid"]
+            match_uid = entry.get("match_uid") if isinstance(entry, dict) else None
+            if not match_uid:
+                continue
+            _record_history_entry(conn, match_uid, uid, entry)
             already_known = conn.execute(
                 "SELECT 1 FROM matches WHERE match_uid=?", (match_uid,)
             ).fetchone()
             if already_known:
                 if is_revisit:
-                    hit_known = True
-                    break
+                    played = entry.get("match_time_stamp")
+                    if played is None or played < stop_before:
+                        hit_known = True
+                        break
                 continue
             try:
                 detail = rivalsmeta.get_match_detail(client, match_uid)
                 # The history entry carries match_map_id, which the
                 # match-detail endpoint does not expose at all — pass it
                 # through so map_id lands.
-                ingest.ingest_match(conn, detail, season, history_entry=entry)
+                ingest.ingest_match(conn, detail, season, history_entry=entry, source_player_uid=uid)
             except fetcher.PlayerNotFoundError:
                 # A match that showed up in this player's history but is no
                 # longer fetchable (404) — normal attrition, not an error and
@@ -180,11 +263,25 @@ def crawl_player(conn, client, uid, season):
     return set_status(conn, uid, "done")
 
 
+def _record_history_entry(conn, match_uid, uid, entry):
+    """Keep the crawled player's own leaver flag and result from a history entry (committed
+    with the page's next write). Known matches are recorded too: no request is involved."""
+    mp = entry.get("match_player") if isinstance(entry.get("match_player"), dict) else {}
+    esc = mp.get("has_escaped")
+    win = mp.get("is_win")
+    db.upsert(conn, "history_entries", ["match_uid", "player_uid"], {
+        "match_uid": match_uid, "player_uid": uid,
+        "has_escaped": None if esc is None else int(bool(esc)),
+        "is_win": None if win is None else int(win),
+    })
+
+
 def requeue_stale_players(
     conn,
-    done_revisit_seconds=43200,
+    done_revisit_seconds=3 * 86400,
     error_retry_seconds=3600,
     claimed_stale_seconds=3600,
+    max_revisits=2000,
 ):
     """Return stale players to the frontier, so the crawl is actually ongoing.
 
@@ -225,10 +322,15 @@ def requeue_stale_players(
     """
     now = db.now()
 
+    # Revisits go to their own 'revisit' queue, which is only claimed when no
+    # first crawl is waiting, and at most `max_revisits` per cycle, oldest
+    # first. Before, every player finished more than 12 h ago went back into
+    # 'pending' at every startup, ahead of the players never crawled.
     done_reset = conn.execute(
-        "UPDATE players SET crawl_status='pending' "
-        "WHERE crawl_status='done' AND last_crawled_at IS NOT NULL AND last_crawled_at < ?",
-        (now - done_revisit_seconds,),
+        "UPDATE players SET crawl_status='revisit' WHERE uid IN ("
+        " SELECT uid FROM players WHERE crawl_status='done' AND last_crawled_at IS NOT NULL"
+        " AND last_crawled_at < ? ORDER BY last_crawled_at LIMIT ?)",
+        (now - done_revisit_seconds, max_revisits),
     ).rowcount
     error_reset = conn.execute(
         "UPDATE players SET crawl_status='pending', last_crawled_at=NULL "

@@ -97,31 +97,38 @@ def test_get_json_exhausts_retries_and_raises_fetch_error():
     assert session.calls == 3
 
 
-def test_get_json_retries_a_200_with_unparseable_body_then_succeeds():
-    # Observed live: the site can answer with a 200 whose body isn't valid
-    # JSON (empty body, or an HTML page) — _request() has no status code to
-    # object to, so this can only be caught at the .json() parsing step.
-    bad = FakeResponse(200, payload=ValueError("Expecting value: line 1 column 1 (char 0)"))
-    good = FakeResponse(200, payload={"ok": True})
-    session = FakeSession([bad, good])
-    client = RivalsMetaClient(session=session, limiter=NoSleepLimiter())
-    assert client.get_json("/api/player/1") == {"ok": True}
-    assert session.calls == 2
-
-
-def test_get_json_exhausts_retries_on_persistent_bad_json_and_raises_fetch_error():
+def test_get_json_bad_json_error_names_the_status_and_quotes_the_body():
+    # The 2026-09-13 season-10 run died on "non-JSON response after 3 attempts"
+    # for dozens of players and nothing recorded WHAT the site had answered
+    # with, so a Cloudflare challenge, a Nuxt HTML fallback page and an empty
+    # body were indistinguishable after the fact. The message must carry the
+    # status and the start of the body — collapsed to one line, and truncated
+    # so a whole HTML page can't flood the log.
     bad = ValueError("Expecting value: line 1 column 1 (char 0)")
-    session = FakeSession([FakeResponse(200, payload=bad) for _ in range(3)])
+    html = "<!DOCTYPE html>\n<html>\n  <head><title>Just a moment...</title>" + "x" * 500
+    session = FakeSession([FakeResponse(200, payload=bad, text=html) for _ in range(3)])
     client = RivalsMetaClient(session=session, limiter=NoSleepLimiter())
-    with pytest.raises(FetchError):
+    with pytest.raises(FetchError) as excinfo:
         client.get_json("/api/player/1")
-    assert session.calls == 3
+    message = str(excinfo.value)
+    assert "status 200" in message
+    assert "<!DOCTYPE html> <html> <head><title>Just a moment...</title>" in message
+    assert "\n" not in message
+    assert len(message) < 300
+
+
+def test_get_json_bad_json_error_marks_an_empty_body_explicitly():
+    bad = ValueError("Expecting value: line 1 column 1 (char 0)")
+    session = FakeSession([FakeResponse(200, payload=bad, text="") for _ in range(3)])
+    client = RivalsMetaClient(session=session, limiter=NoSleepLimiter())
+    with pytest.raises(FetchError) as excinfo:
+        client.get_json("/api/player/1")
+    assert "body=<empty>" in str(excinfo.value)
 
 
 def test_get_json_bad_json_still_backs_off_the_shared_rate_limiter():
-    # One call's worth of bad JSON (MAX_RETRIES attempts) is nowhere near the
-    # circuit threshold (CIRCUIT_FAILURE_THRESHOLD separate calls) on its own,
-    # but it must still slow the shared pacing down like any other failure.
+    # A single non-JSON response is not yet a block, but it must still slow the
+    # shared pacing down like any other failure.
     bad = ValueError("Expecting value: line 1 column 1 (char 0)")
     session = FakeSession([FakeResponse(200, payload=bad)] * 3)
     limiter = NoSleepLimiter()
@@ -132,44 +139,6 @@ def test_get_json_bad_json_still_backs_off_the_shared_rate_limiter():
     assert limiter.current_delay > before
 
 
-def test_sustained_bad_json_across_many_calls_opens_the_circuit_breaker():
-    # Observed live: dozens of consecutive players in a row all came back
-    # 200-with-unparseable-body (a site-side block/challenge page served as a
-    # 200). Each get_json call only registers one unit after exhausting its
-    # own MAX_RETRIES attempts, so it takes CIRCUIT_FAILURE_THRESHOLD separate
-    # calls — not just one call's retries — to open the circuit.
-    bad = ValueError("Expecting value: line 1 column 1 (char 0)")
-    calls_needed = RivalsMetaClient.CIRCUIT_FAILURE_THRESHOLD
-    responses = [FakeResponse(200, payload=bad) for _ in range(calls_needed * RivalsMetaClient.MAX_RETRIES)]
-    session = FakeSession(responses)
-    client = RivalsMetaClient(session=session, limiter=NoSleepLimiter())
-
-    for _ in range(calls_needed):
-        with pytest.raises(FetchError):
-            client.get_json("/api/player/1")
-
-    with pytest.raises(CircuitOpenError):
-        client.get_json("/api/player/2")
-
-
-def test_a_successful_parse_resets_the_bad_json_streak():
-    # Occasional blips must not quietly accumulate toward the circuit
-    # threshold across unrelated, otherwise-healthy calls.
-    bad = ValueError("Expecting value: line 1 column 1 (char 0)")
-    exhausted_call = [FakeResponse(200, payload=bad)] * RivalsMetaClient.MAX_RETRIES
-    session = FakeSession(exhausted_call + exhausted_call + [FakeResponse(200, payload={"ok": True})])
-    client = RivalsMetaClient(session=session, limiter=NoSleepLimiter())
-
-    with pytest.raises(FetchError):
-        client.get_json("/api/player/1")
-    with pytest.raises(FetchError):
-        client.get_json("/api/player/2")
-    assert client._consecutive_bad_json == 2
-
-    assert client.get_json("/api/player/3") == {"ok": True}
-    assert client._consecutive_bad_json == 0
-
-
 def test_sustained_429_raises_rate_limited_error_not_fetch_error():
     # Per the spec, 429/403 is a site-wide throttling signal, not a
     # per-player failure — so it must NOT reach main.py as a FetchError,
@@ -178,14 +147,7 @@ def test_sustained_429_raises_rate_limited_error_not_fetch_error():
     client = RivalsMetaClient(session=session, limiter=NoSleepLimiter())
     with pytest.raises(RateLimitedError):
         client.get_json("/api/player/1")
-    assert session.calls == RivalsMetaClient.MAX_RETRIES
-
-
-def test_sustained_403_raises_rate_limited_error():
-    session = FakeSession([FakeResponse(403)] * 3)
-    client = RivalsMetaClient(session=session, limiter=NoSleepLimiter())
-    with pytest.raises(RateLimitedError):
-        client.get_json("/api/player/1")
+    assert session.calls == 1                                  # no per-call retry into a throttle
 
 
 def test_rate_limited_error_is_not_a_fetch_error():

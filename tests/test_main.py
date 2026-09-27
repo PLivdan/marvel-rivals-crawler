@@ -234,42 +234,6 @@ def test_run_releases_the_claim_when_the_circuit_opens():
     assert claimed_at is None
 
 
-def test_run_releases_the_claim_when_the_crawl_raises_something_unexpected():
-    # Only three exception types are handled by name. Anything else — an
-    # unwrapped PlayerNotFoundError from the match-history endpoint, a
-    # JSONDecodeError when the site answers with an HTML challenge page (a
-    # RequestException, so NOT a FetchError) — used to kill the process, but it
-    # left the player 'pending' and instantly retryable. Now they are claimed,
-    # so an unhandled exception must hand the claim back on its way out or the
-    # player sits out the whole orphan-sweep window for no reason.
-    conn = make_conn()
-    db.upsert(conn, "players", ["uid"], {"uid": 1, "crawl_status": "pending"})
-    flag = main.ShutdownFlag()
-
-    class UnexpectedError(Exception):
-        pass
-
-    def explode(conn_, client_, uid, season):
-        raise UnexpectedError("an HTML challenge page, say")
-
-    with pytest.raises(UnexpectedError):
-        main.run(
-            conn,
-            object(),
-            season=19,
-            shutdown_flag=flag,
-            reseed_interval_seconds=10**9,
-            crawl_player_fn=explode,
-            reseed_fn=lambda conn_, client_: 0,
-        )
-
-    status, claimed_at = conn.execute(
-        "SELECT crawl_status, claimed_at FROM players WHERE uid=1"
-    ).fetchone()
-    assert status == "pending"  # not stranded at 'claimed'
-    assert claimed_at is None
-
-
 def test_run_marks_a_fetch_error_through_the_one_terminal_status_writer():
     # crawler.set_status is the single writer of a terminal status, and the
     # only place that clears claimed_at alongside it. Duplicating that upsert
@@ -570,7 +534,7 @@ def test_main_defaults_to_a_single_worker_so_concurrency_stays_opt_in(monkeypatc
     db_path = str(tmp_path / "w.db")
     captured = {}
 
-    monkeypatch.setattr(fetcher, "RivalsMetaClient", lambda: object())
+    monkeypatch.setattr(fetcher, "RivalsMetaClient", lambda **kw: object())
     monkeypatch.setattr(rivalsmeta, "resolve_current_season", lambda client: 19)
     monkeypatch.setattr(main, "run", lambda *a, **k: captured.update(k))
 
@@ -585,7 +549,7 @@ def test_main_passes_the_requested_worker_count_and_a_per_worker_connection_fact
     db_path = str(tmp_path / "w.db")
     captured = {}
 
-    monkeypatch.setattr(fetcher, "RivalsMetaClient", lambda: object())
+    monkeypatch.setattr(fetcher, "RivalsMetaClient", lambda **kw: object())
     monkeypatch.setattr(rivalsmeta, "resolve_current_season", lambda client: 19)
     monkeypatch.setattr(main, "run", lambda *a, **k: captured.update(k))
 
@@ -958,8 +922,15 @@ def test_worker_pool_surfaces_a_worker_crash_even_when_the_coordinator_also_rais
     path, coordinator_conn = _pool_db(tmp_path, 5)
     worker_crashed = threading.Event()
 
+    raises = []
+
     def exploding_crawl_player(conn_, client_, uid, season):
-        worker_crashed.set()
+        # A worker dies only on the MAX_CONSECUTIVE_UNEXPECTED-th failure in a row
+        # (earlier ones mark the player 'error' and carry on), so that is the
+        # moment to let the coordinator fail too.
+        raises.append(uid)
+        if len(raises) >= main.MAX_CONSECUTIVE_UNEXPECTED:
+            worker_crashed.set()
         raise RuntimeError("worker bug")
 
     def exploding_requeue(conn_):

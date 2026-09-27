@@ -1,7 +1,7 @@
 import db
 
 
-def ingest_match(conn, match_detail, season, history_entry=None):
+def ingest_match(conn, match_detail, season, history_entry=None, source_player_uid=None):
     """Store one match. `history_entry` is the corresponding entry from the
     player-match-history page that surfaced this match — it is the ONLY place
     the map id is exposed (`match_map_id`); /api/matches/{uid} carries no
@@ -29,6 +29,10 @@ def ingest_match(conn, match_detail, season, history_entry=None):
             "fetched_at": db.now(),
         },
     )
+    if source_player_uid is not None:
+        # First source wins: only set it when the row has none yet.
+        conn.execute("UPDATE matches SET source_player_uid=? WHERE match_uid=? AND source_player_uid IS NULL",
+                     (source_player_uid, match_uid))
 
     for ban in match_detail.get("dynamic_fields", {}).get("ban_pick_info", []):
         hero_id = int(ban["hero_id"])
