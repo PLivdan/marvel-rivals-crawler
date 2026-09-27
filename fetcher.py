@@ -63,6 +63,17 @@ class GlobalPacer:
       20 connection errors in 61,000 requests (0.03%, all retried successfully)
       each cut 30% under the first design, and by 08:00 the cap sat at
       0.33 req/s against 3.0 requested.
+    - Failures within WAKE_GRACE_SECONDS of the machine waking from sleep are
+      not judged at all (2026-09-27 fix). A request in flight when the Mac
+      slept times out on the next wake, 1-4 per 45 s maintenance wake, and
+      requests sent before Wi-Fi is back fail too: a failure rate over 1% on
+      every wake, each cutting 30%, with recovery counting only awake time.
+      The 2026-09-26 run went 3.0 -> 0.55 req/s overnight while the site
+      answered every request that reached it. A sleep shows up as the wall
+      clock jumping ahead of `clock`, which stops while the machine is asleep
+      (time.monotonic is mach_absolute_time on macOS, CLOCK_MONOTONIC on Linux).
+      Blocks and 429s are handled by the client, not here, so a real refusal
+      is still caught immediately.
     """
 
     LATENCY_WINDOW = 20
@@ -73,9 +84,12 @@ class GlobalPacer:
     CUT_SPACING_SECONDS = 300
     RECOVERY_SECONDS = 300
     MIN_MULTIPLIER = 0.1
+    SLEEP_DETECT_SECONDS = 5.0
+    WAKE_GRACE_SECONDS = 60.0
 
     def __init__(self, rate=3.0, start_rate=0.5, ramp_seconds=900, hold_seconds=0,
-                 daily_budget=250_000, jitter=0.2, clock=time.monotonic, sleep=time.sleep):
+                 daily_budget=250_000, jitter=0.2, clock=time.monotonic, sleep=time.sleep,
+                 wall_clock=time.time):
         self.rate = float(rate)
         self.start_rate = float(min(start_rate, rate))
         self.ramp_seconds = float(ramp_seconds)
@@ -93,6 +107,19 @@ class GlobalPacer:
         self._outcomes = collections.deque(maxlen=self.FAILURE_WINDOW)   # True = success
         self._last_backoff = float("-inf")
         self._window = collections.deque()
+        self._wall = wall_clock
+        self._wall_offset = wall_clock() - self._t0
+        self._woke_at = float("-inf")
+
+    def _just_woke(self, now):
+        """Note a system sleep since the last call, and say whether `now` is within
+        WAKE_GRACE_SECONDS of the latest wake. Called under the lock on every wait()
+        and record_*(), so the wake is dated by the first event after it."""
+        offset = self._wall() - now
+        if offset - self._wall_offset > self.SLEEP_DETECT_SECONDS:
+            self._woke_at = now
+        self._wall_offset = offset
+        return now - self._woke_at < self.WAKE_GRACE_SECONDS
 
     def _base_rate(self, now):
         elapsed = now - self._t0 - self.hold_seconds
@@ -109,6 +136,7 @@ class GlobalPacer:
     def wait(self):
         with self._lock:
             now = self._clock()
+            self._just_woke(now)
             if self._mult < 1.0 and now - self._last_cut >= self.RECOVERY_SECONDS:
                 self._mult = min(1.0, self._mult * 1.1)
                 self._last_cut = now
@@ -126,6 +154,7 @@ class GlobalPacer:
 
     def record_success(self, latency):
         with self._lock:
+            self._just_woke(self._clock())
             self._outcomes.append(True)
             self._latencies.append(latency)
             if (len(self._latencies) == self.LATENCY_WINDOW
@@ -135,6 +164,8 @@ class GlobalPacer:
 
     def record_failure(self):
         with self._lock:
+            if self._just_woke(self._clock()):
+                return                                       # the machine's sleep, not the site
             self._outcomes.append(False)
             n = len(self._outcomes)
             if n >= self.FAILURE_MIN_SAMPLE and self._outcomes.count(False) / n >= self.FAILURE_RATE:

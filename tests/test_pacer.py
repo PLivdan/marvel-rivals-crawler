@@ -14,19 +14,29 @@ from fetcher import GlobalPacer
 
 
 class FakeClock:
+    """`t` is the awake-only monotonic clock; the wall clock also runs while the
+    machine is suspended, as time.monotonic (mach_absolute_time) and time.time do
+    on macOS."""
     def __init__(self):
         self.t = 1000.0
+        self.asleep = 0.0
 
     def now(self):
         return self.t
 
+    def wall(self):
+        return 1_700_000_000.0 + self.t + self.asleep
+
     def sleep(self, s):
         self.t += max(0.0, s)
+
+    def system_sleep(self, s):
+        self.asleep += s
 
 
 def pacer(clock, **kw):
     kw.setdefault("jitter", 0.0)
-    return GlobalPacer(clock=clock.now, sleep=clock.sleep, **kw)
+    return GlobalPacer(clock=clock.now, sleep=clock.sleep, wall_clock=clock.wall, **kw)
 
 
 def test_the_cap_holds_for_the_aggregate_not_per_caller():
@@ -153,6 +163,49 @@ def test_cuts_from_the_failure_rate_are_spaced_out():
     clock.t += GlobalPacer.CUT_SPACING_SECONDS
     p.record_failure()
     assert p.current_rate() == pytest.approx(3.0 * 0.7 * 0.7)
+
+
+def test_failures_just_after_the_machine_wakes_do_not_cut_the_rate():
+    """2026-09-26 run: a request in flight when the Mac slept timed out on the next
+    maintenance wake, 1-4 per 45 s wake, always over the 1% threshold. Each wake
+    cut the cap 30% and recovery only counts awake time: 3.0 -> 0.55 req/s overnight
+    with the site answering every request that actually reached it."""
+    clock = FakeClock()
+    p = pacer(clock, rate=3.0, start_rate=3.0, ramp_seconds=0)
+    p.wait()                                                   # last request before the sleep
+    clock.system_sleep(1581)                                   # one maintenance-sleep interval
+    clock.t += 15                                              # the in-flight request times out
+    for _ in range(GlobalPacer.FAILURE_WINDOW):
+        p.record_failure()
+    assert p.current_rate() == pytest.approx(3.0)
+
+
+def test_failures_once_the_wake_grace_has_passed_cut_the_rate_as_usual():
+    clock = FakeClock()
+    p = pacer(clock, rate=3.0, start_rate=3.0, ramp_seconds=0)
+    p.wait()
+    clock.system_sleep(1581)
+    p.wait()                                                   # first request after the wake
+    clock.t += GlobalPacer.WAKE_GRACE_SECONDS
+    for _ in range(GlobalPacer.FAILURE_WINDOW):
+        p.record_failure()
+    assert p.current_rate() == pytest.approx(3.0 * 0.7)
+
+
+def test_failures_ignored_during_a_wake_are_not_judged_later():
+    clock = FakeClock()
+    p = pacer(clock, rate=3.0, start_rate=3.0, ramp_seconds=0)
+    for _ in range(GlobalPacer.FAILURE_MIN_SAMPLE):
+        p.record_success(0.2)
+    p.wait()
+    clock.system_sleep(1581)
+    for _ in range(4):
+        p.record_failure()                                     # the wake's timeouts
+    clock.t += GlobalPacer.WAKE_GRACE_SECONDS
+    # One real error is 1 in 101, under the 1% threshold; had the wake's four
+    # timeouts been kept in the window it would be 5 in 105 and cut.
+    p.record_failure()
+    assert p.current_rate() == pytest.approx(3.0)
 
 
 def test_too_few_requests_are_not_judged():
