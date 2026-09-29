@@ -19,3 +19,9 @@ results/lineup_design/*
 results/lineup_design_test/
 results/lineup_design_cache/
 results/lineup_design_cache.tar.gz
+
+# git worktrees for isolated feature work
+.worktrees/
+
+# macOS folder metadata
+.DS_Store

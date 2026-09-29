@@ -1,0 +1,9 @@
+{
+ "_note": "Team-ups the rivalsmeta client bundle does not list yet. refresh_reference.py adds an entry only when the site has no team-up with the same member set, so these retire themselves once the site catches up. Ids follow the site's convention: anchor hero_id * 1000 + n.",
+ "teamups": [
+  {"id": 1024003, "name": "RAGNAROK", "anchor": 1024, "heroes": [1024, 1067], "startSubSeason": "S10.0",
+   "source": "Marvel Rivals Version 20260911 (Season 10, 11 Sep 2026); Gorr guides at marvelrivals.gg/gorr and turbosmurfs.gg list Hela as the anchor"},
+  {"id": 1035003, "name": "HIVE MIND", "anchor": 1035, "heroes": [1035, 1067], "startSubSeason": "S10.0",
+   "source": "Marvel Rivals Version 20260911 (Season 10, 11 Sep 2026); Gorr guides at marvelrivals.gg/gorr and turbosmurfs.gg list Venom as the anchor"}
+ ]
+}

@@ -37,6 +37,8 @@ BUNDLE_MARKER = 'JSON.parse(`[{"hero_id":'
 # the same origin while this script walks the bundle.
 CHUNK_DELAY_SECONDS = 0.5
 
+SUPPLEMENT_PATH = "reference/teamup_supplement.json"
+
 
 def _untemplate(text):
     """Undo JS *template-literal* escaping only.
@@ -90,8 +92,9 @@ def parse_heroes(js_text):
     return json.loads(_untemplate(js_text[start:end]))
 
 
-def load(conn, heroes):
-    """Upsert heroes and their team-ups. Returns (hero_count, teamup_count)."""
+def load(conn, heroes, supplement=None):
+    """Upsert heroes and their team-ups (plus any supplement entries the site
+    does not list yet). Returns (hero_count, teamup_count)."""
     for h in heroes:
         db.upsert(
             conn,
@@ -116,6 +119,13 @@ def load(conn, heroes):
     teamups = {}
     for h in heroes:
         for t in h.get("Teamup") or []:
+            teamups[t["id"]] = t
+    # The site's bundle can lag a season launch (Season 10 shipped Gorr with an
+    # empty Teamup list). Supplement entries fill the gap until the site has a
+    # team-up with the same members, at which point the site's record wins.
+    have = {frozenset(t.get("heroes") or []) for t in teamups.values()}
+    for t in supplement or []:
+        if frozenset(t["heroes"]) not in have and t["id"] not in teamups:
             teamups[t["id"]] = t
 
     for tid, t in teamups.items():
@@ -153,6 +163,8 @@ def load(conn, heroes):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--db-path", default="data/rivals.db")
+    ap.add_argument("--supplement", default=SUPPLEMENT_PATH,
+                    help="JSON of team-ups the site does not list yet ('' to skip)")
     args = ap.parse_args(argv)
 
     session = requests.Session()
@@ -161,8 +173,9 @@ def main(argv=None):
     heroes = parse_heroes(discover_bundle(session))
     conn = db.connect(args.db_path)
     db.init_schema(conn)
+    supplement = json.load(open(args.supplement))["teamups"] if args.supplement else []
     with conn:
-        n_heroes, n_teamups = load(conn, heroes)
+        n_heroes, n_teamups = load(conn, heroes, supplement)
     print(f"loaded {n_heroes} heroes, {n_teamups} team-ups", file=sys.stderr)
     return 0
 
