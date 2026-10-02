@@ -8,11 +8,11 @@ FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 
 
 def load_match():
-    return json.loads((FIXTURES / "match_detail.json").read_text())
+    return json.loads((FIXTURES / "match_detail.json").read_text(encoding="utf-8"))
 
 
 def load_history_page():
-    return json.loads((FIXTURES / "player_match_history_page.json").read_text())
+    return json.loads((FIXTURES / "player_match_history_page.json").read_text(encoding="utf-8"))
 
 
 def make_conn():

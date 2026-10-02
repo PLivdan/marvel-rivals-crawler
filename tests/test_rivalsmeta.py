@@ -7,7 +7,7 @@ FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 
 
 def load(name):
-    return json.loads((FIXTURES / name).read_text())
+    return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
 class FakeClient:
@@ -36,7 +36,7 @@ def test_is_diamond_plus_boundaries():
 
 
 def test_get_global_leaderboard_parses_devalue_payload():
-    raw_text = (FIXTURES / "leaderboard_payload.json").read_text()
+    raw_text = (FIXTURES / "leaderboard_payload.json").read_text(encoding="utf-8")
     client = FakeClient(text_by_path={"/leaderboard/_payload.json": raw_text})
     board = rivalsmeta.get_global_leaderboard(client)
     assert len(board["players"]) == 500
@@ -44,7 +44,7 @@ def test_get_global_leaderboard_parses_devalue_payload():
 
 
 def test_resolve_current_season_reads_rank_game_id_from_leaderboard():
-    raw_text = (FIXTURES / "leaderboard_payload.json").read_text()
+    raw_text = (FIXTURES / "leaderboard_payload.json").read_text(encoding="utf-8")
     client = FakeClient(text_by_path={"/leaderboard/_payload.json": raw_text})
     assert rivalsmeta.resolve_current_season(client) == 19
 

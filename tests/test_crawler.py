@@ -14,7 +14,7 @@ FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 
 
 def load(name):
-    return json.loads((FIXTURES / name).read_text())
+    return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
 def make_conn():
@@ -889,7 +889,7 @@ def test_reseed_never_holds_the_write_lock_across_a_network_call(tmp_path):
 
     other = db.connect(path)
     other.execute("PRAGMA busy_timeout=50")  # fail fast rather than wait 5s
-    raw_leaderboard_text = (FIXTURES / "leaderboard_payload.json").read_text()
+    raw_leaderboard_text = (FIXTURES / "leaderboard_payload.json").read_text(encoding="utf-8")
     hero_lb = load("hero_leaderboard.json")
     observations = []
 
@@ -990,7 +990,7 @@ def test_crawl_player_never_holds_the_write_lock_across_a_network_call(tmp_path)
 
 def test_reseed_queues_players_from_global_and_hero_leaderboards():
     conn = make_conn()
-    raw_leaderboard_text = (FIXTURES / "leaderboard_payload.json").read_text()
+    raw_leaderboard_text = (FIXTURES / "leaderboard_payload.json").read_text(encoding="utf-8")
     hero_lb = load("hero_leaderboard.json")
     # Seed one hero as already-known so reseed has something to iterate.
     db.upsert(conn, "heroes", ["hero_id"], {"hero_id": 1047})

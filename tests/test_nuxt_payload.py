@@ -7,7 +7,7 @@ FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 
 
 def test_resolve_payload_reconstructs_leaderboard():
-    raw = (FIXTURES / "leaderboard_payload.json").read_text()
+    raw = (FIXTURES / "leaderboard_payload.json").read_text(encoding="utf-8")
     data = resolve_payload(raw)
     assert data["device"] == "1"
     assert data["season"] == "last"
@@ -21,6 +21,6 @@ def test_resolve_payload_reconstructs_leaderboard():
 def test_resolve_payload_is_pure_json_compatible():
     # sanity: the raw fixture must itself be valid JSON (an array),
     # confirming this is devalue-over-JSON, not a bespoke text format.
-    raw = (FIXTURES / "leaderboard_payload.json").read_text()
+    raw = (FIXTURES / "leaderboard_payload.json").read_text(encoding="utf-8")
     arr = json.loads(raw)
     assert isinstance(arr, list)
