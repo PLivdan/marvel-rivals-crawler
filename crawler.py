@@ -69,6 +69,13 @@ UNTAGGED_FALLBACK_SQL = {st: _UNTAGGED_TEMPLATE.format(status=st) for st in QUEU
 
 REVISIT_STOP_SLACK_SECONDS = 3600
 
+# A match whose detail fetch fails (a non-JSON body, or 5xx after the client's own
+# retries) is skipped like a malformed one, so one bad response does not throw away
+# the whole player's crawl and send them back for a full first crawl. This many in a
+# single player's crawl means the site is in trouble, not the match, and the crawl
+# fails as before.
+MAX_MATCH_FETCH_FAILURES = 3
+
 
 def select_next_player(conn):
     """Read-only peek at the head of the frontier. Safe on its own only when
@@ -157,18 +164,12 @@ def crawl_player(conn, client, uid, season):
     score = rank_blob.get("rank_score")
     name = profile.get("player", {}).get("info", {}).get("name")
 
-    db.upsert(
-        conn,
-        "players",
-        ["uid"],
-        {
-            "uid": uid,
-            "nick_name": name,
-            "latest_known_score": score,
-            "latest_known_level": level,
-            "visibility_json": json.dumps(visibility),
-        },
-    )
+    profile_row = {"uid": uid, "nick_name": name, "visibility_json": json.dumps(visibility)}
+    if level is not None:
+        # The profile is the site's current answer, so it is dated now and only a
+        # later match replaces it (see ingest._upsert_discovered_player).
+        profile_row.update(latest_known_score=score, latest_known_level=level, level_seen_at=db.now())
+    db.upsert(conn, "players", ["uid"], profile_row)
     conn.commit()
 
     if not visibility.get("match_history", False):
@@ -198,6 +199,7 @@ def crawl_player(conn, client, uid, season):
     stop_before = crawled_before_row[0] - REVISIT_STOP_SLACK_SECONDS if is_revisit else None
 
     skip = 0
+    fetch_failures = 0
     while True:
         # History rows from the last page's known matches are uncommitted, and
         # pysqlite's open transaction holds SQLite's single write lock. Commit
@@ -250,6 +252,14 @@ def crawl_player(conn, client, uid, season):
                     file=sys.stderr,
                 )
                 continue
+            except fetcher.FetchError as exc:
+                # Nothing was written for this match. Blocks, 429s and an open
+                # circuit are not FetchErrors, so they still end the crawl.
+                fetch_failures += 1
+                if fetch_failures >= MAX_MATCH_FETCH_FAILURES:
+                    raise
+                print(f"skipping match {match_uid} after a failed fetch: {exc}", file=sys.stderr)
+                continue
             except (KeyError, TypeError, ValueError) as exc:
                 # This is an undocumented third-party API that can change
                 # shape without notice. One malformed match must not take
@@ -289,6 +299,8 @@ def requeue_stale_players(
     error_retry_seconds=3600,
     claimed_stale_seconds=3600,
     max_revisits=2000,
+    private_retry_seconds=7 * 86400,
+    max_private_retries=1000,
 ):
     """Return stale players to the frontier, so the crawl is actually ongoing.
 
@@ -324,6 +336,14 @@ def requeue_stale_players(
       single legitimate crawl can take ~15 minutes — which a 10-minute window
       would wrongly reap. Hence one hour.
 
+    - A 'skipped_floor' player goes back to 'pending' once their stored level
+      reads Diamond+ again, which only a match newer than the one that floored
+      them can do. This costs no request until then: the pre-check in
+      crawl_player skips them again for free while the level is still low.
+    - A 'skipped_private' player is retried after `private_retry_seconds`, at
+      most `max_private_retries` per cycle, oldest first, since profiles are
+      made public again. Each retry costs one profile request.
+
     A NULL timestamp never satisfies `< cutoff` in SQL, so rows in an
     unexpected state are left alone rather than requeued.
     """
@@ -350,8 +370,20 @@ def requeue_stale_players(
         (now - claimed_stale_seconds,),
     ).rowcount
 
+    floor_reset = conn.execute(
+        "UPDATE players SET crawl_status='pending', last_crawled_at=NULL "
+        "WHERE crawl_status='skipped_floor' AND latest_known_level >= ?",
+        (rivalsmeta.RANK_LEVEL_DIAMOND_MIN,),
+    ).rowcount
+    private_reset = conn.execute(
+        "UPDATE players SET crawl_status='pending', last_crawled_at=NULL WHERE uid IN ("
+        " SELECT uid FROM players WHERE crawl_status='skipped_private' AND last_crawled_at IS NOT NULL"
+        " AND last_crawled_at < ? ORDER BY last_crawled_at LIMIT ?)",
+        (now - private_retry_seconds, max_private_retries),
+    ).rowcount
+
     conn.commit()
-    return done_reset + error_reset + claimed_reset
+    return done_reset + error_reset + claimed_reset + floor_reset + private_reset
 
 
 def reseed(conn, client, hero_refresh_seconds=86400):

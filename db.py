@@ -265,7 +265,30 @@ ADDED_COLUMNS = {
         # player ever COMPLETED a crawl" — stamping that at claim time would
         # make every first crawl look like a revisit.
         "claimed_at": "INTEGER",
+        # When latest_known_level/score were observed: the match's time for a level taken from a
+        # match, the crawl time for one taken from the profile. A match only replaces the level
+        # if it is at least this new. Before, every ingested match overwrote it in whatever order
+        # matches arrived, so an old sub-Diamond match could floor-skip a Diamond+ player for
+        # good (11,598 such players in the 2026-10-02 season 10 database).
+        "level_seen_at": "INTEGER",
     },
+}
+
+# Run once, right after ADDED_COLUMNS adds the column it names, to fill it for the rows that
+# already exist.
+BACKFILLS = {
+    ("players", "level_seen_at"): """
+        UPDATE players SET (latest_known_level, latest_known_score, level_seen_at) = (
+            SELECT m.new_level, m.new_score, x.match_time_stamp
+              FROM match_players m JOIN matches x ON x.match_uid = m.match_uid
+             WHERE m.player_uid = players.uid AND m.new_level IS NOT NULL
+               AND x.match_time_stamp IS NOT NULL
+             ORDER BY x.match_time_stamp DESC LIMIT 1)
+         WHERE EXISTS (
+            SELECT 1 FROM match_players m JOIN matches x ON x.match_uid = m.match_uid
+             WHERE m.player_uid = players.uid AND m.new_level IS NOT NULL
+               AND x.match_time_stamp IS NOT NULL)
+    """,
 }
 
 # Concurrent workers hold one connection each to the same WAL-mode file, so a
@@ -361,6 +384,8 @@ def _add_missing_columns(conn):
         for name, decl in columns.items():
             if name not in present:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+                if (table, name) in BACKFILLS:
+                    conn.execute(BACKFILLS[(table, name)])
 
 
 def upsert(conn, table, pk_cols, row):

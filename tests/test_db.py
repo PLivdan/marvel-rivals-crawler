@@ -200,3 +200,23 @@ def test_init_schema_backfills_hero_coverage_for_a_database_that_predates_it(tmp
     _insert_match_hero_rows(conn, [("m4", 1, 1002)])
     assert dict(conn.execute("SELECT hero_id, n FROM hero_coverage").fetchall()) == {1001: 2, 1002: 2}
     conn.close()
+
+
+def test_adding_level_seen_at_backfills_each_players_latest_match_level():
+    # A database from before the column, its levels overwritten in arrival order.
+    conn = db.connect(":memory:")
+    db.init_schema(conn)
+    conn.execute("ALTER TABLE players DROP COLUMN level_seen_at")
+    for mu, ts in (("old", 1_000), ("new", 2_000)):
+        conn.execute("INSERT INTO matches (match_uid, match_time_stamp) VALUES (?, ?)", (mu, ts))
+    conn.execute("INSERT INTO match_players (match_uid, player_uid, new_level, new_score) VALUES ('new', 1, 14, 4100)")
+    conn.execute("INSERT INTO match_players (match_uid, player_uid, new_level, new_score) VALUES ('old', 1, 11, 3000)")
+    conn.execute("INSERT INTO players (uid, latest_known_level, crawl_status) VALUES (1, 11, 'skipped_floor')")
+    conn.execute("INSERT INTO players (uid, latest_known_level, crawl_status) VALUES (2, 16, 'pending')")
+    conn.commit()
+
+    db.init_schema(conn)
+
+    rows = conn.execute(
+        "SELECT uid, latest_known_level, latest_known_score, level_seen_at FROM players ORDER BY uid").fetchall()
+    assert rows == [(1, 14, 4100, 2_000), (2, 16, None, None)]  # no stored match: left alone

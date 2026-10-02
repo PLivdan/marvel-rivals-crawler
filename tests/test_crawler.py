@@ -9,6 +9,7 @@ import pytest
 import db
 import fetcher
 import crawler
+import ingest
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 
@@ -686,11 +687,12 @@ def test_requeue_stale_players_leaves_players_inside_their_windows_alone():
 def test_requeue_stale_players_never_touches_other_statuses():
     # Terminal/never-crawlable states must stay out of the frontier no matter
     # how old they are: re-crawling them would burn requests to learn nothing.
+    # (A floor-skipped player with no Diamond+ level since, here none at all,
+    # stays put too. Private players are retried on their own timer.)
     conn = make_conn()
     ancient = db.now() - 10**7
     statuses = {
         1: "pending",
-        2: "skipped_private",
         3: "skipped_floor",
         4: "not_indexed",
     }
@@ -1164,3 +1166,120 @@ def test_a_match_first_surfaced_by_one_player_keeps_that_source_when_another_rep
     crawler.crawl_player(conn, _ScriptedClient(2, [entry(2)]), uid=2, season=20)
     assert conn.execute("SELECT source_player_uid FROM matches WHERE match_uid='m_shared'").fetchone()[0] == 1
     assert conn.execute("SELECT COUNT(*) FROM history_entries WHERE match_uid='m_shared'").fetchone()[0] == 2
+
+
+# ---- floor and private retries, dated levels, failed match fetches (2026-10-02 review) ----
+
+def _player(conn, uid, **cols):
+    db.upsert(conn, "players", ["uid"], {"uid": uid, **cols})
+
+
+def test_requeue_returns_a_floor_skipped_player_once_their_level_reads_diamond():
+    conn = make_conn()
+    old = db.now() - 10
+    _player(conn, 1, crawl_status="skipped_floor", latest_known_level=14, last_crawled_at=old)
+    _player(conn, 2, crawl_status="skipped_floor", latest_known_level=12, last_crawled_at=old)
+
+    assert crawler.requeue_stale_players(conn) == 1
+
+    rows = dict(conn.execute("SELECT uid, crawl_status FROM players").fetchall())
+    assert rows == {1: "pending", 2: "skipped_floor"}
+    # A first crawl again, so it paginates their whole history.
+    assert conn.execute("SELECT last_crawled_at FROM players WHERE uid=1").fetchone()[0] is None
+
+
+def test_requeue_retries_private_players_after_a_week_capped_oldest_first():
+    conn = make_conn()
+    now = db.now()
+    _player(conn, 1, crawl_status="skipped_private", last_crawled_at=now - 9 * 86400)
+    _player(conn, 2, crawl_status="skipped_private", last_crawled_at=now - 8 * 86400)
+    _player(conn, 3, crawl_status="skipped_private", last_crawled_at=now - 86400)
+
+    assert crawler.requeue_stale_players(conn, max_private_retries=1) == 1
+
+    rows = dict(conn.execute("SELECT uid, crawl_status FROM players").fetchall())
+    assert rows == {1: "pending", 2: "skipped_private", 3: "skipped_private"}
+
+
+def _ingest_with(conn, match, match_uid, ts, uid, new_level):
+    m = copy.deepcopy(match)
+    m["match_uid"] = match_uid
+    m["match_time_stamp"] = ts
+    for p in m["match_players"]:
+        if p["player_uid"] == uid:
+            p.setdefault("dynamic_fields", {})["new_level"] = new_level
+    ingest.ingest_match(conn, m, season=20)
+
+
+def test_an_older_match_never_replaces_a_newer_level():
+    conn = make_conn()
+    match = load("match_detail.json")
+    uid = match["match_players"][0]["player_uid"]
+    level = "SELECT latest_known_level, level_seen_at FROM players WHERE uid=?"
+
+    _ingest_with(conn, match, "newer", 2_000, uid, new_level=14)
+    _ingest_with(conn, match, "older", 1_000, uid, new_level=11)
+    assert conn.execute(level, (uid,)).fetchone() == (14, 2_000)
+
+    _ingest_with(conn, match, "newest", 3_000, uid, new_level=12)
+    assert conn.execute(level, (uid,)).fetchone() == (12, 3_000)
+
+
+def test_a_profile_without_this_seasons_rank_keeps_the_stored_level():
+    conn = make_conn()
+    uid = 457877313
+    _player(conn, uid, crawl_status="pending", latest_known_level=15, level_seen_at=1_000)
+    profile = copy.deepcopy(load("player_public.json"))
+    info = profile["player"]["info"]
+    profile["player"]["info"] = {k: v for k, v in info.items() if not k.startswith("rank_game_")}
+    profile["visibility"] = {"match_history": False}
+
+    class ProfileOnly:
+        def get_json(self, path, params=None):
+            return profile
+
+    assert crawler.crawl_player(conn, ProfileOnly(), uid=uid, season=20) == "skipped_private"
+    row = conn.execute("SELECT latest_known_level, level_seen_at FROM players WHERE uid=?", (uid,)).fetchone()
+    assert row == (15, 1_000)
+
+
+def _failing_match_client(uid, profile, history_page, good, failing):
+    class Client:
+        def get_json(self, path, params=None):
+            if path == f"/api/player/{uid}":
+                return profile
+            if path == f"/api/player-match-history/{uid}":
+                return history_page if params["skip"] == 0 else []
+            match_uid = path.rsplit("/", 1)[-1]
+            if match_uid in failing:
+                raise fetcher.FetchError(f"non-JSON response: {path}")
+            if match_uid == good["match_uid"]:
+                return good
+            raise AssertionError(f"unexpected call: {path} {params}")
+    return Client()
+
+
+def test_crawl_player_skips_a_match_whose_fetch_fails_and_keeps_going():
+    conn = make_conn()
+    match = load("match_detail.json")
+    uid = 457877313
+    _player(conn, uid, crawl_status="pending")
+    page = [{"match_uid": "bad"}, {"match_uid": match["match_uid"]}]
+    client = _failing_match_client(uid, load("player_public.json"), page, match, {"bad"})
+
+    assert crawler.crawl_player(conn, client, uid=uid, season=19) == "done"
+    stored = {r[0] for r in conn.execute("SELECT match_uid FROM matches").fetchall()}
+    assert stored == {match["match_uid"]}
+
+
+def test_crawl_player_still_fails_when_many_match_fetches_fail():
+    conn = make_conn()
+    match = load("match_detail.json")
+    uid = 457877313
+    _player(conn, uid, crawl_status="pending")
+    bad = {f"bad{i}" for i in range(crawler.MAX_MATCH_FETCH_FAILURES)}
+    page = [{"match_uid": b} for b in sorted(bad)] + [{"match_uid": match["match_uid"]}]
+    client = _failing_match_client(uid, load("player_public.json"), page, match, bad)
+
+    with pytest.raises(fetcher.FetchError):
+        crawler.crawl_player(conn, client, uid=uid, season=19)

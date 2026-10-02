@@ -1,6 +1,8 @@
 import collections
+import ctypes
 import random
 import statistics
+import sys
 import threading
 import time
 
@@ -38,6 +40,20 @@ class BlockedError(Exception):
     each call three times and kept probing every few minutes afterwards."""
 
 
+def _unbiased_interrupt_time():
+    """Seconds of awake time on Windows. time.monotonic there is GetTickCount64, which
+    keeps counting while the machine sleeps, so the pacer's wake detection (the wall
+    clock jumping ahead of its clock) never fired; QueryUnbiasedInterruptTime stops
+    during sleep, like time.monotonic on macOS and Linux."""
+    t = ctypes.c_ulonglong()
+    ctypes.windll.kernel32.QueryUnbiasedInterruptTime(ctypes.byref(t))
+    return t.value / 1e7
+
+
+# The pacer's clock: one that stops while the machine sleeps, on every platform.
+awake_clock = _unbiased_interrupt_time if sys.platform == "win32" else time.monotonic
+
+
 class GlobalPacer:
     """One request schedule shared by every worker thread and the reseed.
 
@@ -71,7 +87,8 @@ class GlobalPacer:
       The 2026-09-26 run went 3.0 -> 0.55 req/s overnight while the site
       answered every request that reached it. A sleep shows up as the wall
       clock jumping ahead of `clock`, which stops while the machine is asleep
-      (time.monotonic is mach_absolute_time on macOS, CLOCK_MONOTONIC on Linux).
+      (time.monotonic is mach_absolute_time on macOS, CLOCK_MONOTONIC on Linux,
+      and on Windows awake_clock uses QueryUnbiasedInterruptTime instead).
       Blocks and 429s are handled by the client, not here, so a real refusal
       is still caught immediately.
     """
@@ -88,7 +105,7 @@ class GlobalPacer:
     WAKE_GRACE_SECONDS = 60.0
 
     def __init__(self, rate=3.0, start_rate=0.5, ramp_seconds=900, hold_seconds=0,
-                 daily_budget=250_000, jitter=0.2, clock=time.monotonic, sleep=time.sleep,
+                 daily_budget=250_000, jitter=0.2, clock=awake_clock, sleep=time.sleep,
                  wall_clock=time.time):
         self.rate = float(rate)
         self.start_rate = float(min(start_rate, rate))

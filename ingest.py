@@ -108,6 +108,7 @@ def ingest_match(conn, match_detail, season, history_entry=None, source_player_u
             score=dyn.get("new_score"),
             level=dyn.get("new_level"),
             discovery_hero_id=cur_hero_id,
+            seen_at=match_detail.get("match_time_stamp"),
         )
         if created:
             new_player_uids.append(uid)
@@ -127,11 +128,15 @@ def _record_hero_seen(conn, hero_id):
     db.upsert(conn, "heroes", ["hero_id"], {"hero_id": hero_id})
 
 
-def _upsert_discovered_player(conn, uid, nick_name, score, level, discovery_hero_id):
-    """Refresh a player's freshest known name/score/level. discovery_hero_id
-    and crawl_status are set ONLY on first creation and never overwritten
-    afterwards, so a player already tagged (e.g. from hero-leaderboard
-    seeding) keeps that tag no matter how many other matches surface them."""
+def _upsert_discovered_player(conn, uid, nick_name, score, level, discovery_hero_id, seen_at=None):
+    """Refresh a player's name, and their score/level if this match (played at
+    `seen_at`) is at least as new as the one the stored level came from: matches
+    arrive in no particular time order, and crawl_player floor-skips on this level
+    without asking the site. discovery_hero_id and crawl_status are set ONLY on
+    first creation and never overwritten afterwards, so a player already tagged
+    (e.g. from hero-leaderboard seeding) keeps that tag no matter how many other
+    matches surface them."""
+    dated = level is not None and seen_at is not None
     existing = conn.execute("SELECT uid FROM players WHERE uid=?", (uid,)).fetchone()
     if existing is None:
         db.upsert(
@@ -145,19 +150,16 @@ def _upsert_discovered_player(conn, uid, nick_name, score, level, discovery_hero
                 "latest_known_level": level,
                 "discovery_hero_id": discovery_hero_id,
                 "crawl_status": "pending",
+                "level_seen_at": seen_at if dated else None,
             },
         )
         return True
 
-    db.upsert(
-        conn,
-        "players",
-        ["uid"],
-        {
-            "uid": uid,
-            "nick_name": nick_name,
-            "latest_known_score": score,
-            "latest_known_level": level,
-        },
-    )
+    conn.execute("UPDATE players SET nick_name=? WHERE uid=?", (nick_name, uid))
+    if dated:
+        conn.execute(
+            "UPDATE players SET latest_known_score=?, latest_known_level=?, level_seen_at=? "
+            "WHERE uid=? AND ? >= COALESCE(level_seen_at, 0)",
+            (score, level, seen_at, uid, seen_at),
+        )
     return False

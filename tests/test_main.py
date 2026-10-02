@@ -1,5 +1,6 @@
 import threading
 import time
+import types
 
 import pytest
 
@@ -1089,3 +1090,27 @@ def test_worker_pool_gives_each_worker_its_own_connection(tmp_path):
     assert len(all_ids) == len(conn_by_thread)
     assert id(coordinator_conn) not in all_ids
     coordinator_conn.close()
+
+
+class _FakeKernel32:
+    def __init__(self):
+        self.calls = []
+
+    def SetThreadExecutionState(self, flags):
+        self.calls.append(flags)
+        return 1
+
+
+def test_keep_awake_asks_windows_and_gives_it_back(monkeypatch):
+    kernel = _FakeKernel32()
+    monkeypatch.setattr(main.sys, "platform", "win32")
+    monkeypatch.setattr(main.ctypes, "windll", types.SimpleNamespace(kernel32=kernel), raising=False)
+
+    assert main.keep_awake(True) is True
+    assert main.keep_awake(False) is True
+    assert kernel.calls == [0x80000001, 0x80000000]
+
+
+def test_keep_awake_is_a_no_op_off_windows(monkeypatch):
+    monkeypatch.setattr(main.sys, "platform", "darwin")
+    assert main.keep_awake(True) is False

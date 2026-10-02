@@ -1,5 +1,6 @@
 import sys
 import threading
+import time
 
 import pytest
 import requests
@@ -499,3 +500,20 @@ def test_a_failure_seen_by_one_thread_immediately_widens_every_thread_delay():
     t.join()
 
     assert observed == [2.0]
+
+
+def test_pacer_defaults_to_a_clock_that_stops_during_sleep():
+    import fetcher as f
+    assert f.GlobalPacer()._clock is f.awake_clock
+    if sys.platform == "win32":
+        # time.monotonic is GetTickCount64 there, which counts through sleep.
+        assert f.awake_clock is not time.monotonic
+
+
+def test_awake_clock_keeps_pace_with_monotonic_while_awake():
+    import fetcher as f
+    a0, m0 = f.awake_clock(), time.monotonic()
+    time.sleep(0.3)
+    a1, m1 = f.awake_clock(), time.monotonic()
+    assert a1 >= a0
+    assert abs((a1 - a0) - (m1 - m0)) < 0.05

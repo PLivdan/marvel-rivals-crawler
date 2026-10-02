@@ -1,5 +1,6 @@
 import argparse
 import concurrent.futures
+import ctypes
 import random
 import signal
 import sqlite3
@@ -62,6 +63,23 @@ def log(message):
     when it happened (review I4)."""
     print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} [{threading.current_thread().name}] {message}",
           file=sys.stderr, flush=True)
+
+
+# SetThreadExecutionState flags: keep the system out of idle sleep until reset.
+_ES_CONTINUOUS = 0x80000000
+_ES_SYSTEM_REQUIRED = 0x00000001
+
+
+def keep_awake(on):
+    """On Windows, ask the system not to idle-sleep while the crawl runs (on=True) and
+    give that back (on=False). A sleeping PC stops the crawl, and the requests in
+    flight at the wake fail. It does not stop a manual sleep or closing a laptop lid.
+    Elsewhere a no-op (the pacer already tolerates a Mac's sleeps). Returns whether
+    the request was made."""
+    if sys.platform != "win32":
+        return False
+    flags = _ES_CONTINUOUS | (_ES_SYSTEM_REQUIRED if on else 0)
+    return ctypes.windll.kernel32.SetThreadExecutionState(flags) != 0
 
 
 def warm_restart_hold_seconds(last_request_at, now):
@@ -642,17 +660,22 @@ def main(argv=None):
     signal.signal(signal.SIGINT, shutdown_flag.request)
     signal.signal(signal.SIGTERM, shutdown_flag.request)
 
-    outcome = run(
-        conn,
-        client,
-        season,
-        shutdown_flag,
-        reseed_interval_seconds=args.reseed_interval_hours * 3600,
-        workers=args.workers,
-        worker_conn_fn=lambda: db.connect(args.db_path),
-        worker_start_stagger_seconds=args.stagger_seconds,
-        season_fn=rivalsmeta.resolve_current_season,
-    )
+    if keep_awake(True):
+        log("asked Windows not to sleep while the crawl runs")
+    try:
+        outcome = run(
+            conn,
+            client,
+            season,
+            shutdown_flag,
+            reseed_interval_seconds=args.reseed_interval_hours * 3600,
+            workers=args.workers,
+            worker_conn_fn=lambda: db.connect(args.db_path),
+            worker_start_stagger_seconds=args.stagger_seconds,
+            season_fn=rivalsmeta.resolve_current_season,
+        )
+    finally:
+        keep_awake(False)
     _report(conn, client)
     if outcome == OUTCOME_BLOCKED:
         log(f"STOPPED: the site is blocking this client ({client.blocked}). "
