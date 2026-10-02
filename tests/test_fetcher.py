@@ -517,3 +517,41 @@ def test_awake_clock_keeps_pace_with_monotonic_while_awake():
     a1, m1 = f.awake_clock(), time.monotonic()
     assert a1 >= a0
     assert abs((a1 - a0) - (m1 - m0)) < 0.05
+
+
+class _JsonResponse:
+    def __init__(self, status_code, body):
+        self.status_code, self._body, self.headers = status_code, body, {}
+        self.text = str(body)
+
+    def json(self):
+        if isinstance(self._body, str):
+            raise ValueError("not JSON")
+        return self._body
+
+
+class _OneResponseSession:
+    def __init__(self, resp):
+        self.resp = resp
+
+    def get(self, url, params=None, timeout=None):
+        return self.resp
+
+
+def _client_for(resp):
+    pacer = fetcher.GlobalPacer(rate=1000, start_rate=1000, jitter=0, sleep=lambda s: None)
+    return fetcher.RivalsMetaClient(session=_OneResponseSession(resp), limiter=pacer)
+
+
+def test_a_private_403_is_a_private_error_and_does_not_block_the_client():
+    client = _client_for(_JsonResponse(403, {"private": True, "section": "match_history"}))
+    with pytest.raises(fetcher.PrivateError):
+        client.get_json("/api/player-match-history/1")
+    assert client.blocked is None
+
+
+def test_any_other_403_still_blocks():
+    client = _client_for(_JsonResponse(403, "Forbidden"))
+    with pytest.raises(fetcher.BlockedError):
+        client.get_json("/api/player-match-history/1")
+    assert client.blocked

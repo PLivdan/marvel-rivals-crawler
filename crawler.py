@@ -76,6 +76,33 @@ REVISIT_STOP_SLACK_SECONDS = 3600
 # fails as before.
 MAX_MATCH_FETCH_FAILURES = 3
 
+# Entries per history page, and in a profile's match_history.
+HISTORY_PAGE_SIZE = 20
+
+
+def _history_from_profile(profile, season, stop_before):
+    """The ranked entries of the profile's own match_history when they hold everything
+    the history pages would, else None (then the pages are fetched as before).
+
+    The profile carries the player's newest HISTORY_PAGE_SIZE matches of every mode this
+    season, and its ranked entries are exactly the first entries of the ranked history
+    page (checked live 2026-10-02; the site's own player page also treats a shorter
+    list as complete). So it covers:
+    - a first crawl when the list is shorter than a page: that is the whole season;
+    - a revisit when the list reaches back before `stop_before`: every ranked match
+      the revisit could need is newer than that.
+    Saves one request per player it covers."""
+    entries = profile.get("match_history")
+    if not isinstance(entries, list) or not all(isinstance(e, dict) for e in entries):
+        return None
+    if any(str(e.get("match_season")) != str(season) for e in entries):
+        return None
+    if len(entries) >= HISTORY_PAGE_SIZE:
+        times = [e.get("match_time_stamp") for e in entries]
+        if stop_before is None or not times or any(t is None for t in times) or min(times) >= stop_before:
+            return None
+    return [e for e in entries if e.get("game_mode_id") == rivalsmeta.MATCHMODE_COMPETITIVE]
+
 
 def select_next_player(conn):
     """Read-only peek at the head of the frontier. Safe on its own only when
@@ -157,6 +184,8 @@ def crawl_player(conn, client, uid, season):
         profile = rivalsmeta.get_player(client, uid, season)
     except fetcher.PlayerNotFoundError:
         return set_status(conn, uid, "not_indexed")
+    except fetcher.PrivateError:
+        return set_status(conn, uid, "skipped_private")
 
     visibility = profile.get("visibility") or {}
     rank_blob = rivalsmeta.current_season_rank(profile, season) or {}
@@ -198,6 +227,7 @@ def crawl_player(conn, client, uid, season):
     # An entry with no timestamp keeps the old stop-at-first-known behaviour.
     stop_before = crawled_before_row[0] - REVISIT_STOP_SLACK_SECONDS if is_revisit else None
 
+    from_profile = _history_from_profile(profile, season, stop_before)
     skip = 0
     fetch_failures = 0
     while True:
@@ -206,14 +236,20 @@ def crawl_player(conn, client, uid, season):
         # before every network call, as reseed does: the call first waits its
         # turn in the shared pacer, longer than other workers' busy_timeout.
         conn.commit()
-        try:
-            page = rivalsmeta.get_player_match_history_page(client, uid, skip, season)
-        except fetcher.PlayerNotFoundError:
-            # The profile answered but the history 404s: the site no longer
-            # indexes this player. Before, this escaped crawl_player, killed
-            # the worker pool, and crashed again on the same player after every
-            # restart (review finding I1, reproduced).
-            return set_status(conn, uid, "not_indexed")
+        if from_profile is not None:
+            page = from_profile
+        else:
+            try:
+                page = rivalsmeta.get_player_match_history_page(client, uid, skip, season)
+            except fetcher.PlayerNotFoundError:
+                # The profile answered but the history 404s: the site no longer
+                # indexes this player. Before, this escaped crawl_player, killed
+                # the worker pool, and crashed again on the same player after every
+                # restart (review finding I1, reproduced).
+                return set_status(conn, uid, "not_indexed")
+            except fetcher.PrivateError:
+                # Made private between the profile and this request.
+                return set_status(conn, uid, "skipped_private")
         if not page:
             break
         if not isinstance(page, list):
@@ -243,9 +279,9 @@ def crawl_player(conn, client, uid, season):
                 # match-detail endpoint does not expose at all — pass it
                 # through so map_id lands.
                 ingest.ingest_match(conn, detail, season, history_entry=entry, source_player_uid=uid)
-            except fetcher.PlayerNotFoundError:
+            except (fetcher.PlayerNotFoundError, fetcher.PrivateError):
                 # A match that showed up in this player's history but is no
-                # longer fetchable (404) — normal attrition, not an error and
+                # longer fetchable (404, or a private 403) — normal attrition, not an error and
                 # not a payload problem. Nothing was written, so no rollback.
                 print(
                     f"match {match_uid} no longer available (404); skipping",
@@ -272,9 +308,9 @@ def crawl_player(conn, client, uid, season):
                     file=sys.stderr,
                 )
                 continue
-        if hit_known or len(page) < 20:
+        if hit_known or from_profile is not None or len(page) < HISTORY_PAGE_SIZE:
             break
-        skip += 20
+        skip += HISTORY_PAGE_SIZE
 
     return set_status(conn, uid, "done")
 

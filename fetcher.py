@@ -27,6 +27,12 @@ class RateLimitedError(Exception):
     'error'. (403 used to land here too; it is now a BlockedError.)"""
 
 
+class PrivateError(Exception):
+    """A 403 whose body says the section is private ({"private":true,"section":...}):
+    this player's setting, not the site refusing us, so not a BlockedError. Seen on
+    /api/player-match-history for a private player (2026-10-02)."""
+
+
 class BlockedError(Exception):
     """The site is refusing this client: HTTP 400/401/403/451, repeated non-JSON
     2xx bodies, or repeated 429s. Deliberately neither a FetchError nor a
@@ -428,6 +434,10 @@ class RivalsMetaClient:
             status = resp.status_code
             self._count(status)
 
+            if status == 403 and _is_private_body(resp):
+                self.limiter.record_success(latency)
+                self._reset_failures()
+                raise PrivateError(path)
             if status in self.BLOCK_STATUSES:
                 self._block(f"status {status} for {path} (body={_body_snippet(getattr(resp, 'text', ''))})")
             if status == 429:
@@ -500,6 +510,14 @@ class RivalsMetaClient:
         with self._state_lock:
             self._consecutive_bad_json += 1
             return self._consecutive_bad_json
+
+
+def _is_private_body(resp):
+    try:
+        body = resp.json()
+    except Exception:
+        return False
+    return isinstance(body, dict) and body.get("private") is True
 
 
 def _parse_retry_after(value, default):

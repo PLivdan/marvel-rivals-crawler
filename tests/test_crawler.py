@@ -499,6 +499,7 @@ def test_crawl_player_revisit_still_stops_at_first_known_match():
     known_uid = "already_have_this_one"
     uid = 457877313
     profile = load("player_public.json")
+    del profile["match_history"]  # so the history pages are read, not the profile's list
 
     db.upsert(conn, "matches", ["match_uid"], {"match_uid": known_uid})
     db.upsert(
@@ -1283,3 +1284,104 @@ def test_crawl_player_still_fails_when_many_match_fetches_fail():
 
     with pytest.raises(fetcher.FetchError):
         crawler.crawl_player(conn, client, uid=uid, season=19)
+
+
+# ---- the profile's own match history, and private 403s (2026-10-02) ----
+
+def _entry(match_uid, ts, mode=2, season=20):
+    return {"match_uid": match_uid, "match_time_stamp": ts, "game_mode_id": mode, "match_season": str(season)}
+
+
+class _HistoryClient:
+    """Serves a profile and match details; records history-page calls."""
+
+    def __init__(self, uid, profile, match, page=None):
+        self.uid, self.profile, self.match, self.page = uid, profile, match, page or []
+        self.history_calls, self.detail_calls = 0, []
+
+    def get_json(self, path, params=None):
+        if path == f"/api/player/{self.uid}":
+            return self.profile
+        if path == f"/api/player-match-history/{self.uid}":
+            self.history_calls += 1
+            return self.page if params["skip"] == 0 else []
+        if path.startswith("/api/matches/"):
+            mu = path.rsplit("/", 1)[1]
+            self.detail_calls.append(mu)
+            return dict(copy.deepcopy(self.match), match_uid=mu)
+        raise AssertionError(f"unexpected call: {path} {params}")
+
+
+def _profile_with(entries):
+    profile = copy.deepcopy(load("player_public.json"))
+    profile["match_history"] = entries
+    return profile
+
+
+def test_a_short_profile_history_is_the_whole_season_so_no_history_page_is_fetched():
+    conn = make_conn()
+    uid = 457877313
+    _player(conn, uid, crawl_status="pending")
+    entries = [_entry("r1", 3_000), _entry("q1", 2_500, mode=3), _entry("r2", 2_000)]
+    client = _HistoryClient(uid, _profile_with(entries), load("match_detail.json"))
+
+    assert crawler.crawl_player(conn, client, uid=uid, season=20) == "done"
+    assert client.history_calls == 0
+    assert client.detail_calls == ["r1", "r2"]  # ranked only
+
+
+def test_a_full_profile_history_on_a_first_crawl_still_reads_the_pages():
+    conn = make_conn()
+    uid = 457877313
+    _player(conn, uid, crawl_status="pending")
+    entries = [_entry(f"r{i}", 10_000 - i) for i in range(crawler.HISTORY_PAGE_SIZE)]
+    client = _HistoryClient(uid, _profile_with(entries), load("match_detail.json"), page=[_entry("p1", 9_000)])
+
+    crawler.crawl_player(conn, client, uid=uid, season=20)
+    assert client.history_calls == 1
+    assert client.detail_calls == ["p1"]
+
+
+def test_a_revisit_uses_a_profile_history_that_reaches_back_before_the_last_crawl():
+    conn = make_conn()
+    uid = 457877313
+    last = 100_000
+    _player(conn, uid, crawl_status="revisit", last_crawled_at=last)
+    stop = last - crawler.REVISIT_STOP_SLACK_SECONDS
+    db.upsert(conn, "matches", ["match_uid"], {"match_uid": "known_old"})
+    entries = ([_entry("new1", last + 50), _entry("new2", last + 10)]
+               + [_entry("known_old", stop - 10)]
+               + [_entry(f"older{i}", stop - 100 - i) for i in range(crawler.HISTORY_PAGE_SIZE - 3)])
+    client = _HistoryClient(uid, _profile_with(entries), load("match_detail.json"))
+
+    assert crawler.crawl_player(conn, client, uid=uid, season=20) == "done"
+    assert client.history_calls == 0
+    assert client.detail_calls == ["new1", "new2"]
+
+
+def test_a_profile_history_from_another_season_is_not_trusted():
+    conn = make_conn()
+    uid = 457877313
+    _player(conn, uid, crawl_status="pending")
+    client = _HistoryClient(uid, _profile_with([_entry("old_season", 1_000, season=19)]),
+                            load("match_detail.json"), page=[_entry("p1", 9_000)])
+
+    crawler.crawl_player(conn, client, uid=uid, season=20)
+    assert client.history_calls == 1
+    assert client.detail_calls == ["p1"]
+
+
+def test_a_history_that_turns_private_marks_the_player_private():
+    conn = make_conn()
+    uid = 457877313
+    _player(conn, uid, crawl_status="pending")
+    profile = copy.deepcopy(load("player_public.json"))
+    del profile["match_history"]
+
+    class TurnsPrivate:
+        def get_json(self, path, params=None):
+            if path == f"/api/player/{uid}":
+                return profile
+            raise fetcher.PrivateError(path)
+
+    assert crawler.crawl_player(conn, TurnsPrivate(), uid=uid, season=19) == "skipped_private"
